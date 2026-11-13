@@ -1,0 +1,14 @@
+# Правила проекта OpticumeClient (Minecraft 26.3 / Java 25 / Vulkan)
+
+1. Всегда отвечай пользователю на русском языке.
+2. Перед внесением изменений прочитай `AGENTS.md`, `README.md` и `VISUAL_DATABASE.md`.
+3. Целевая платформа: Minecraft 26.3 (Official Mojang Mappings, без Intermediary и refmap), Java 25, Fabric Loader 0.20.1, Sodium 0.9.3 + Vulkan 1.4.323.
+4. Строгая изоляция лаунчера: деплоить и обращаться разрешено ТОЛЬКО к тестовому инстансу `C:\Users\User\AppData\Roaming\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods`. Запрещено трогать любые другие папки в `instances/`.
+5. Команды проверки и сборки (автоматически синхронизируют `src/` и `src_26/`):
+   - Компиляция: `python compile_check_26.py`
+   - Тесты (7/7): `python test_suite_26.py`
+   - Сборка и деплой: `python deploy_26.py`
+6. Технические правила MC 26.3:
+   - Не вызывать `Items.*.getDefaultInstance()` в `<clinit>` или конструкторах модулей (вызывает `NullPointerException: Components not bound yet` при старте). Использовать ленивую инициализацию.
+   - Учитывать коды кнопок мыши SDL3 (`1=LMB, 2=MMB, 3=RMB`) в экранах GUI.
+   - Не использовать `System.gc()` и прямые вызовы `GL11`; рендерить через `GuiGraphicsExtractor`, `RenderPipelines`, `Render2DHelper` и `Render3DHelper`.

@@ -1,0 +1,60 @@
+{
+  "mappings": {
+    "dev/optimusprime/mixin/ClientPlayerEntityMixin": {
+      "getActiveItemSpeedMultiplier": "Lnet/minecraft/class_746;method_75410()F",
+      "isBlockedFromSprinting": "Lnet/minecraft/class_746;method_75409()Z",
+      "shouldSlowDown": "Lnet/minecraft/class_746;method_20303()Z",
+      "shouldStopSprinting": "Lnet/minecraft/class_746;method_65949()Z"
+    },
+    "dev/optimusprime/mixin/EntityMixin": {
+      "slowMovement": "Lnet/minecraft/class_1297;method_5844(Lnet/minecraft/class_2680;Lnet/minecraft/class_243;)V"
+    },
+    "dev/optimusprime/mixin/GameRendererMixin": {
+      "renderWorld": "Lnet/minecraft/class_757;method_3188(Lnet/minecraft/class_9779;)V",
+      "tiltViewWhenHurt": "Lnet/minecraft/class_757;method_3198(Lnet/minecraft/class_4587;F)V"
+    },
+    "dev/optimusprime/mixin/HeldItemRendererMixin": {
+      "applyEquipOffset": "Lnet/minecraft/class_759;method_3224(Lnet/minecraft/class_4587;Lnet/minecraft/class_1306;F)V"
+    },
+    "dev/optimusprime/mixin/InGameHudMixin": {
+      "render": "Lnet/minecraft/class_329;method_1753(Lnet/minecraft/class_332;Lnet/minecraft/class_9779;)V",
+      "renderCrosshair": "Lnet/minecraft/class_329;method_1736(Lnet/minecraft/class_332;Lnet/minecraft/class_9779;)V"
+    },
+    "dev/optimusprime/mixin/LivingEntityRendererMixin": {
+      "getMixColor": "Lnet/minecraft/class_922;method_62484(Lnet/minecraft/class_10042;)I"
+    },
+    "dev/optimusprime/mixin/PlayerEntityMixin": {
+      "knockbackTarget": "Lnet/minecraft/class_1657;method_75122(Lnet/minecraft/class_1297;FLnet/minecraft/class_243;)V"
+    }
+  },
+  "data": {
+    "named:intermediary": {
+      "dev/optimusprime/mixin/ClientPlayerEntityMixin": {
+        "getActiveItemSpeedMultiplier": "Lnet/minecraft/class_746;method_75410()F",
+        "isBlockedFromSprinting": "Lnet/minecraft/class_746;method_75409()Z",
+        "shouldSlowDown": "Lnet/minecraft/class_746;method_20303()Z",
+        "shouldStopSprinting": "Lnet/minecraft/class_746;method_65949()Z"
+      },
+      "dev/optimusprime/mixin/EntityMixin": {
+        "slowMovement": "Lnet/minecraft/class_1297;method_5844(Lnet/minecraft/class_2680;Lnet/minecraft/class_243;)V"
+      },
+      "dev/optimusprime/mixin/GameRendererMixin": {
+        "renderWorld": "Lnet/minecraft/class_757;method_3188(Lnet/minecraft/class_9779;)V",
+        "tiltViewWhenHurt": "Lnet/minecraft/class_757;method_3198(Lnet/minecraft/class_4587;F)V"
+      },
+      "dev/optimusprime/mixin/HeldItemRendererMixin": {
+        "applyEquipOffset": "Lnet/minecraft/class_759;method_3224(Lnet/minecraft/class_4587;Lnet/minecraft/class_1306;F)V"
+      },
+      "dev/optimusprime/mixin/InGameHudMixin": {
+        "render": "Lnet/minecraft/class_329;method_1753(Lnet/minecraft/class_332;Lnet/minecraft/class_9779;)V",
+        "renderCrosshair": "Lnet/minecraft/class_329;method_1736(Lnet/minecraft/class_332;Lnet/minecraft/class_9779;)V"
+      },
+      "dev/optimusprime/mixin/LivingEntityRendererMixin": {
+        "getMixColor": "Lnet/minecraft/class_922;method_62484(Lnet/minecraft/class_10042;)I"
+      },
+      "dev/optimusprime/mixin/PlayerEntityMixin": {
+        "knockbackTarget": "Lnet/minecraft/class_1657;method_75122(Lnet/minecraft/class_1297;FLnet/minecraft/class_243;)V"
+      }
+    }
+  }
+}

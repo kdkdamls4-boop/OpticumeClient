@@ -1,0 +1,32 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.optimusprime.mixin",
+  "refmap": "optimusprime.refmap.json",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BossHealthOverlayMixin",
+    "ClientPacketListenerMixin",
+    "ClientPlayerEntityMixin",
+    "EntityMixin",
+    "EntityRenderDispatcherMixin",
+    "FogRendererMixin",
+    "GameRendererMixin",
+    "HeldItemRendererMixin",
+    "HumanoidArmorLayerMixin",
+    "InGameHudMixin",
+    "KeyboardHandlerMixin",
+    "LivingEntityRendererMixin",
+    "MouseHandlerMixin",
+    "MthMixin",
+    "MultiPlayerGameModeMixin",
+    "ParticleEngineMixin",
+    "PlayerEntityMixin",
+    "ScreenEffectRendererMixin",
+    "SkyRendererMixin",
+    "WeatherEffectRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

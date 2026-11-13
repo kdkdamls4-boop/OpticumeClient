@@ -1,0 +1,39 @@
+# Build & Gradle artifacts
+build/
+build26/
+.gradle/
+out/
+logs/
+*.class
+*.log
+
+# Archives, local backups and external references
+backups/
+reference_sources/
+*.zip
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Secrets & environment variables
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.jks
+*.pfx
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE & OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Temporary agent state
+.agents/teamwork/
