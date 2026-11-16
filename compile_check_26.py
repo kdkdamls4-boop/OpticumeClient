@@ -12,15 +12,77 @@ import sys
 import zipfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-LAUNCHER = os.path.join(os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming")), "ElyPrismLauncher")
+APPDATA = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+CACHE_DEFAULT = os.path.expanduser("~/.cache/opticumeclient-mc26.3")
+
+
+def _resolve_base_dir():
+    env_cache = os.environ.get("OPTICUME_MC_CACHE")
+    if env_cache and os.path.isdir(os.path.join(env_cache, "libraries")):
+        return env_cache
+    if sys.platform == "win32":
+        for cand in (
+            os.path.join(APPDATA, "ElyPrismLauncher"),
+            r"C:\Users\User\AppData\Roaming\ElyPrismLauncher",
+        ):
+            if os.path.isdir(os.path.join(cand, "libraries")):
+                return cand
+    return env_cache or CACHE_DEFAULT
+
+
+def _first_existing(candidates):
+    for p in candidates:
+        if p and os.path.exists(p):
+            return p
+    return candidates[0] if candidates else ""
+
+
+def _is_javac_25(path):
+    if not path or not os.path.exists(path):
+        return False
+    try:
+        r = subprocess.run([path, "-version"], capture_output=True, text=True, timeout=10)
+        return "javac 25" in (r.stdout + r.stderr)
+    except Exception:
+        return False
+
+
+def _resolve_javac(base_dir):
+    exe = "javac.exe" if sys.platform == "win32" else "javac"
+    candidates = [
+        os.environ.get("OPTICUME_JAVAC", ""),
+        os.path.join(base_dir, "java", "java-runtime-epsilon", "bin", "javac.exe"),
+        os.path.join(os.environ.get("JAVA_HOME", ""), "bin", exe) if os.environ.get("JAVA_HOME") else "",
+        os.path.expanduser("~/.local/jdks/jdk-25/bin/javac"),
+        shutil.which("javac") or "",
+    ]
+    for c in candidates:
+        if _is_javac_25(c):
+            return c
+    return _first_existing(candidates)
+
+
+LAUNCHER = _resolve_base_dir()
 LIBS = os.path.join(LAUNCHER, "libraries")
 META = os.path.join(LAUNCHER, "meta")
-JAVAC = os.path.join(LAUNCHER, r"java\java-runtime-epsilon\bin\javac.exe")
-MC_JAR = os.path.join(LIBS, r"com\mojang\minecraft\26.3\minecraft-26.3-client.jar")
-FABRIC_API_JAR = os.path.join(LAUNCHER, r"instances\OPTIMUSPRIME\minecraft\mods\fabric-api-0.165.2+26.3.jar")
-FABRIC_LOADER = os.path.join(LIBS, r"net\fabricmc\fabric-loader\0.19.5\fabric-loader-0.19.5.jar")
-MIXIN = os.path.join(LIBS, r"net\fabricmc\sponge-mixin\0.17.5+mixin.0.8.7\sponge-mixin-0.17.5+mixin.0.8.7.jar")
-JOML = os.path.join(LIBS, r"org\joml\joml\1.10.9\joml-1.10.9.jar")
+JAVAC = _resolve_javac(LAUNCHER)
+MC_JAR = os.path.join(LIBS, "com", "mojang", "minecraft", "26.3", "minecraft-26.3-client.jar")
+FABRIC_API_JAR = _first_existing([
+    os.path.join(LAUNCHER, "instances", "OPTIMUSPRIME", "minecraft", "mods", "fabric-api-0.165.2+26.3.jar"),
+    os.path.join(LAUNCHER, "mods", "fabric-api-0.165.2+26.3.jar"),
+    *sorted(glob.glob(os.path.join(LAUNCHER, "instances", "OPTIMUSPRIME", "minecraft", "mods", "fabric-api-*+26.3.jar"))),
+    *sorted(glob.glob(os.path.join(LAUNCHER, "mods", "fabric-api-*+26.3.jar"))),
+])
+FABRIC_LOADER = _first_existing([
+    os.path.join(LIBS, "net", "fabricmc", "fabric-loader", "0.20.1", "fabric-loader-0.20.1.jar"),
+    os.path.join(LIBS, "net", "fabricmc", "fabric-loader", "0.19.5", "fabric-loader-0.19.5.jar"),
+    *sorted(glob.glob(os.path.join(LIBS, "net", "fabricmc", "fabric-loader", "*", "*.jar")), reverse=True),
+])
+MIXIN = _first_existing([
+    os.path.join(LIBS, "net", "fabricmc", "sponge-mixin", "0.17.5+mixin.0.8.7", "sponge-mixin-0.17.5+mixin.0.8.7.jar"),
+    *sorted(glob.glob(os.path.join(LIBS, "net", "fabricmc", "sponge-mixin", "*", "*.jar")), reverse=True),
+])
+JOML = os.path.join(LIBS, "org", "joml", "joml", "1.10.9", "joml-1.10.9.jar")
 LWJGL_VER = "3.4.3"
 
 BUILD = os.path.join(ROOT, "build26")
@@ -117,7 +179,7 @@ def compile_sources(java_files, out_dir=CLASSES, log_path=None, extra_cp=None):
     with open(args_file, "w", encoding="utf-8") as f:
         f.write("-encoding\nUTF-8\n--release\n25\n-proc:none\n-Xmaxerrs\n100000\n-Xmaxwarns\n0\n")
         f.write("-d\n" + out_dir.replace("\\", "/") + "\n")
-        f.write("-cp\n" + ";".join(cp).replace("\\", "/") + "\n")
+        f.write("-cp\n" + os.pathsep.join(cp).replace("\\", "/") + "\n")
         for s in java_files:
             f.write(os.path.abspath(s).replace("\\", "/") + "\n")
     res = subprocess.run([JAVAC, "@" + args_file], capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -136,8 +198,11 @@ def main():
         src = os.path.abspath(argv[argv.index("--src") + 1])
     if "--log" in argv:
         log = os.path.abspath(argv[argv.index("--log") + 1])
-    if not os.path.exists(JAVAC):
-        print(f"JDK 25 javac not found: {JAVAC}")
+    if not JAVAC or not os.path.exists(JAVAC):
+        print(f"JDK 25 javac not found: {JAVAC}. Run 'python3 setup_env_26.py' on Linux/cloud.")
+        return 2
+    if not os.path.exists(MC_JAR) or not os.path.exists(FABRIC_API_JAR):
+        print(f"MC 26.3 / Fabric dependencies not found under {LAUNCHER}. Run 'python3 setup_env_26.py'.")
         return 2
     os.makedirs(BUILD, exist_ok=True)
     java_files = glob.glob(os.path.join(src, "**", "*.java"), recursive=True)
