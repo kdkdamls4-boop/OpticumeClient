@@ -1,26 +1,24 @@
 # 🚀 OpticumeClient — Документация и Инструкции для ИИ-Агентов
 
-> **Статус проекта:** Все майлстоуны **M1 – M5 полностью завершены и верифицированы** (`VICTORY CONFIRMED`).  
-> Проект собран под **Minecraft 26.3 / Java 25 / Sodium 0.9.3 + Vulkan 1.4.323** (86 исходных файлов, 42 модуля, 15 миксинов, 0 ошибок компиляции, 7/7 тестов пройдено).
+> **Статус проекта:** Полный ребрендинг в **OpticumeClient**, главное меню в стиле **Desire**, глобальный стеклянный стиль кнопок/слайдеров, оффлайн **AltManager** и **ClickGUI в стиле System** завершены.  
+> Проект собран под **Minecraft 26.3 / Java 25 / Sodium 0.9.3 + Vulkan 1.4.323** (`115` исходных Java-файлов, `49` модулей, `26` миксинов, `0` ошибок компиляции, `8/8` тестов пройдено).
 
 ---
 
 ## 📌 1. Основная информация и пути
 
-* **Директория проекта:** `c:\Users\User\Desktop\Projects\OPTIMUSPRIME`
+* **Корень репозитория:** текущая рабочая директория проекта (`./`)
 * **Навигация по документации:**
-  - [`README.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/README.md) — человекочитаемый обзор проекта, таблицы модулей и структура папок.
-  - [`AGENTS.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/AGENTS.md) — инструкции и правила для ИИ-агентов (Antigravity, Codex, Windsurf, Copilot).
-  - [`TASK_LIST_NEXT.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/TASK_LIST_NEXT.md) — актуальный технический план следующих задач (M6) с точной диагностикой багов и строк кода.
-  - [`CLAUDE.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/CLAUDE.md) и [`.cursorrules`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/.cursorrules) — точки входа для Claude Code и Cursor IDE.
-  - [`VISUAL_DATABASE.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/VISUAL_DATABASE.md) — полная база данных визуальной архитектуры, цветов и рендер-пайплайна.
-* **Исходный код:** `src/` и `src_26/` (86 Java-файлов под Minecraft 26.3; автоматически двусторонне синхронизируются скриптом `compile_check_26.py`, поэтому редактировать можно любую из двух папок).
+  - [`README.md`](README.md) — человекочитаемый обзор проекта, таблицы модулей и структура папок.
+  - [`AGENTS.md`](AGENTS.md) — инструкции и правила для ИИ-Агентов (Antigravity, Codex, Windsurf, Copilot).
+  - [`TASK_LIST_NEXT.md`](TASK_LIST_NEXT.md) — архив технического плана M6 (все 8 задач выполнены).
+  - [`CLAUDE.md`](CLAUDE.md) и [`.cursorrules`](.cursorrules) — точки входа для Claude Code и Cursor IDE.
+  - [`VISUAL_DATABASE.md`](VISUAL_DATABASE.md) — полная база данных визуальной архитектуры, цветов и рендер-пайплайна.
+* **Исходный код:** `src/` и `src_26/` (`115` Java-файлов и `62` ресурса под Minecraft 26.3 в пакете `dev.opticumeclient.*`; автоматически двусторонне синхронизируются скриптом `compile_check_26.py`, при переименовании/удалении файлов удаляйте старые копии в обеих папках).
 * **Целевая версия игры:** Minecraft **26.3** (Game Drop 2026).
-* **Рантайм Java:** Java **25.0.1** (Microsoft OpenJDK 25.0.1+8-LTS):
-  `C:\Users\User\AppData\Roaming\ElyPrismLauncher\java\java-runtime-epsilon\bin\javac.exe`
+* **Рантайм Java:** Java **25** (Microsoft OpenJDK 25): `%APPDATA%\ElyPrismLauncher\java\java-runtime-epsilon\bin\javac.exe`
 * **Графический стек:** Fabric Loader `0.20.1`, Fabric API `0.165.2+26.3`, Sodium `0.9.3-beta.1+mc26.3` + **Vulkan 1.4.323** (RenderPearl / Blaze3D).
 * **Маппинги:** Официальные Mojang-имена (**Official Mappings**, без Intermediary и без TinyRemapper).
-* **Единый чистый бэкап:** `c:\Users\User\Desktop\Projects\OPTIMUSPRIME\backups\OpticumeClient_backup.zip`
 
 ---
 
@@ -28,8 +26,8 @@
 
 1. **Изоляция инстансов лаунчера:**
    * Работать и деплоить разрешено **СТРОГО И ИСКЛЮЧИТЕЛЬНО** в тестовый инстанс:
-     `C:\Users\User\AppData\Roaming\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods`
-     *(В лаунчере называется `Optimus Prime Test`)*.
+     `%APPDATA%\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods`
+     *(Техническое имя тестового инстанса в ElyPrismLauncher: `OPTIMUSPRIME`)*.
    * **КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНО** читать, изменять или трогать другие папки в `instances/`.
 2. **Графика и RenderPearl / Vulkan:**
    * Не использовать устаревшие прямые вызовы OpenGL (`glBegin`, `glEnd`, `GL11`, `GlStateManager`).
@@ -43,47 +41,38 @@
 
 ## 🛠️ 3. Скрипты сборки, проверки и деплоя
 
-Все команды запускать из корня проекта `c:\Users\User\Desktop\Projects\OPTIMUSPRIME`:
+Все команды запускать из корня репозитория:
 
 * **Проверка компиляции (`javac --release 25`):**
   ```powershell
   python compile_check_26.py
   ```
-* **Запуск автоматических тестов (7/7 проверок):**
+* **Запуск автоматических тестов (8/8 проверок):**
   ```powershell
   python test_suite_26.py
   ```
-* **Сборка jar и деплой в лаунчер:**
+* **Сборка jar и деплой в лаунчер (`opticumeclient-26.3.jar`):**
   ```powershell
   python deploy_26.py
   ```
 
 ---
 
-## ✅ 4. Полный список реализованных подсистем (M1 – M5)
+## ✅ 4. Полный список реализованных подсистем (M1 – M8)
 
-1. **M1 — Управление, ввод и ClickGUI:**
-   * Нормализация кнопок мыши SDL3 (`1=LMB, 2=MMB, 3=RMB` $\to$ `0=LMB, 1=RMB, 2=MMB`) в [`ClickGuiScreen.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/gui/ClickGuiScreen.java).
-   * Drag & Drop виджетов HUD в `ChatScreen` через [`MouseHandlerMixin.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/mixin/MouseHandlerMixin.java).
-   * Глобальная обработка биндов через [`KeyboardHandlerMixin.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/mixin/KeyboardHandlerMixin.java).
-   * Единое окно с сайдбаром и карточками (`Sidebar Window` 660x430) по умолчанию.
-2. **M2 — Оптимизация рендеринга и FPS (350+ FPS):**
-   * Удалён `System.gc()` из [`MemoryCleanerModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/optimization/MemoryCleanerModule.java).
-   * Подключены [`EntityRenderDispatcherMixin.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/mixin/EntityRenderDispatcherMixin.java) и [`MthMixin.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/mixin/MthMixin.java).
-   * Оптимизированы [`Render2DHelper.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/render/Render2DHelper.java) (`TextureAssets.GLOW_RADIAL`, блочные скругления без попиксельных циклов) и [`Render3DHelper.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/render/Render3DHelper.java) (линии квадами без 2px-дробления).
-   * Кеширование данных HUD в `onTick()` (20 TPS) с нулевыми аллокациями в `onRender2D`.
-3. **M3 — 3D-проекция, HD-прицел и 8 визуальных модулей 4-го этапа:**
-   * В `Render3DHelper.worldToScreen` внедрена точная матрица проекции камеры и динамический FOV, устранено съезжание Призрака в `TargetEspModule`; очищен чёрный фон `firefly.png`.
-   * Процедурный HD-прицел `CROSSHAIR_RING_HD` (128x128) со стилями *Nursultan Circle*, *Catlavan Cross*, *Expensive Modern*, *Dot* и отрисовка предметов HUD в масштабе `1.0x`.
-   * Реализованы и зарегистрированы 8 новых визуальных модулей (всего **42 модуля** и **15 миксинов**):
-     - [`ViewModelModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/ViewModelModule.java)
-     - [`NameTagsModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/NameTagsModule.java)
-     - [`PopChamsModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/PopChamsModule.java)
-     - [`AmbienceModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/AmbienceModule.java)
-     - [`KillEffectModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/KillEffectModule.java)
-     - [`ItemEspModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/ItemEspModule.java)
-     - [`TracersModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/TracersModule.java)
-     - [`ChamsModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src/main/java/dev/optimusprime/client/modules/visuals/ChamsModule.java)
-4. **M4 – M5 — Ребрендинг в `OpticumeClient`, консолидация и бэкап:**
-   * Выполнен ребрендинг в `"OpticumeClient"` во всех точках отображения (`fabric.mod.json`, ClickGUI, Watermark, Dynamic Island, `MANIFEST.MF`).
-   * Папка `src/` синхронизирована с `src_26/`, временные папки и старые скрипты удалены, создан единый архив [`backups/OpticumeClient_backup.zip`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/backups/OpticumeClient_backup.zip).
+1. **M1 — Управление, ввод и Input:**
+   * Нормализация кнопок мыши SDL3 (`1=LMB, 2=MMB, 3=RMB` $\to$ `0=LMB, 1=RMB, 2=MMB`) в [`ClickGuiScreen.java`](src_26/main/java/dev/opticumeclient/client/gui/ClickGuiScreen.java).
+   * Drag & Drop виджетов HUD в `ChatScreen` и `ClickGuiScreen` через [`HudManager.java`](src_26/main/java/dev/opticumeclient/client/hud/HudManager.java) с автосохранением позиций в конфиг.
+   * Глобальная обработка биндов через [`KeyboardHandlerMixin.java`](src_26/main/java/dev/opticumeclient/mixin/KeyboardHandlerMixin.java).
+2. **M2 — Оптимизация рендеринга и FPS:**
+   * Умный `MemoryCleanerModule` без фризов на главном потоке, [`EntityRenderDispatcherMixin.java`](src_26/main/java/dev/opticumeclient/mixin/EntityRenderDispatcherMixin.java), [`MthMixin.java`](src_26/main/java/dev/opticumeclient/mixin/MthMixin.java), [`FrameSyncModule.java`](src_26/main/java/dev/opticumeclient/client/modules/optimization/FrameSyncModule.java), [`NoRenderModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/NoRenderModule.java) и [`LowFireModule.java`](src_26/main/java/dev/opticumeclient/client/modules/optimization/LowFireModule.java) через [`ScreenEffectRendererMixin.java`](src_26/main/java/dev/opticumeclient/mixin/ScreenEffectRendererMixin.java).
+3. **M3 – M6 — 3D-проекция, визуалы, ViewModel, Ambience:**
+   * Точная матрица проекции в [`Render3DHelper.java`](src_26/main/java/dev/opticumeclient/client/render/Render3DHelper.java), HD-прицел, серверные пресеты (`Default`, `Dexland`, `FunTime`, `HolyWorld`, `MaxFPS`) в [`ConfigManager.java`](src_26/main/java/dev/opticumeclient/client/config/ConfigManager.java) с авто-миграцией данных в `<gameDir>/opticumeclient/`.
+4. **M7 — Ребрендинг в `OpticumeClient` и +5 модулей:**
+   * Пакет `dev.opticumeclient.*`, [`OpticumeClient.java`](src_26/main/java/dev/opticumeclient/OpticumeClient.java), [`OpticumeAuraModule.java`](src_26/main/java/dev/opticumeclient/client/modules/combat/OpticumeAuraModule.java), `opticumeclient.mixins.json`, ресурсы `assets/opticumeclient/` (`icon.png`), JAR `opticumeclient-26.3.jar`.
+   * Добавлены модули: [`VelocityModule.java`](src_26/main/java/dev/opticumeclient/client/modules/movement/VelocityModule.java), [`NoPushModule.java`](src_26/main/java/dev/opticumeclient/client/modules/movement/NoPushModule.java), [`NoJumpDelayModule.java`](src_26/main/java/dev/opticumeclient/client/modules/movement/NoJumpDelayModule.java), [`MiddleClickPearlModule.java`](src_26/main/java/dev/opticumeclient/client/modules/combat/MiddleClickPearlModule.java), [`ZoomModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/ZoomModule.java).
+5. **M8 — Main Menu (Desire), глобальные кнопки, AltManager и ClickGUI (System):**
+   * Главное меню [`OpticumeMainMenuScreen.java`](src_26/main/java/dev/opticumeclient/client/ui/menu/OpticumeMainMenuScreen.java) + [`GuiMixin.java`](src_26/main/java/dev/opticumeclient/mixin/GuiMixin.java) + [`MenuWallpapers.java`](src_26/main/java/dev/opticumeclient/client/ui/menu/MenuWallpapers.java) (живая панорама по умолчанию + `Gallery` с 8 обоями).
+   * Единый стеклянный стиль ванильных кнопок и слайдеров [`OpticumeButtonStyle.java`](src_26/main/java/dev/opticumeclient/client/ui/menu/OpticumeButtonStyle.java) через [`AbstractButtonMixin.java`](src_26/main/java/dev/opticumeclient/mixin/AbstractButtonMixin.java) и [`AbstractSliderButtonMixin.java`](src_26/main/java/dev/opticumeclient/mixin/AbstractSliderButtonMixin.java).
+   * Оффлайн [`OpticumeAltScreen.java`](src_26/main/java/dev/opticumeclient/client/ui/menu/OpticumeAltScreen.java) через [`MinecraftAccessor.java`](src_26/main/java/dev/opticumeclient/mixin/MinecraftAccessor.java) и [`MenuConfigStore.java`](src_26/main/java/dev/opticumeclient/client/ui/menu/MenuConfigStore.java).
+   * Новый ClickGUI в стиле **System**: [`ClickGuiScreen.java`](src_26/main/java/dev/opticumeclient/client/gui/ClickGuiScreen.java), [`SystemTheme.java`](src_26/main/java/dev/opticumeclient/client/gui/SystemTheme.java), [`SystemModuleCard.java`](src_26/main/java/dev/opticumeclient/client/gui/SystemModuleCard.java), [`SystemSearchModal.java`](src_26/main/java/dev/opticumeclient/client/gui/SystemSearchModal.java), [`SystemPages.java`](src_26/main/java/dev/opticumeclient/client/gui/SystemPages.java).

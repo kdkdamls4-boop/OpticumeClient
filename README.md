@@ -4,69 +4,70 @@
 
 ---
 
-## ⚡ Быстрый старт (Для человека и ИИ)
+## ⚡ Быстрый старт
 
-Все команды выполняются из корня проекта (`c:\Users\User\Desktop\Projects\OPTIMUSPRIME`):
+Все команды выполняются из корня репозитория:
 
 ```powershell
-# 1. Проверить компиляцию (Java 25, 86 исходных файлов, авто-синхронизация src/ <-> src_26/)
+# 1. Проверить компиляцию (Java 25, 115 исходных файлов, авто-синхронизация src/ <-> src_26/)
 python compile_check_26.py
 
-# 2. Собрать JAR и задеплоить в тестовый инстанс лаунчера (Optimus Prime Test)
+# 2. Собрать JAR и задеплоить в тестовый инстанс лаунчера (%APPDATA%\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods)
 python deploy_26.py
 
-# 3. Запустить полный набор автотестов (7/7 проверок)
+# 3. Запустить полный набор автотестов (8/8 проверок)
 python test_suite_26.py
 ```
 
-* **Открыть меню в игре:** клавиша `Right Shift` (`Правый Shift`).
-* **Перетаскивание виджетов HUD (Drag & Drop):** откройте чат (`T`) и перетаскивайте любой виджет мышью (с магнитным выравниванием по сетке).
+* **Главное меню и AltManager:** кастомное меню в стиле **Desire** поверх живой панорамы Minecraft (плюс выдвижная **Gallery** для выбора обоев), рабочий оффлайн-переключатель ников **AltManager** и стеклянный стиль для всех ванильных кнопок и слайдеров игры.
+* **Открыть ClickGUI в игре:** клавиша `Right Shift` (`Правый Shift`) — меню в стиле **System** со сворачиваемым сайдбаром, тёмной/светлой темой, поиском `Ctrl+F`, 3-колоночной сеткой карточек, страницами `Configs` / `Friends` и режимом `HUD Editor`.
+* **Перетаскивание виджетов HUD (Drag & Drop):** откройте чат (`T`) или нажмите `HUD Editor` в ClickGUI.
 
 ---
 
-## 🧭 Навигация по документации (Для людей и любых ИИ-систем)
+## 🧭 Навигация по документации
 
 | Файл | Назначение | Кто читает |
 | :--- | :--- | :--- |
-| [`README.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/README.md) | Обзор проекта, быстрый старт, структура папок, таблицы всех модулей и миксинов | Человек, GitHub, IDE, любые ИИ |
-| [`AGENTS.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/AGENTS.md) | Главный свод правил, ограничений безопасности, архитектуры и пайплайна сборки | Antigravity, OpenAI Codex, Windsurf, Cline, Copilot |
-| [`CLAUDE.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/CLAUDE.md) | Точка входа и инструкции для агентов Claude Code | Claude Code (`claude`) |
-| [`.cursorrules`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/.cursorrules) | Системные правила для IDE Cursor | Cursor AI |
-| [`VISUAL_DATABASE.md`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/VISUAL_DATABASE.md) | Полная визуальная база данных: палитры, координаты UI, шейдеры, рендер-пайплайн | Любой ИИ / Дизайнер / Разработчик |
+| [`README.md`](README.md) | Обзор проекта, быстрый старт, структура папок, таблицы всех модулей и миксинов | Человек, GitHub, IDE, ИИ |
+| [`AGENTS.md`](AGENTS.md) | Главный свод правил, ограничений безопасности, архитектуры и пайплайна сборки | Antigravity, Codex, Windsurf, Copilot |
+| [`CLAUDE.md`](CLAUDE.md) | Точка входа и инструкции для агентов Claude Code | Claude Code |
+| [`.cursorrules`](.cursorrules) | Системные правила для IDE Cursor | Cursor AI |
+| [`VISUAL_DATABASE.md`](VISUAL_DATABASE.md) | Полная визуальная база данных: палитры, координаты UI, рендер-пайплайн | Дизайнер / Разработчик |
 
 ---
 
 ## 📂 Структура директорий
 
 ```text
-OPTIMUSPRIME/
-├── src/                        # Основной исходный код (86 Java-файлов + ресурсы, синхронизирован с src_26/)
+OpticumeClient/
+├── src/                        # Основной исходный код (115 Java-файлов + 62 ресурса, синхронизирован с src_26/)
 │   └── main/
-│       ├── java/dev/optimusprime/
-│       │   ├── OptimusPrimeClient.java     # Главная точка входа мода (ClientModInitializer)
+│       ├── java/dev/opticumeclient/
+│       │   ├── OpticumeClient.java         # Главная точка входа мода (ClientModInitializer, MOD_ID = opticumeclient)
 │       │   ├── client/
-│       │   │   ├── gui/ClickGuiScreen.java # Единое окно ClickGUI (Sidebar Window 660x430 + 3 режима)
-│       │   │   ├── hud/                    # Менеджер HUD и 4 HUD-модуля (InfoHud, ArmorHud, PotionHud, KeystrokesHud)
-│       │   │   ├── modules/                # 42 модуля по 6 категориям + ModuleManager + Settings
-│       │   │   └── render/                 # Render2DHelper, Render3DHelper, TextureAssets, ThemeManager, Animation
-│       │   └── mixin/                      # 15 Mixin-классов (Official Mojang Mappings, JAVA_25)
+│       │   │   ├── config/                 # ConfigManager (<gameDir>/opticumeclient/)
+│       │   │   ├── friend/                 # FriendManager (<gameDir>/opticumeclient/friends.json)
+│       │   │   ├── gui/                    # System ClickGUI (ClickGuiScreen, SystemTheme, SystemModuleCard, SystemSearchModal, SystemPages)
+│       │   │   ├── hud/                    # HudManager (с автосохранением) и 4 HUD-модуля
+│       │   │   ├── modules/                # 49 модулей по категориям + ModuleManager
+│       │   │   ├── render/                 # Render2DHelper, Render3DHelper, TextureAssets, ThemeManager, Animation
+│       │   │   ├── setting/                # Настройки модулей (Boolean, Number, Mode, MultiBox, Color)
+│       │   │   └── ui/menu/                # Главное меню Desire, Gallery, оффлайн AltManager, OpticumeButtonStyle
+│       │   └── mixin/                      # 26 Mixin-классов (Official Mojang Mappings, JAVA_25)
 │       └── resources/
-│           ├── fabric.mod.json             # Метаданные мода OpticumeClient
-│           ├── optimusprime.mixins.json    # Конфигурация 15 миксинов
-│           └── assets/optimusprime/        # Текстуры (firefly, glow, snowflake, star, heart, arrow)
+│           ├── fabric.mod.json             # Метаданные мода OpticumeClient (id: opticumeclient)
+│           ├── opticumeclient.mixins.json  # Конфигурация 26 миксинов
+│           └── assets/opticumeclient/      # Иконка (icon.png), локализации (en_us, ru_ru), иконки и обои
 ├── src_26/                     # Зеркало исходников для пайплайна сборки 26.3 (авто-синхронизируется с src/)
-├── build26/                    # Артефакты сборки: скомпилированные классы и build26/libs/optimusprime-26.3.jar
-├── backups/                    # Единый чистый архив проекта: backups/OpticumeClient_backup.zip
-├── reference_sources/          # Исходные референсы открытых клиентов (только для чтения/справки)
-├── .agents/rules/              # Автоматические правила для агентов Antigravity
-├── compile_check_26.py         # Скрипт быстрой компиляции (javac --release 25 + авто-синхронизация src/ и src_26/)
-├── deploy_26.py                # Скрипт упаковки JAR и деплоя в тестовый инстанс лаунчера
-└── test_suite_26.py            # Автоматический тест-сьют (7/7 проверок)
+├── compile_check_26.py         # Скрипт проверки компиляции (javac --release 25 + авто-синхронизация)
+├── deploy_26.py                # Скрипт упаковки JAR и деплоя в инстанс лаунчера
+└── test_suite_26.py            # Автоматический тест-сьют (8/8 проверок)
 ```
 
 > [!TIP]
 > **Автоматическая синхронизация `src/` и `src_26/`:**  
-> Вы можете редактировать файлы как в `src/`, так и в `src_26/`. При запуске `python compile_check_26.py` (или `python deploy_26.py`) скрипт автоматически синхронизирует обе папки по дате последнего изменения файла (`mtime`).
+> При запуске `python compile_check_26.py` (или `python deploy_26.py`) обе папки автоматически синхронизируются по времени модификации файла. При удалении или переименовании файлов удаляйте старые копии в обеих директориях.
 
 ---
 
@@ -74,37 +75,39 @@ OPTIMUSPRIME/
 
 ```mermaid
 flowchart TD
-    A["Minecraft 26.3 (Java 25 + SDL3 + Vulkan 1.4.323)"] --> B["OptimusPrimeClient (onInitializeClient)"]
-    B --> C["ModuleManager (42 модуля в 6 категориях)"]
-    B --> D["HudManager (Drag & Drop + Smart Snap Lines)"]
-    A --> E["15 Mixins (Official Mojang Mappings)"]
+    A["Minecraft 26.3 (Java 25 + SDL3 + Vulkan 1.4.323)"] --> B["OpticumeClient (onInitializeClient)"]
+    B --> C["ModuleManager (49 модулей)"]
+    B --> D["HudManager (Drag & Drop + Smart Snap + AutoSave)"]
+    A --> E["26 Mixins (Official Mojang Mappings)"]
+    E -->|"GuiMixin / AbstractButtonMixin / AbstractSliderButtonMixin"| M["OpticumeMainMenuScreen, AltManager & Стеклянные кнопки"]
     E -->|"InGameHudMixin"| F["Render2DHelper (GuiGraphicsExtractor + GLOW_RADIAL)"]
-    E -->|"WorldRendererMixin"| G["Render3DHelper (Camera Projection + Quads)"]
-    E -->|"MouseHandlerMixin / KeyboardHandlerMixin"| H["ClickGuiScreen (SDL3 Normalized Input)"]
+    E -->|"GameRendererMixin / CameraMixin"| G["Render3DHelper & Smooth Zoom"]
+    E -->|"MouseHandlerMixin / KeyboardHandlerMixin"| H["System ClickGuiScreen (SDL3 Input)"]
 ```
 
 ---
 
-## 🧩 Полный список модулей (42 модуля)
+## 🧩 Полный список модулей (49 модулей)
 
 | Категория | Кол-во | Модули |
 | :--- | :---: | :--- |
-| **COMBAT** | 8 | `LegitAuraModule`, `KillAuraModule`, `OptimusAuraModule`, `TriggerBotModule`, `AimAssistModule`, `AutoTotemModule`, `ShieldBreakerModule`, `MiddleClickFriendModule` |
-| **MOVEMENT** | 2 | `SprintModule`, `NoSlowModule` |
-| **VISUALS** | 21 | `PlayerEspModule`, `TargetEspModule` (*Ghosts / Soul*), `ViewModelModule`, `NameTagsModule`, `PopChamsModule`, `AmbienceModule`, `KillEffectModule`, `ItemEspModule`, `TracersModule`, `ChamsModule`, `JumpCirclesModule`, `ParticlesModule`, `ChinaHatModule`, `HitBubblesModule`, `ArrowsModule`, `FullbrightModule`, `HitColorModule`, `TrailsModule`, `CrosshairModule`, `TargetHudModule`, `CustomFontModule` |
+| **COMBAT** | 8 | `LegitAuraModule`, `KillAuraModule`, `OpticumeAuraModule`, `TriggerBotModule`, `AimAssistModule`, `AutoTotemModule`, `ShieldBreakerModule`, `MiddleClickPearlModule` |
+| **FRIENDS** | 1 | `MiddleClickFriendModule` *(плюс страница Friends в ClickGUI)* |
+| **MOVEMENT** | 5 | `SprintModule`, `NoSlowModule`, `VelocityModule`, `NoPushModule`, `NoJumpDelayModule` |
+| **VISUALS** | 23 | `PlayerEspModule`, `TargetEspModule`, `ViewModelModule`, `NameTagsModule`, `PopChamsModule`, `AmbienceModule`, `KillEffectModule`, `ItemEspModule`, `TracersModule`, `ChamsModule`, `JumpCirclesModule`, `ParticlesModule`, `ChinaHatModule`, `HitBubblesModule`, `ArrowsModule`, `FullbrightModule`, `HitColorModule`, `TrailsModule`, `CrosshairModule`, `TargetHudModule`, `CustomFontModule`, `NoRenderModule`, `ZoomModule` |
 | **ANIMATIONS** | 1 | `OldAnimationsModule` |
-| **OPTIMIZATION** | 6 | `LowFireModule`, `NoHurtCamModule`, `MemoryCleanerModule`, `EntityCullingModule`, `ChunkAnimatorModule`, `FastMathModule` |
-| **HUD** | 4 | `InfoHud` (*12 встроенных суб-виджетов*), `KeystrokesHud`, `ArmorHud`, `PotionHud` |
+| **OPTIMIZATION** | 7 | `LowFireModule`, `NoHurtCamModule`, `MemoryCleanerModule`, `EntityCullingModule`, `ChunkAnimatorModule`, `FastMathModule`, `FrameSyncModule` |
+| **HUD** | 4 | `InfoHud`, `KeystrokesHud`, `ArmorHud`, `PotionHud` |
 
 ---
 
 ## ⚠️ Важные технические особенности Minecraft 26.3
 
 1. **Официальные маппинги (Official Mojang Mappings):**
-   * В Minecraft 26.3 обфускация удалена. Используются прямые имена классов и методов Mojang (`GuiGraphicsExtractor`, `DeltaTracker`, `PoseStack`, `KeyMapping`). Никаких Intermediary и `refmap.json`!
-2. **Ввод мыши через SDL3:**
-   * В `Screen.mouseClicked(MouseButtonEvent, boolean)` SDL3 передаёт коды кнопок `1=LMB, 2=MMB, 3=RMB`. В `ClickGuiScreen.normalizeMouseButton` они приводятся к `0=LMB, 1=RMB, 2=MMB`.
-3. **Ленивая инициализация `ItemStack` (`Components not bound yet`):**
-   * В Minecraft 26.3 вызов `Items.*.getDefaultInstance()` или `new ItemStack(...)` внутри `<clinit>` или конструкторов до завершения загрузки реестров выбрасывает `NullPointerException: Components not bound yet`. Все `ItemStack` для иконок HUD создаются лениво (см. `InfoHud.ensureStaticItemStacks()`).
-4. **Строгая изоляция лаунчера:**
-   * Деплой выполняется **только** в тестовый инстанс `C:\Users\User\AppData\Roaming\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods\optimusprime-26.3.jar`.
+   * В Minecraft 26.3 обфускация удалена (`GuiGraphicsExtractor`, `DeltaTracker`, `PoseStack`, `Gui.setScreen`, без Intermediary и `refmap.json`).
+2. **Ввод через SDL3:**
+   * В `Screen.mouseClicked(MouseButtonEvent, boolean)` используются SDL3-коды (`1=LMB, 2=MMB, 3=RMB`), а скан-коды клавиатуры задаются через `InputConstants.KEY_*`.
+3. **Ленивая инициализация `ItemStack`:**
+   * Все `ItemStack` для иконок HUD создаются лениво, чтобы не вызывать `NullPointerException: Components not bound yet` в `<clinit>`.
+4. **Изоляция лаунчера:**
+   * Деплой выполняется **только** в тестовый инстанс `%APPDATA%\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods\opticumeclient-26.3.jar`.

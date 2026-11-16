@@ -23,8 +23,9 @@ reference_sources/
 *.jks
 *.pfx
 
-# Python cache
+# Python cache & linters
 __pycache__/
+.ruff_cache/
 *.pyc
 *.pyo
 

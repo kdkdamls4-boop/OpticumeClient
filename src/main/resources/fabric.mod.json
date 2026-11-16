@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
-  "id": "optimusprime",
+  "id": "opticumeclient",
   "version": "${version}",
   "name": "OpticumeClient",
   "description": "High-performance Minecraft Fabric PvP, visuals and utility client with Dark Neon Glassmorphism UI.",
   "authors": [
-    "Optimus Team"
+    "OpticumeClient Team"
   ],
   "contact": {
-    "homepage": "https://github.com/optimusprime"
+    "homepage": "https://github.com/opticumeclient"
   },
   "license": "MIT",
-  "icon": "assets/optimusprime/icon.png",
+  "icon": "assets/opticumeclient/icon.png",
   "environment": "client",
   "entrypoints": {
     "client": [
-      "dev.optimusprime.OptimusPrimeClient"
+      "dev.opticumeclient.OpticumeClient"
     ]
   },
   "mixins": [
-    "optimusprime.mixins.json"
+    "opticumeclient.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.16.0",

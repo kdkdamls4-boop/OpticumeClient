@@ -1,0 +1,37 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.opticumeclient.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "AbstractButtonMixin",
+    "AbstractSliderButtonMixin",
+    "BossHealthOverlayMixin",
+    "CameraMixin",
+    "ClientPacketListenerMixin",
+    "ClientPlayerEntityMixin",
+    "EntityMixin",
+    "EntityRenderDispatcherMixin",
+    "FogRendererMixin",
+    "GameRendererMixin",
+    "GuiMixin",
+    "HeldItemRendererMixin",
+    "HumanoidArmorLayerMixin",
+    "InGameHudMixin",
+    "KeyboardHandlerMixin",
+    "LivingEntityMixin",
+    "LivingEntityRendererMixin",
+    "MinecraftAccessor",
+    "MouseHandlerMixin",
+    "MthMixin",
+    "MultiPlayerGameModeMixin",
+    "ParticleEngineMixin",
+    "PlayerEntityMixin",
+    "ScreenEffectRendererMixin",
+    "SkyRendererMixin",
+    "WeatherEffectRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

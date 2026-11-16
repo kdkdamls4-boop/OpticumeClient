@@ -1,7 +1,7 @@
-"""Package and deploy OPTIMUS PRIME for Minecraft 26.3 (Mojang/official names, Java 25).
+"""Package and deploy OpticumeClient for Minecraft 26.3 (Mojang/official names, Java 25).
 
 No intermediary, no TinyRemapper: classes compiled against the official-named client jar
-are packaged as-is. Old deploy_to_launcher.py is untouched.
+are packaged as-is.
 
 Usage: python deploy_26.py [--no-deploy] [--skip-compile] [--classes DIR]
 """
@@ -17,8 +17,9 @@ BUILD = os.path.join(ROOT, "build26")
 CLASSES = os.path.join(BUILD, "classes")
 RESOURCES = os.path.join(ROOT, "src_26", "main", "resources")
 LIBS_OUT = os.path.join(BUILD, "libs")
-JAR_NAME = "optimusprime-26.3.jar"
-MODS_DIR = r"C:\Users\User\AppData\Roaming\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods"
+JAR_NAME = "opticumeclient-26.3.jar"
+LAUNCHER = os.path.join(os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming")), "ElyPrismLauncher")
+MODS_DIR = os.path.join(LAUNCHER, "instances", "OPTIMUSPRIME", "minecraft", "mods")
 MOD_VERSION = "1.0.0+mc26.3"
 
 MANIFEST = (
@@ -100,10 +101,13 @@ def deploy():
     if not os.path.isdir(MODS_DIR):
         print(f"Mods dir not found: {MODS_DIR}")
         sys.exit(1)
-    # Warn about other jars with the same mod id (duplicates conflict in Fabric Loader)
+    # Remove legacy optimusprime jars and duplicate opticumeclient jars to avoid Fabric Loader conflicts
     for f in os.listdir(MODS_DIR):
-        if f.lower().startswith("optimusprime") and f.endswith(".jar") and f != JAR_NAME:
-            print(f"WARNING: {f} also present in mods dir - duplicate mod id 'optimusprime' will conflict!")
+        low = f.lower()
+        if low.endswith(".jar") and ((low.startswith("optimusprime") or low.startswith("opticumeclient")) and f != JAR_NAME):
+            old_jar = os.path.join(MODS_DIR, f)
+            os.remove(old_jar)
+            print(f"REMOVED stale jar from mods dir: {f}")
     target = os.path.join(MODS_DIR, JAR_NAME)
     shutil.copy2(jar_path, target)
     print(f"DEPLOYED: {target}")

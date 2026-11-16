@@ -1,6 +1,6 @@
 # 📋 OpticumeClient (MC 26.3 / Java 25) — Детальный План Задач и Техническая Спецификация (Recovery & Handoff)
 
-> **Статус сборки перед переключением ИИ:** `0 ошибок компиляции`, `7/7 тестов пройдено`, 87 исходных файлов (`src/` и `src_26/` синхронизированы), архив восстановления сохранён в [`backups/OpticumeClient_backup.zip`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/backups/OpticumeClient_backup.zip).
+> **Статус сборки перед переключением ИИ:** `0 ошибок компиляции`, `7/7 тестов пройдено`, 87 исходных файлов (`src/` и `src_26/` синхронизированы), архив восстановления сохранён в [`backups/OpticumeClient_backup.zip`](backups/OpticumeClient_backup.zip).
 
 ---
 
@@ -8,7 +8,7 @@
 
 ### Задача 1. Оптимизация индикатора `Speed` (BPS Graph) в `InfoHud.java`
 * **Симптом (скриншот 1):** Кажется, что из-за виджета `Speed` (`renderBpsGraph`) происходят микрофризы при ходьбе, а иконка спидометра имеет чёрный квадратный фон.
-* **Точная причина в коде ([`InfoHud.java:1031-1089`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/hud/InfoHud.java#L1031-L1089)):**
+* **Точная причина в коде ([`InfoHud.java:1031-1089`](src_26/main/java/dev/optimusprime/client/hud/InfoHud.java#L1031-L1089)):**
   1. В `renderBpsGraph` каждый кадр в цикле (`for (int i = 0; i < BPS_SAMPLES - 1; i += 2)`) выполняется **60 отдельных вызовов `drawGradientRect` + `drawRect`** (по 30 сегментов кривой), а также вызов `Render2DHelper.getTextWidth(speedText, 0.74f)` прямо в `onRender2D`.
   2. Текстура `assets/optimusprime/textures/speedometer.png` имеет непрозрачный чёрный фон `RGB(0,0,0)`.
 * **Что нужно сделать:**
@@ -18,7 +18,7 @@
 ---
 
 ### Задача 2. Анимация появления `Notifications`, защита от выхода за экран и анти-спам переполнения
-* **Симптом:** Уведомления (`renderNotifications` в [`InfoHud.java:1217-1253`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/hud/InfoHud.java#L1217-L1253)) не имеют плавной slide-анимации выезда/исчезновения по координатам X/Y, могут выходить за пределы маленького окна Minecraft, а при быстром переключении модулей накапливаются.
+* **Симптом:** Уведомления (`renderNotifications` в [`InfoHud.java:1217-1253`](src_26/main/java/dev/optimusprime/client/hud/InfoHud.java#L1217-L1253)) не имеют плавной slide-анимации выезда/исчезновения по координатам X/Y, могут выходить за пределы маленького окна Minecraft, а при быстром переключении модулей накапливаются.
 * **Точная причина в коде:**
   - В `renderNotifications` переменная `anim = alert.slideAnim.getValue()` применяется только к `alpha` карточки, но **не сдвигает координаты `x` / `y`** при появлении и исчезновении (`slide-in` / `slide-out`).
   - Нет проверки нижней и правой границ экрана (`screenW = mc.getWindow().getGuiScaledWidth()`, `screenH = mc.getWindow().getGuiScaledHeight()`).
@@ -30,7 +30,7 @@
 ---
 
 ### Задача 3. Исправление `MemoryCleaner` + Новые модули реальной оптимизации (`NoRender`, `FrameSync` / Render Optimizer)
-* **Симптом:** `MemoryCleaner` сейчас ничего не делает (пустой `if` на строке 28 [`MemoryCleanerModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/modules/optimization/MemoryCleanerModule.java#L28-L31)), а `FastMath` реально дал `+10..25 FPS` и стабильный фреймтайм. Нужен рабочий `MemoryCleaner`, полноценный модуль **`NoRender`** и оптимизатор рендера/синхронизации кадров (**`FrameSync` / `GpuOptimizer`**).
+* **Симптом:** `MemoryCleaner` сейчас ничего не делает (пустой `if` на строке 28 [`MemoryCleanerModule.java`](src_26/main/java/dev/optimusprime/client/modules/optimization/MemoryCleanerModule.java#L28-L31)), а `FastMath` реально дал `+10..25 FPS` и стабильный фреймтайм. Нужен рабочий `MemoryCleaner`, полноценный модуль **`NoRender`** и оптимизатор рендера/синхронизации кадров (**`FrameSync` / `GpuOptimizer`**).
 * **Что нужно сделать:**
   1. **`MemoryCleanerModule.java`:**
      - Добавить настройки: `Mode` (`Smart Trim`, `Aggressive GC`), `Interval (sec)`, `Clean Render Caches` (очистка неиспользуемых буферов/кэшей коллекций клиента без фриза на главном потоке — вызывать фоновый `CompletableFuture.runAsync(System::gc)` только при превышении порога памяти или при открытии инвентаря/паузы, плюс сбрасывать пустые кэши партиклов/трейлов).
@@ -54,8 +54,8 @@
 ---
 
 ### Задача 4. Модуль `Particles`: улучшение видимости, больше настроек и увеличение лимитов
-* **Симптом:** В [`ParticlesModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/modules/visuals/ParticlesModule.java) частицы плохо видно: маленький лимит размера (`max = 0.65`), малый лимит количества (`max = 45`, общий пул жёстко зажат `< 90` на строках 96 и 174), всего `14` светлячков в мире (`targetAmbient = 14`), и нет яркого свечения (`Glow`).
-* **Что нужно сделать в [`ParticlesModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/modules/visuals/ParticlesModule.java):**
+* **Симптом:** В [`ParticlesModule.java`](src_26/main/java/dev/optimusprime/client/modules/visuals/ParticlesModule.java) частицы плохо видно: маленький лимит размера (`max = 0.65`), малый лимит количества (`max = 45`, общий пул жёстко зажат `< 90` на строках 96 и 174), всего `14` светлячков в мире (`targetAmbient = 14`), и нет яркого свечения (`Glow`).
+* **Что нужно сделать в [`ParticlesModule.java`](src_26/main/java/dev/optimusprime/client/modules/visuals/ParticlesModule.java):**
   1. Увеличить лимиты ползунков:
      - `Hit Count`: default `30`, min `5`, **max `150`**.
      - `Ambient Count` (новый ползунок): default `45`, min `10`, **max `200`** (вместо зашитого `targetAmbient = 14`).
@@ -76,11 +76,11 @@
 * **Точная техническая причина (найдена через `javap -c FirstPersonHandsAndItemsRenderer`):**
   1. В Minecraft 26.3 метод `submitHandsWithItems` вызывает `submitArmWithItem` сначала для `MAIN_HAND`, а затем для `OFF_HAND`, передавая **один и тот же `PoseStack matrices`**.
   2. Внутри `submitArmWithItem` вызов `matrices.pushPose()` происходит на **96-м байте байткода** (после проверок `isScoping` и `avatarRenderState`).
-  3. В [`HeldItemRendererMixin.java:28`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/mixin/HeldItemRendererMixin.java#L28) инъекция стояла в `@At("HEAD")` — то есть **ДО `matrices.pushPose()`**! Из-за этого трансформация `MAIN_HAND` записывалась в родительскую матрицу `PoseStack`, не сбрасывалась в `popPose()`, и полностью наследовалась левой рукой (`OFF_HAND`)!
+  3. В [`HeldItemRendererMixin.java:28`](src_26/main/java/dev/optimusprime/mixin/HeldItemRendererMixin.java#L28) инъекция стояла в `@At("HEAD")` — то есть **ДО `matrices.pushPose()`**! Из-за этого трансформация `MAIN_HAND` записывалась в родительскую матрицу `PoseStack`, не сбрасывалась в `popPose()`, и полностью наследовалась левой рукой (`OFF_HAND`)!
   4. Кроме того, вызов `matrices.scale(...)` до `applyItemArmTransform` масштабировал базовое смещение плеча `(0.56, -0.52, -0.72)`, уводя руку за экран.
 * **Что нужно сделать:**
-  1. В [`HeldItemRendererMixin.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/mixin/HeldItemRendererMixin.java) перенести инъекцию трансформации позиции/вращения/масштаба внутрь `submitArmWithItem` **ПОСЛЕ `PoseStack.pushPose()`** (`@At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", shift = At.Shift.AFTER)`) для `translate`, а `scale` и `rotate` применять в `@Inject(method = "applyItemArmTransform", at = @At("TAIL"))` (когда матрица уже находится в локальном пивоте кисти `HumanoidArm.RIGHT` / `HumanoidArm.LEFT`!).
-  2. Добавить в [`ViewModelModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/modules/visuals/ViewModelModule.java) детальные настройки как в лучших open-source ViewModel модах (Marlow's ViewModel / ThunderHack ViewModel):
+  1. В [`HeldItemRendererMixin.java`](src_26/main/java/dev/optimusprime/mixin/HeldItemRendererMixin.java) перенести инъекцию трансформации позиции/вращения/масштаба внутрь `submitArmWithItem` **ПОСЛЕ `PoseStack.pushPose()`** (`@At(value = "INVOKE", target = "Lcom/mojang/blaze3d/vertex/PoseStack;pushPose()V", shift = At.Shift.AFTER)`) для `translate`, а `scale` и `rotate` применять в `@Inject(method = "applyItemArmTransform", at = @At("TAIL"))` (когда матрица уже находится в локальном пивоте кисти `HumanoidArm.RIGHT` / `HumanoidArm.LEFT`!).
+  2. Добавить в [`ViewModelModule.java`](src_26/main/java/dev/optimusprime/client/modules/visuals/ViewModelModule.java) детальные настройки как в лучших open-source ViewModel модах (Marlow's ViewModel / ThunderHack ViewModel):
      - Правая рука: `MainX`, `MainY`, `MainZ`, `MainScale`, `MainRotX`, `MainRotY`, `MainRotZ`.
      - Левая рука: `OffX`, `OffY`, `OffZ`, `OffScale`, `OffRotX`, `OffRotY`, `OffRotZ`.
      - `No Equip Reset` (`BooleanSetting` — убирает проваливание меча вниз при переключении слотов / ударе).
@@ -91,7 +91,7 @@
 
 ### Задача 6. Отрисовка настроек модулей в режиме `Layout: Panels` (Dropdown Panels)
 * **Симптом (скриншот 2):** При переключении ClickGUI в режим `Layout: Panels` и нажатии ПКМ по модулю (например, `ViewModel`) карточка растягивается вниз, но внутри неё пусто — настройки не рисуются и не кликаются.
-* **Точная причина в коде ([`ClickGuiScreen.java:1076-1140`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/gui/ClickGuiScreen.java#L1076-L1140)):**
+* **Точная причина в коде ([`ClickGuiScreen.java:1076-1140`](src_26/main/java/dev/optimusprime/client/gui/ClickGuiScreen.java#L1076-L1140)):**
   - В `DropdownPanel.render` высота карточки считается через `float mH = m.isExpanded() ? calculateCardHeight(m) : 24.0f;`, но метод `renderCompactModuleCard` рисует только заголовок (`cx + 5.0f, cy + 7.0f`) и переключатель, **вообще не вызывая `renderExpandedSettings`**! А `DropdownPanel.mouseClicked` проверяет только `button == 0` (toggle) и `button == 1` (expand) по всей высоте `mH`.
 * **Что нужно сделать:**
   1. Увеличить `PANEL_WIDTH` с `116.0f` до `152.0f` (или адаптировать `renderExpandedSettings` под любую ширину `cw`), вызывать `renderExpandedSettings(context, m, cx, cy, cw, ch, expandVal, mouseX, mouseY)` внутри `renderCompactModuleCard`, когда `m.isExpanded()`.
@@ -101,7 +101,7 @@
 
 ### Задача 7. Гармонизация цветов неба и тумана в `AmbienceModule`
 * **Симптом (скриншот 3):** При включении `Ambience` цвет неба и цвет тумана резко отличаются (жёсткая граница на горизонте), а хочется либо идеального слияния, либо независимой гибкой настройки (например, оставить красивый цвет неба, но отключить или смягчить туман).
-* **Точная причина в коде ([`AmbienceModule.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/modules/visuals/AmbienceModule.java), [`SkyRendererMixin.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/mixin/SkyRendererMixin.java), [`FogRendererMixin.java`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/mixin/FogRendererMixin.java)):**
+* **Точная причина в коде ([`AmbienceModule.java`](src_26/main/java/dev/optimusprime/client/modules/visuals/AmbienceModule.java), [`SkyRendererMixin.java`](src_26/main/java/dev/optimusprime/mixin/SkyRendererMixin.java), [`FogRendererMixin.java`](src_26/main/java/dev/optimusprime/mixin/FogRendererMixin.java)):**
   - По умолчанию `skyMode = "Vanilla"`, а `fogMode = "Theme"`.
   - Даже когда оба стоят в `"Theme"`, `SkyRendererMixin` умножает цвет темы на `0.45f`, а `FogRendererMixin` берёт `1.0f` без затемнения!
 * **Что нужно сделать:**
@@ -114,7 +114,7 @@
 
 ### Задача 8. Полное отображение описаний модулей и настроек в ClickGUI (`ClickGuiScreen.java`)
 * **Симптом (скриншоты 4 и 5):** На карточках всех модулей (не только `Arrows`) описание обрезается многоточием (`Круговые OOF-стрелочки радара вокруг прице...`), а у самих настроек внутри карточки описания вообще не показываются.
-* **Точная причина в коде ([`ClickGuiScreen.java:688-694`](file:///c:/Users/User/Desktop/Projects/OPTIMUSPRIME/src_26/main/java/dev/optimusprime/client/gui/ClickGuiScreen.java#L688-L694)):**
+* **Точная причина в коде ([`ClickGuiScreen.java:688-694`](src_26/main/java/dev/optimusprime/client/gui/ClickGuiScreen.java#L688-L694)):**
   - Метод `getTruncatedDescription` обрезает описание модуля в одну короткую строку до правого переключателя, и нигде не рисует ни 2-ю строку, ни всплывающий тултип (Tooltip) при наведении курсора на модуль или настройку!
 * **Что нужно сделать:**
   1. Увеличить высоту шапки карточки `CARD_HEADER_HEIGHT` с `42.0f` до `48.0f` и выводить описание модуля **в 2 строки** (перенос по словам `wrapText(desc, maxDescW, 0.64f)`) без обрезки смысла!

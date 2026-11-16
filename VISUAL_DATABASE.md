@@ -13,125 +13,123 @@
   * Внутренний зеркальный блик (Specular Sheen) сверху карточек и виджетов.
   * Мягкий внешний радиальный ореол свечения (`TextureAssets.GLOW_RADIAL`).
 * **Палитра 12 Встроенных Тем (`ThemeManager.java`):**
-  1. 🌸 **Nursultan Alpha:** Неоновый циан (`#00F5FF`) $\to$ Розово-фиолетовый (`#FF2A85`).
-  2. ⚡ **Catlavan Acid:** Кислотно-салатовый (`#39FF14`) $\to$ Электрик-циан (`#00E5FF`).
-  3. 💜 **Expensive Purple:** Насыщенный пурпур (`#A855F7`) $\to$ Глубокий индиго (`#6366F1`).
-  4. 🩸 **Rockstar Crimson:** Рубиново-алый (`#EF4444`) $\to$ Огненный оранж (`#F97316`).
-  5. ❄️ **Wexside Ice:** Ледяной лазурный (`#38BDF8`) $\to$ Мятный арктик (`#2DD4BF`).
-  6. 🤖 **Delta Cyber:** Неоновый лайм (`#84CC16`) $\to$ Бирюзовый киберпанк (`#06B6D4`).
-  7. 🌌 **Celestial Neon:** Электрический ультрамарин (`#3B82F6`) $\to$ Неоновый фиолет (`#8B5CF6`).
-  8. ⚡ **ThunderHack:** Тёмный фиолетовый грозовой (`#7C3AED`) $\to$ Золотая молния (`#FBBF24`).
-  9. 🌅 **Astolfo Sunset:** Закатный персиковый (`#F43F5E`) $\to$ Тёплый янтарь (`#FB923C`).
-  10. 🌊 **Rise Ocean:** Глубокий сапфировый (`#0284C7`) $\to$ Морская волна (`#14B8A6`).
-  11. 🟢 **DeadCode Matrix:** Матричный изумруд (`#10B981`) $\to$ Цифровой лайм (`#22C55E`).
-  12. 👻 **Vape Ghost:** Призрачный мятный фантом (`#2DD4BF`) $\to$ Серебристо-дымчатый (`#94A3B8`).
+  1. 🌸 **Nursultan Alpha:** Неоновый фиолет (`#7B61FF`) $\to$ Неоновый циан (`#00E5FF`).
+  2. ⚡ **Catlavan Acid:** Кислотно-розовый (`#FF2A85`) $\to$ Электрик-циан (`#00F0FF`).
+  3. 💜 **Expensive Purple:** Насыщенный пурпур (`#8A5CF6`) $\to$ Маджента (`#D946EF`).
+  4. 🩸 **Rockstar Crimson:** Рубиново-алый (`#FF2E54`) $\to$ Огненный оранж (`#FF8A00`).
+  5. ❄️ **Wexside Ice:** Ледяной лазурный (`#38BDF8`) $\to$ Глубокий индиго (`#6366F1`).
+  6. 🤖 **Delta Cyber:** Неоновый мятный (`#00F5A0`) $\to$ Бирюзовый киберпанк (`#00D9F5`).
+  7. 🌌 **Celestial Neon:** Ярко-розовый (`#FF007F`) $\to$ Неоновый фиолет (`#7928CA`).
+  8. ⚡ **ThunderHack:** Грозовой аметист (`#A855F7`) $\to$ Маджента (`#EC4899`).
+  9. 🌅 **Astolfo Sunset:** Закатный персиковый (`#FF6B9D`) $\to$ Бирюза (`#4ECDC4`).
+  10. 🌊 **Rise Ocean:** Глубокий сапфировый (`#2563EB`) $\to$ Аква (`#06B6D4`).
+  11. 🟢 **DeadCode Matrix:** Матричный изумруд (`#22C55E`) $\to$ Цифровой лайм (`#A3E635`).
+  12. 👻 **Vape Ghost:** Стелс-синий (`#3B82F6`) $\to$ Светлый голубой (`#60A5FA`).
 
 ---
 
 ## 🖥️ 2. ClickGUI — Главное Меню Клиента
 
-* **Режим по умолчанию:** Единое окно с сайдбаром (`Sidebar Window Mode`, размер: `660 x 430` px, центрировано).
+* **Режим 1 (по умолчанию):** Единое окно с сайдбаром (`Sidebar Window Mode`, размер: `660 x 430` px, центрировано).
 * **Левый Сайдбар (155 px):**
-  * **Шапка:** Мини-логотип молнии (`TextureAssets.MINI_LOGO`) + градиентный текст `"OPTIMUS"` и бейдж версии `"PRIME 26.3"`.
+  * **Шапка:** Мини-логотип молнии (`TextureAssets.MINI_LOGO`) + градиентный текст `"OpticumeClient"` и бейдж версии `"v1.0.0 • 26.3"`.
   * **Список категорий (с анимированной скользящей пилюлей):**
-    * ⚔️ `Combat` (Aura, ShieldBreaker, TriggerBot, AutoTotem)
-    * 👁️ `Visuals` (TargetESP, Crosshair, TargetHUD, ChinaHat, Trails, JumpCircles, Particles)
-    * 🚀 `Optimization` (EntityCulling, FastMath, ChunkAnimator, MemoryCleaner)
-    * 🖥️ `HUD` (Watermark, ArrayList, ArmorHUD, Cooldowns, Radar, StaffList, KeyBinds)
-    * ⚡ `Movement` (Sprint, NoSlow, Velocity)
-    * 👥 `Friends` (FriendManager)
+    * ⚔️ `Combat` (`OpticumeAura`, `KillAura`, `LegitAura`, `ShieldBreaker`, `TriggerBot`, `AimAssist`, `AutoTotem`, `MiddleClickPearl`)
+    * 👁️ `Visuals` (`TargetESP`, `Crosshair`, `TargetHUD`, `ViewModel`, `NameTags`, `PopChams`, `Ambience`, `KillEffect`, `ItemESP`, `Tracers`, `Chams`, `ChinaHat`, `Trails`, `JumpCircles`, `Particles`, `NoRender`, `Zoom`, ...)
+    * 🚀 `Optimization` (`EntityCulling`, `FastMath`, `FrameSync`, `ChunkAnimator`, `MemoryCleaner`, `LowFire`, `NoHurtCam`)
+    * 🖥️ `HUD` (`InfoHud`, `KeystrokesHud`, `ArmorHud`, `PotionHud`)
+    * ⚡ `Movement` (`Sprint`, `NoSlow`, `Velocity`, `NoPush`, `NoJumpDelay`)
+    * 👥 `Friends` (модуль `MiddleClickFriend` + встроенный **Friends Manager**: ввод ника, список сохранённых друзей и быстрые кнопки `+ Add / ✓ Friend` для онлайн-игроков)
   * **Нижняя панель сайдбара:**
-    * Кнопка быстрой смены темы (`ThemeSelector` с 2D-превью цвета).
-    * Карточка профиля игрока: сглаженная голова скина (`PlayerFaceExtractor`), ник, ранг `#0001 | Prime` и индикатор FPS.
+    * Кнопка **`Config: <active>`** (открывает экран `Configs & Presets` с загрузкой, сохранением, автозагрузкой `★ Auto` и удалением).
+    * Кнопка **`Theme: <name>`** (`ThemeSelector` с 12 темами).
+    * Карточка профиля игрока: сглаженная голова скина (`drawPlayerHead`), ник (fallback `"OpticumeClient"`), ранг `UID: #0001 | OpticumeClient` и индикатор FPS.
 * **Правая Рабочая Зона (Контент модулей):**
-  * **Верхняя панель:** Название категории, переключатель `[View: Sidebar / Panels]`, фильтр `[Bind Only]`, строка живого поиска (`Search modules...`).
+  * **Верхняя панель:** Название категории, переключатель `Layout: Window / Panels`, фильтр `Bound Only` (или `+ Save New` в конфигах), строка живого поиска (`Search modules...`).
   * **Сетка карточек (Masonry Grid, 2 колонки):**
-    * Карточки модулей размером `234 x 42` px (свернутые).
-    * Внутри карточки: название модуля, краткое описание (мутный серый шрифт), бейдж текущего бинда клавиши (`[-]`), кнопка-тумблер со скользящей неоновой пилюлей.
-    * По правому клику (ПКМ) карточка раскрывается вниз, отображая вложенные компоненты: слайдеры с заполнением, выпадающие списки (Mode), чипы-пилюли (MultiBox) и расширенный 2D HSB+Alpha колор-пикер.
+    * Карточки модулей шириной `233` px, шапка `48` px с 2-строчным переносом описания и плавающим стеклянным тултипом (`Floating Liquid Glass Tooltip`).
+    * По правому клику (ПКМ) карточка раскрывается вниз, отображая вложенные компоненты: слайдеры с заполнением, выпадающие списки (`Mode`), чипы (`MultiBox`), настройку бинда (`Keybind`) и раскрывающийся **2D HSB + Alpha + Rainbow пикер** для `ColorSetting`.
+* **Режим 2 (`Layout: Panels`):**
+  * 6 перетаскиваемых колонок категорий шириной `152` px с раскрытием настроек внутри панелей, списком друзей в панели `Friends`, живым поиском в верхней панели (`barW = 580` px) и модальным оверлеем `Configs & Presets`.
 
 ---
 
 ## 📊 3. HUD (Оверлей Виджетов в Игре)
 
-Все 16 виджетов свободно перемещаются мышью при открытии чата (`ChatScreen`) с умными направляющими прилипания (`Smart Snap Lines`):
+Виджеты свободно перемещаются мышью при открытии чата (`ChatScreen`) или ClickGUI с умными направляющими прилипания (`Smart Snap Lines`) и автоматическим сохранением координат в активный конфиг:
 
-1. **Watermark / Dynamic Island (Сверху):** Стеклянная капсула с логотипом, именем клиента, ником, FPS, пингом, скоростью (BPS), системными часами.
-2. **ArrayList (Справа сверху):** Раскрывающийся список активных модулей, отсортированный по ширине текста с неоновыми боковыми маркерами и бейджами режимов.
-3. **TargetHUD (Рядом с прицелом):**
-   * Стили: *Nursultan*, *Catlavan*, *ThunderHack*.
-   * Пружинная анимация появления (`EaseOutBack`), 2D-голова цели с эффектом сжатия и покраснения при уроне, разлетающиеся частицы крови/сердец, двойной бар HP (основной + запаздывающий след урона), золотой бар абсорбции, броня и оружие в руках, бейдж превосходства (`WIN / LOSE`).
-4. **ArmorHUD:** Горизонтальные или вертикальные слоты брони + предметы в руках с полосками прочности и процентом износа.
-5. **Cooldowns:** Иконки эндер-жемчуга, золотых яблок, хоруса и винд-чарджа с полосками перезарядки.
-6. **KeyBinds:** Панель активных забиндженных клавиш и их текущий статус (`[TOGGLE]`).
-7. **StaffList:** Список обнаруженных модераторов/админов сервера (парсинг таб-листа и дистанции).
-8. **2D Radar:** Круговой радар с точками союзников (синие), врагов (красные) и мобов с дистанционными кольцами.
-9. **Speedometer & BPS Graph:** Сглаженный график скорости игрока в блоках в секунду.
-10. **Totem & GApple Counter:** Компактная плашка с количеством тотемов, чарок и перлов в инвентаре.
-11. **PotionHUD:** Список активных эффектов зелий с таймерами и цветными иконками.
-12. **Keystrokes:** Стеклянные интерактивные клавиши WASD + кнопки мыши (LMB/RMB) со счётчиком CPS.
-13. **Coordinates:** Координаты XYZ и сторона света.
-14. **Notifications:** Всплывающие уведомления в стиле Dynamic Island справа снизу.
+1. **Watermark:** Стеклянная капсула с логотипом, именем `"OpticumeClient"`, ником, FPS, пингом, скоростью (BPS), координатами XYZ.
+2. **Dynamic Island:** Симметрично расширяющаяся капсула с эквалайзером, временем, телеметрией и алертами переключения модулей.
+3. **ArrayList:** Раскрывающийся список активных модулей, отсортированный по ширине текста с неоновыми боковыми маркерами и бейджами режимов.
+4. **TargetHUD:** Стили *Nursultan*, *Catlavan*, *ThunderHack*; пружинная анимация `EaseOutBack`, 2D-голова цели, частицы урона, двойной бар HP, броня, предмет в руке и бейдж `WIN / LOSE`.
+5. **ArmorHUD:** Слоты брони + предметы в руках с полосками прочности.
+6. **Cooldowns:** Иконки эндер-жемчуга, золотых яблок, хоруса и винд-чарджа с полосками перезарядки.
+7. **KeyBinds:** Панель активных забиндженных клавиш и их текущий статус.
+8. **StaffList:** Список обнаруженных модераторов/админов сервера.
+9. **2D Radar:** Круговой радар с точками союзников (друзей) и врагов.
+10. **Speedometer & BPS Graph:** Сглаженный график скорости игрока в блоках в секунду.
+11. **Totem & GApple Counter:** Компактная плашка с количеством тотемов, яблок и перлов.
+12. **PotionHUD:** Список активных эффектов зелий с таймерами.
+13. **Keystrokes:** Интерактивные клавиши WASD + кнопки мыши (LMB/RMB) со счётчиком CPS.
+14. **Coordinates:** Координаты XYZ и сторона света.
+15. **Notifications:** Всплывающие уведомления с `EaseOutBack` / `EaseInBack` и защитой границ экрана.
 
 ---
 
 ## 🔮 4. 3D-Визуалы и Эффекты
 
-* **TargetESP:**
-  * Режим *Ghosts*: 3 светящиеся траектории частиц (`firefly.png`), вращающиеся вокруг цели со смещением по синусоиде.
-  * Режим *Jello Ring*: плавающее пульсирующее кольцо у ног цели с градиентным затуханием.
-  * Режим *Nurik Quad*: 4 неоновые вертикальные стойки с угловыми засечками.
-  * Режим *Spiral*: восходящая спираль частиц вокруг тела моба.
-* **Crosshair (Прицел):**
-  * Стили: *Nursultan Circle* (плавное кольцо с радиальным индикатором кулдауна удара и точкой), *Catlavan Cross* (динамический крестик с разлетом при ходьбе), *Expensive Modern* (кольцо + 4 засечки), *Dot* (минималистичная точка).
-* **JumpCircles:** Неоновые круги на земле в месте прыжка, плавно расширяющиеся и затухающие.
-* **ChinaHat:** Неоновая коническая шляпа над головой игрока с вращающимися ободами.
-* **Trails:** Градиентная светящаяся лента за спиной игрока при движении.
-* **HitBubbles & Particles:** Вылетающие анимированные пузыри урона и частицы при ударах по сущностям.
-* **Arrows:** Круговые стрелки вокруг прицела, указывающие на игроков вне зоны видимости (FOV).
+* **TargetESP:** Режимы *Ghosts*, *Jello Ring*, *Nurik Quad*, *Spiral*.
+* **Crosshair (Прицел):** Стили *Nursultan Circle*, *Catlavan Cross*, *Expensive Modern*, *Dot*.
+* **ViewModel & OldAnimations:** Изолированная настройка смещения/масштаба/поворота правой и левой руки around кисти, анимации удара (`Nursultan Smooth`, `1.7 BlockHit`, `Exhibition`, др.).
+* **Ambience:** Синхронизация неба и тумана (`Sync Sky`), независимые ползунки яркости.
+* **JumpCircles, ChinaHat, Trails, HitBubbles, Particles (Glow Halo), Arrows, Zoom.**
 
 ---
 
 ## 📁 5. Структура Репозитория и Карта Файлов
 
 ```text
-c:\Users\User\Desktop\Projects\OPTIMUSPRIME\
-├── AGENTS.md                          # Главные правила и инструкции для ИИ-агентов
-├── VISUAL_DATABASE.md                 # Данный документ (визуальная база и архитектура)
-├── compile_check_26.py                # Скрипт быстрой проверки компиляции (Java 25, 0 ошибок)
-├── test_suite_26.py                   # Комплексный тест-сьют (7/7 проверок)
-├── deploy_26.py                       # Сборка jar и деплой в Optimus Prime Test
-├── src_26/main/                       # АКТИВНЫЙ ИСХОДНЫЙ КОД ПОД MINECRAFT 26.3
+<PROJECT_ROOT>/
+├── AGENTS.md                            # Главные правила и инструкции для ИИ-агентов
+├── VISUAL_DATABASE.md                   # Данный документ (визуальная база и архитектура)
+├── compile_check_26.py                  # Скрипт быстрой проверки компиляции (Java 25, 0 ошибок)
+├── test_suite_26.py                     # Комплексный тест-сьют (8/8 проверок)
+├── deploy_26.py                         # Сборка jar и деплой в instances\OPTIMUSPRIME\minecraft\mods
+├── src_26/main/                         # АКТИВНЫЙ ИСХОДНЫЙ КОД ПОД MINECRAFT 26.3 (синхронизирован с src/)
 │   ├── resources/
-│   │   ├── fabric.mod.json            # Манифест мода (id: optimusprime, name: OpticumeClient)
-│   │   ├── optimusprime.mixins.json   # Конфигурация 11 миксинов под Java 25
-│   │   └── assets/optimusprime/textures/ # Ассеты (firefly, circle, hitbubble, mini_logo и др.)
-│   └── java/dev/optimusprime/
-│       ├── OptimusPrimeClient.java    # Точка входа Fabric Client ModInitializer
+│   │   ├── fabric.mod.json              # Манифест мода (id: opticumeclient, name: OpticumeClient)
+│   │   ├── opticumeclient.mixins.json   # Конфигурация 26 миксинов под Java 25
+│   │   └── assets/opticumeclient/       # icon.png, lang/{en_us,ru_ru}.json, menu/{icons,wallpapers} и текстуры
+│   └── java/dev/opticumeclient/
+│       ├── OpticumeClient.java          # Точка входа Fabric ClientModInitializer
 │       ├── client/
-│       │   ├── friend/                # Менеджер друзей (FriendManager)
-│       │   ├── gui/                   # ClickGUI, ModuleCard, выпадающие панели и компоненты
-│       │   │   ├── ClickGuiScreen.java
-│       │   │   ├── ModuleCard.java
-│       │   │   └── component/         # Boolean, Slider, Mode, MultiBox, Color, Bind
-│       │   ├── hud/                   # HudManager, DraggableWidget, InfoHud, ArmorHud, PotionHud, KeystrokesHud
+│       │   ├── config/                  # ConfigManager (<gameDir>/opticumeclient/, миграция из opticume/)
+│       │   ├── friend/                  # FriendManager (<gameDir>/opticumeclient/friends.json)
+│       │   ├── gui/                     # ClickGuiScreen (System), SystemTheme, SystemModuleCard, SystemSearchModal, SystemPages
+│       │   ├── ui/menu/                 # OpticumeMainMenuScreen (Desire), OpticumeAltScreen, MenuWallpapers, OpticumeButtonStyle
+│       │   ├── hud/                     # HudManager, InfoHud, ArmorHud, PotionHud, KeystrokesHud
 │       │   ├── modules/
 │       │   │   ├── Module.java / ModuleManager.java / Category.java
-│       │   │   ├── combat/            # KillAura, ShieldBreaker, TriggerBot, AutoTotem
-│       │   │   ├── movement/          # Sprint, NoSlow, Velocity
-│       │   │   ├── optimization/      # EntityCulling, FastMath, MemoryCleaner, ChunkAnimator
-│       │   │   └── visuals/           # TargetEsp, Crosshair, TargetHud, ChinaHat, Trails, JumpCircles, Particles...
-│       │   ├── render/                # Render2DHelper, Render3DHelper, TextureAssets, ThemeManager, ColorUtils, Animation, Easing
-│       │   └── setting/               # Setting, BooleanSetting, NumberSetting, ModeSetting, ColorSetting, MultiBoxSetting
-│       └── mixin/                     # 11 миксинов к ванильному клиенту MC 26.3
-│           ├── MouseHandlerMixin.java (фикс кликов и Drag&Drop в ChatScreen)
-│           ├── KeyboardHandlerMixin.java (глобальные бинды)
-│           ├── EntityRenderDispatcherMixin.java (куллинг мобов)
-│           ├── MthMixin.java (FastMath синусы)
-│           ├── GameRendererMixin.java (3D-рендер мира)
-│           ├── InGameHudMixin.java (2D-рендер HUD)
-│           └── ClientPlayerEntityMixin, EntityMixin, LivingEntityRendererMixin, PlayerEntityMixin, HeldItemRendererMixin
-└── reference_sources/                 # Эталонные исходники для подглядывания архитектуры
-    ├── thunderhack/                   # ThunderHack Recode (шейдеры, 3D Engine, партиклы)
-    └── cis_visuals/                   # Expensive 2.0 / 3.1 / Upgrade Fabric (GUI, RenderEngine, JumpCircles)
+│       │   │   ├── animations/          # OldAnimationsModule
+│       │   │   ├── combat/              # OpticumeAura, KillAura, LegitAura, ShieldBreaker, TriggerBot, AimAssist, AutoTotem, MiddleClickPearl, MiddleClickFriend
+│       │   │   ├── movement/            # Sprint, NoSlow, Velocity, NoPush, NoJumpDelay
+│       │   │   ├── optimization/        # EntityCulling, FastMath, FrameSync, MemoryCleaner, ChunkAnimator, LowFire, NoHurtCam
+│       │   │   └── visuals/             # TargetEsp, Crosshair, TargetHud, ViewModel, Ambience, Particles, NoRender, Zoom, ...
+│       │   ├── render/                  # Render2DHelper, Render3DHelper, TextureAssets, ThemeManager, ColorUtils, Animation, Easing
+│       │   └── setting/                 # Setting, BooleanSetting, NumberSetting, ModeSetting, ColorSetting, MultiBoxSetting
+│       └── mixin/                       # 26 миксинов к ванильному клиенту MC 26.3
+│           ├── GuiMixin.java (подмена TitleScreen на OpticumeMainMenuScreen)
+│           ├── AbstractButtonMixin.java (стеклянный стиль ванильных кнопок Desire)
+│           ├── AbstractSliderButtonMixin.java (стеклянный стиль ванильных слайдеров)
+│           ├── MinecraftAccessor.java (переключение User в AltManager)
+│           ├── CameraMixin.java (плавный Zoom)
+│           ├── LivingEntityMixin.java (NoJumpDelay)
+│           ├── ClientPacketListenerMixin.java (Velocity, PopChams, KillEffect)
+│           ├── ScreenEffectRendererMixin.java (NoRender Fire/Totem + LowFire)
+│           └── BossHealthOverlayMixin, ClientPlayerEntityMixin, EntityMixin, EntityRenderDispatcherMixin,
+│               FogRendererMixin, GameRendererMixin, HeldItemRendererMixin, HumanoidArmorLayerMixin,
+│               InGameHudMixin, KeyboardHandlerMixin, LivingEntityRendererMixin, MouseHandlerMixin,
+│               MthMixin, MultiPlayerGameModeMixin, ParticleEngineMixin, PlayerEntityMixin,
+│               SkyRendererMixin, WeatherEffectRendererMixin
+└── reference_sources/                   # Эталонные исходники для справки
 ```

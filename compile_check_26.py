@@ -12,7 +12,7 @@ import sys
 import zipfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-LAUNCHER = r"C:\Users\User\AppData\Roaming\ElyPrismLauncher"
+LAUNCHER = os.path.join(os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming")), "ElyPrismLauncher")
 LIBS = os.path.join(LAUNCHER, "libraries")
 META = os.path.join(LAUNCHER, "meta")
 JAVAC = os.path.join(LAUNCHER, r"java\java-runtime-epsilon\bin\javac.exe")
