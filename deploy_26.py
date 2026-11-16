@@ -18,7 +18,8 @@ CLASSES = os.path.join(BUILD, "classes")
 RESOURCES = os.path.join(ROOT, "src_26", "main", "resources")
 LIBS_OUT = os.path.join(BUILD, "libs")
 JAR_NAME = "opticumeclient-26.3.jar"
-LAUNCHER = os.path.join(os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming")), "ElyPrismLauncher")
+APPDATA = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+LAUNCHER = os.path.join(APPDATA, "ElyPrismLauncher")
 MODS_DIR = os.path.join(LAUNCHER, "instances", "OPTIMUSPRIME", "minecraft", "mods")
 MOD_VERSION = "1.0.0+mc26.3"
 
