@@ -3,6 +3,7 @@ package dev.opticumeclient.client.modules.optimization;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.setting.NumberSetting;
+import net.minecraft.client.Camera;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity; 
 
@@ -25,9 +26,14 @@ public class EntityCullingModule extends Module {
         if (!isEnabled() || mc.player == null) return false;
         if (entity == mc.player) return false;
 
-        double px = mc.player.getX();
-        double py = mc.player.getY();
-        double pz = mc.player.getZ();
+        Camera cam = (mc.gameRenderer != null) ? mc.gameRenderer.mainCamera() : null;
+        if (cam != null && cam.isInitialized() && entity == cam.entity()) {
+            return false;
+        }
+
+        double px = (cam != null && cam.isInitialized()) ? cam.position().x : mc.player.getX();
+        double py = (cam != null && cam.isInitialized()) ? cam.position().y : mc.player.getY();
+        double pz = (cam != null && cam.isInitialized()) ? cam.position().z : mc.player.getZ();
 
         double dx = entity.getX() - px;
         double dy = entity.getY() - py;
@@ -41,9 +47,9 @@ public class EntityCullingModule extends Module {
 
         // Behind-the-back culling for entities further than 8 blocks (8^2 = 64)
         if (distSq > 64.0) {
-            // Analytical look vector from player rotation angles (zero Vec3 allocations)
-            float xRot = mc.player.getXRot();
-            float yRot = mc.player.getYRot();
+            // Analytical look vector from camera/player rotation angles (zero Vec3 allocations)
+            float xRot = (cam != null && cam.isInitialized()) ? cam.xRot() : mc.player.getXRot();
+            float yRot = (cam != null && cam.isInitialized()) ? cam.yRot() : mc.player.getYRot();
             float f = xRot * 0.017453292F;
             float g = -yRot * 0.017453292F;
             float h = Mth.cos(g);

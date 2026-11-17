@@ -37,12 +37,19 @@ public abstract class MouseHandlerMixin {
         if (buttonInfo != null) {
             int button = buttonInfo.button();
             boolean pressed = (action == 1);
+            boolean inGame = pressed && this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null;
             if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 this.isLeftPressed = pressed;
+                if (inGame) {
+                    dev.opticumeclient.client.hud.KeystrokesHud.recordLeftClick();
+                }
             } else if (button == InputConstants.MOUSE_BUTTON_MIDDLE) {
                 this.isMiddlePressed = pressed;
             } else if (button == InputConstants.MOUSE_BUTTON_RIGHT) {
                 this.isRightPressed = pressed;
+                if (inGame) {
+                    dev.opticumeclient.client.hud.KeystrokesHud.recordRightClick();
+                }
             }
         }
     }

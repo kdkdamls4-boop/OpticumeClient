@@ -78,7 +78,11 @@
 
 ## 🔮 4. 3D-Визуалы и Эффекты
 
-* **TargetESP:** Режимы *Ghosts*, *Jello Ring*, *Nurik Quad*, *Spiral*.
+* **TargetESP (полный порт Desire):**
+  * 7 режимов отображения: `Карты`, `Квадрат` (Типы 1–2), `Кольцо` (Типы 1–3, включая желе-кольцо `JellyShape`), `Кристалики` (Типы 1–5), `Молнии` (Типы 1–3), `Пентограмма` (Типы 1–2), `Призраки` (Типы 1–8).
+  * 25 динамически скрываемых настроек (`visibleWhen`), 35 SPIR-V-адаптированных шейдеров в `assets/opticumeclient/shaders/core/targetesp/`, 12 текстур в `assets/opticumeclient/targetesp/`, экранное преломление (`GlowDistortionPass`), Gaussian bloom (`EspBloomPass`) и динамическое освещение поверхностей блоков (`SurfaceLightingPass`).
+* **CustomFont (MSDF Font Renderer):**
+  * Полноценный MSDF-рендер текста (`OpticumeFonts` / `MsdfFontFace`) со шрифтами `Inter Medium`, `Inter Regular`, `Inter SemiBold`, `Outfit SemiBold` и SPIR-V шейдерами `msdf_text.vsh` / `msdf_text.fsh`.
 * **Crosshair (Прицел):** Стили *Nursultan Circle*, *Catlavan Cross*, *Expensive Modern*, *Dot*.
 * **ViewModel & OldAnimations:** Изолированная настройка смещения/масштаба/поворота правой и левой руки around кисти, анимации удара (`Nursultan Smooth`, `1.7 BlockHit`, `Exhibition`, др.).
 * **Ambience:** Синхронизация неба и тумана (`Sync Sky`), независимые ползунки яркости.
@@ -95,11 +99,11 @@
 ├── compile_check_26.py                  # Скрипт быстрой проверки компиляции (Java 25, 0 ошибок)
 ├── test_suite_26.py                     # Комплексный тест-сьют (8/8 проверок)
 ├── deploy_26.py                         # Сборка jar и деплой в instances\OPTIMUSPRIME\minecraft\mods
-├── src_26/main/                         # АКТИВНЫЙ ИСХОДНЫЙ КОД ПОД MINECRAFT 26.3 (синхронизирован с src/)
+├── src_26/main/                         # АКТИВНЫЙ ИСХОДНЫЙ КОД ПОД MINECRAFT 26.3 (127 Java-файлов, 115 ресурсов, синхронизирован с src/)
 │   ├── resources/
 │   │   ├── fabric.mod.json              # Манифест мода (id: opticumeclient, name: OpticumeClient)
-│   │   ├── opticumeclient.mixins.json   # Конфигурация 26 миксинов под Java 25
-│   │   └── assets/opticumeclient/       # icon.png, lang/{en_us,ru_ru}.json, menu/{icons,wallpapers} и текстуры
+│   │   ├── opticumeclient.mixins.json   # Конфигурация 27 миксинов под Java 25
+│   │   └── assets/opticumeclient/       # icon.png, lang/{en_us,ru_ru}.json, fonts/msdf, shaders/core/targetesp (35), targetesp (12), menu
 │   └── java/dev/opticumeclient/
 │       ├── OpticumeClient.java          # Точка входа Fabric ClientModInitializer
 │       ├── client/
@@ -113,14 +117,16 @@
 │       │   │   ├── animations/          # OldAnimationsModule
 │       │   │   ├── combat/              # OpticumeAura, KillAura, LegitAura, ShieldBreaker, TriggerBot, AimAssist, AutoTotem, MiddleClickPearl, MiddleClickFriend
 │       │   │   ├── movement/            # Sprint, NoSlow, Velocity, NoPush, NoJumpDelay
-│       │   │   ├── optimization/        # EntityCulling, FastMath, FrameSync, MemoryCleaner, ChunkAnimator, LowFire, NoHurtCam
-│       │   │   └── visuals/             # TargetEsp, Crosshair, TargetHud, ViewModel, Ambience, Particles, NoRender, Zoom, ...
-│       │   ├── render/                  # Render2DHelper, Render3DHelper, TextureAssets, ThemeManager, ColorUtils, Animation, Easing
-│       │   └── setting/                 # Setting, BooleanSetting, NumberSetting, ModeSetting, ColorSetting, MultiBoxSetting
-│       └── mixin/                       # 26 миксинов к ванильному клиенту MC 26.3
+│       │   │   ├── optimization/        # EntityCulling, FrameSync, MemoryCleaner, LowFire, NoHurtCam
+│       │   │   └── visuals/             # TargetEspModule + targetesp/ (16 классов), Crosshair, TargetHud, ViewModel, CustomFont, NoRender, Zoom, ...
+│       │   ├── render/                  # Render2DHelper, Render3DHelper, font/OpticumeFonts, TextureAssets, ThemeManager, ColorUtils, Animation, Easing
+│       │   └── setting/                 # Setting (с visibleWhen), BooleanSetting, NumberSetting, ModeSetting, ColorSetting, MultiBoxSetting
+│       └── mixin/                       # 27 миксинов к ванильному клиенту MC 26.3
 │           ├── GuiMixin.java (подмена TitleScreen на OpticumeMainMenuScreen)
 │           ├── AbstractButtonMixin.java (стеклянный стиль ванильных кнопок Desire)
 │           ├── AbstractSliderButtonMixin.java (стеклянный стиль ванильных слайдеров)
+│           ├── GuiGraphicsExtractorMixin.java (MSDF CustomFont)
+│           ├── LightmapRenderStateExtractorMixin.java (FullbrightModule в MC 26.3)
 │           ├── MinecraftAccessor.java (переключение User в AltManager)
 │           ├── CameraMixin.java (плавный Zoom)
 │           ├── LivingEntityMixin.java (NoJumpDelay)
@@ -129,7 +135,7 @@
 │           └── BossHealthOverlayMixin, ClientPlayerEntityMixin, EntityMixin, EntityRenderDispatcherMixin,
 │               FogRendererMixin, GameRendererMixin, HeldItemRendererMixin, HumanoidArmorLayerMixin,
 │               InGameHudMixin, KeyboardHandlerMixin, LivingEntityRendererMixin, MouseHandlerMixin,
-│               MthMixin, MultiPlayerGameModeMixin, ParticleEngineMixin, PlayerEntityMixin,
+│               MultiPlayerGameModeMixin, ParticleEngineMixin, PlayerEntityMixin,
 │               SkyRendererMixin, WeatherEffectRendererMixin
 └── reference_sources/                   # Эталонные исходники для справки
 ```

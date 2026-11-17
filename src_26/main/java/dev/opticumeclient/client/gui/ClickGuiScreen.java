@@ -14,7 +14,6 @@ import dev.opticumeclient.client.setting.ColorSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
 import dev.opticumeclient.client.ui.menu.MenuConfigStore;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.CharacterEvent;
@@ -91,6 +90,7 @@ public class ClickGuiScreen extends Screen {
     private float targetScroll = 0.0f;
     private float currentScroll = 0.0f;
     private float maxScroll = 0.0f;
+    private Module pendingJumpModule = null;
     private float openProgress = 0.0f;
     private boolean closing = false;
     private boolean hudEditorMode = false;
@@ -255,7 +255,6 @@ public class ClickGuiScreen extends Screen {
 
     private void renderSideBar(GuiGraphicsExtractor context, float sx, float sy, float sw, float sh,
                                int mouseX, int mouseY, float alpha) {
-        Font font = minecraft.font;
         float expandRatio = Mth.clamp((sw - SIDEBAR_COLLAPSED_W) / (SIDEBAR_EXPANDED_W - SIDEBAR_COLLAPSED_W), 0.0f, 1.0f);
 
         context.enableScissor(Math.round(sx), Math.round(sy), Math.round(sx + sw), Math.round(sy + sh));
@@ -286,6 +285,7 @@ public class ClickGuiScreen extends Screen {
                 activePage == NavPage.FAVORITES, expandRatio, mouseX, mouseY, alpha);
 
         for (Category cat : Category.values()) {
+            if (cat == Category.FRIENDS) continue;
             boolean act = (activePage == NavPage.CATEGORY && selectedCategory == cat);
             curY = renderSideItem(context, sx, curY, sw, cat.getDisplayName(), getCategoryIcon(cat),
                     act, expandRatio, mouseX, mouseY, alpha);
@@ -338,7 +338,7 @@ public class ClickGuiScreen extends Screen {
         Render2DHelper.drawPlayerHeadByUuid(context, UUIDUtil.createOfflinePlayerUUID(uname),
                 Math.round(sx + 11), Math.round(footY + 5), 16, alpha);
         if (expandRatio > 0.2f) {
-            Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, uname, 0.80f, sw - 46.0f),
+            Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(uname, 0.80f, sw - 46.0f),
                     sx + 32.0f, footY + 5.5f, SystemTheme.fade(SystemTheme.foreground(), alpha * expandRatio), 0.80f, false);
             Render2DHelper.drawScaledText(context, ConfigManager.getInstance().getActiveConfigName(),
                     sx + 32.0f, footY + 15.0f, SystemTheme.fade(SystemTheme.mutedFg(), alpha * expandRatio), 0.66f, false);
@@ -379,23 +379,26 @@ public class ClickGuiScreen extends Screen {
         float sideBtnX = tx + 10.0f;
         float btnY = ty + (th - btnSize) * 0.5f;
         drawIconToolButton(context, sideBtnX, btnY, btnSize, TextureAssets.ICON_SIDEBAR, mouseX, mouseY, sidebarCollapsed, alpha);
+        if (isInside(mouseX, mouseY, sideBtnX, btnY, btnSize, btnSize)) {
+            hoverTarget.title = sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar";
+            hoverTarget.description = sidebarCollapsed ? "Expand sidebar navigation panel" : "Collapse sidebar to compact icon bar";
+        }
 
         String title = getCurrentPageTitle();
         float titleX = sideBtnX + btnSize + 10.0f;
         Render2DHelper.drawScaledText(context, title, titleX, ty + 13.0f,
                 SystemTheme.fade(SystemTheme.foreground(), alpha), 1.02f, false);
 
-        Font font = minecraft.font;
-        float badgeX = titleX + font.width(title) * 1.02f + 8.0f;
+        float badgeX = titleX + Render2DHelper.getTextWidth(title, 1.02f) + 8.0f;
         if (!toastText.isEmpty() && System.currentTimeMillis() - toastTimestamp < 2600L) {
-            float pillW = font.width(toastText) * 0.72f + 12.0f;
+            float pillW = Render2DHelper.getTextWidth(toastText, 0.72f) + 12.0f;
             Render2DHelper.drawRoundedRect(context, badgeX, ty + 10.0f, pillW, 15.0f, 4.0f,
                     SystemTheme.fade(SystemTheme.elevated(), alpha));
             Render2DHelper.drawScaledText(context, toastText, badgeX + 6.0f, ty + 14.0f,
                     SystemTheme.fade(SystemTheme.SUCCESS, alpha), 0.72f, false);
         } else if (isModulePage()) {
             String cnt = getDisplayedModules().size() + " modules";
-            float pw = font.width(cnt) * 0.72f + 10.0f;
+            float pw = Render2DHelper.getTextWidth(cnt, 0.72f) + 10.0f;
             Render2DHelper.drawRoundedRect(context, badgeX, ty + 10.5f, pw, 14.0f, 4.0f,
                     SystemTheme.fade(SystemTheme.elevated(), alpha));
             Render2DHelper.drawScaledText(context, cnt, badgeX + 5.0f, ty + 14.0f,
@@ -429,7 +432,7 @@ public class ClickGuiScreen extends Screen {
 
         // Client HUD/Visuals Accent Palette Switcher pill
         String themeName = ThemeManager.getInstance().getCurrentTheme().getName();
-        float accentPillW = Math.min(92.0f, font.width(themeName) * 0.70f + 20.0f);
+        float accentPillW = Math.min(92.0f, Render2DHelper.getTextWidth(themeName, 0.70f) + 20.0f);
         rx -= (accentPillW + 5.0f);
         boolean aHov = isInside(mouseX, mouseY, rx, btnY, accentPillW, btnSize);
         Render2DHelper.drawRoundedRect(context, rx, btnY, accentPillW, btnSize, 5.0f,
@@ -438,7 +441,7 @@ public class ClickGuiScreen extends Screen {
                 SystemTheme.fade(SystemTheme.border(), alpha));
         Render2DHelper.drawCircle(context, rx + 8.0f, btnY + btnSize * 0.5f, 3.5f,
                 ColorUtils.withAlphaFactor(ThemeManager.getInstance().getAccentColor(0), alpha));
-        Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, themeName, 0.70f, accentPillW - 18.0f),
+        Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(themeName, 0.70f, accentPillW - 18.0f),
                 rx + 14.0f, btnY + 6.5f, SystemTheme.fade(SystemTheme.foreground(), alpha), 0.70f, false);
         if (isInside(mouseX, mouseY, rx, btnY, accentPillW, btnSize)) {
             hoverTarget.title = "HUD & Visual Accent";
@@ -484,6 +487,18 @@ public class ClickGuiScreen extends Screen {
         float tallest = 0.0f;
         for (float h : colHeights) tallest = Math.max(tallest, h);
         maxScroll = Math.max(0.0f, tallest - gap + pad * 2.0f - ch);
+
+        if (pendingJumpModule != null) {
+            SystemModuleCard targetCard = cardMap.get(pendingJumpModule);
+            if (targetCard != null) {
+                // targetCard.y was calculated as: cy + pad + colTop - currentScroll
+                // So the content top position of the card is: targetCard.y + currentScroll - cy
+                float cardTopInContent = targetCard.y + currentScroll - cy;
+                targetScroll = Mth.clamp(cardTopInContent - pad, 0.0f, maxScroll);
+            }
+            pendingJumpModule = null;
+        }
+
         targetScroll = Mth.clamp(targetScroll, 0.0f, maxScroll);
         currentScroll = Mth.clamp(currentScroll, 0.0f, maxScroll);
 
@@ -517,7 +532,7 @@ public class ClickGuiScreen extends Screen {
     }
 
     private void renderHudEditorBar(GuiGraphicsExtractor context, int mouseX, int mouseY) {
-        float barW = 288.0f;
+        float barW = 360.0f;
         float barH = 26.0f;
         float bx = (this.width - barW) * 0.5f;
         float by = 10.0f;
@@ -527,8 +542,19 @@ public class ClickGuiScreen extends Screen {
                 SystemTheme.foreground(), 0.82f, false);
 
         float doneW = 54.0f;
+        float resetW = 74.0f;
         float dx = bx + barW - doneW - 6.0f;
+        float rx = bx + barW - doneW - resetW - 12.0f;
         float dy = by + 4.0f;
+
+        // Reset HUD button
+        boolean hovReset = isInside(mouseX, mouseY, rx, dy, resetW, 18.0f);
+        Render2DHelper.drawRoundedRect(context, rx, dy, resetW, 18.0f, 5.0f,
+                hovReset ? SystemTheme.DANGER : SystemTheme.elevated());
+        Render2DHelper.drawCenteredText(context, "Reset HUD", rx + resetW * 0.5f, dy + 5.0f,
+                hovReset ? SystemTheme.onPrimary() : SystemTheme.foreground(), false);
+
+        // Done button
         boolean hov = isInside(mouseX, mouseY, dx, dy, doneW, 18.0f);
         Render2DHelper.drawRoundedRect(context, dx, dy, doneW, 18.0f, 5.0f,
                 hov ? SystemTheme.primary() : SystemTheme.elevated());
@@ -537,19 +563,54 @@ public class ClickGuiScreen extends Screen {
     }
 
     private void renderTooltip(GuiGraphicsExtractor context, String title, String desc, int mouseX, int mouseY, float alpha) {
-        Font font = minecraft.font;
-        float maxW = 190.0f;
-        float tw = Math.min(maxW, Math.max(font.width(title) * 0.82f, font.width(desc) * 0.72f) + 14.0f);
-        float th = 28.0f;
-        float tx = Math.min(this.width - tw - 6.0f, mouseX + 10.0f);
-        float ty = Math.min(this.height - th - 6.0f, mouseY + 12.0f);
+        float maxW = 200.0f;
+        float maxTextW = maxW - 14.0f;
+
+        // Word-wrap description to fit within maxTextW at 0.70f scale
+        List<String> lines = new ArrayList<>();
+        if (desc != null && !desc.isEmpty()) {
+            String[] words = desc.split(" ");
+            StringBuilder sb = new StringBuilder();
+            for (String w : words) {
+                String test = sb.length() == 0 ? w : sb + " " + w;
+                if (Render2DHelper.getTextWidth(test, 0.70f) > maxTextW) {
+                    if (sb.length() > 0) {
+                        lines.add(sb.toString());
+                        sb.setLength(0);
+                    }
+                    sb.append(w);
+                } else {
+                    sb = new StringBuilder(test);
+                }
+            }
+            if (sb.length() > 0) {
+                lines.add(sb.toString());
+            }
+        }
+        if (lines.isEmpty()) {
+            lines.add(desc != null ? desc : "");
+        }
+
+        float longestLineW = 0.0f;
+        for (String line : lines) {
+            float lw = Render2DHelper.getTextWidth(line, 0.70f);
+            if (lw > longestLineW) longestLineW = lw;
+        }
+
+        float tw = Math.min(maxW, Math.max(Render2DHelper.getTextWidth(title, 0.80f), longestLineW) + 14.0f);
+        float th = 18.0f + lines.size() * 9.5f;
+        float tx = Math.min(this.width - tw - 6.0f, Math.max(6.0f, mouseX + 10.0f));
+        float ty = Math.min(this.height - th - 6.0f, Math.max(6.0f, mouseY + 12.0f));
 
         Render2DHelper.drawRoundedRect(context, tx, ty, tw, th, 6.0f, SystemTheme.fade(SystemTheme.bg(), alpha * 0.96f));
         Render2DHelper.drawRoundedOutline(context, tx, ty, tw, th, 6.0f, 1.0f, SystemTheme.fade(SystemTheme.border(), alpha));
-        Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, title, 0.80f, tw - 12.0f),
+        Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(title, 0.80f, tw - 12.0f),
                 tx + 7.0f, ty + 5.0f, SystemTheme.fade(SystemTheme.foreground(), alpha), 0.80f, false);
-        Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, desc, 0.70f, tw - 12.0f),
-                tx + 7.0f, ty + 15.5f, SystemTheme.fade(SystemTheme.mutedFg(), alpha), 0.70f, false);
+
+        for (int i = 0; i < lines.size(); i++) {
+            Render2DHelper.drawScaledText(context, lines.get(i),
+                    tx + 7.0f, ty + 16.0f + i * 9.5f, SystemTheme.fade(SystemTheme.mutedFg(), alpha), 0.70f, false);
+        }
     }
 
     private static void drawIconToolButton(GuiGraphicsExtractor context, float x, float y, float size,
@@ -570,9 +631,20 @@ public class ClickGuiScreen extends Screen {
         int button = normalizeMouseButton(click.button());
 
         if (hudEditorMode) {
-            float barW = 288.0f;
+            float barW = 360.0f;
             float bx = (this.width - barW) * 0.5f;
-            if (isInside(mx, my, bx + barW - 60.0f, 14.0f, 54.0f, 18.0f)) {
+            float doneW = 54.0f;
+            float resetW = 74.0f;
+            float dx = bx + barW - doneW - 6.0f;
+            float rx = bx + barW - doneW - resetW - 12.0f;
+
+            if (isInside(mx, my, rx, 14.0f, resetW, 18.0f)) {
+                playClick();
+                dev.opticumeclient.client.hud.HudManager.getInstance().resetAllLayouts();
+                showToast("HUD layout reset to defaults");
+                return true;
+            }
+            if (isInside(mx, my, dx, 14.0f, doneW, 18.0f)) {
                 playClick();
                 hudEditorMode = false;
                 return true;
@@ -630,7 +702,7 @@ public class ClickGuiScreen extends Screen {
                 return true;
             }
             String themeName = ThemeManager.getInstance().getCurrentTheme().getName();
-            float accentPillW = Math.min(92.0f, minecraft.font.width(themeName) * 0.70f + 20.0f);
+            float accentPillW = Math.min(92.0f, Render2DHelper.getTextWidth(themeName, 0.70f) + 20.0f);
             rx -= (accentPillW + 5.0f);
             if (isInside(mx, my, rx, btnY, accentPillW, btnSize)) {
                 playClick();
@@ -704,6 +776,7 @@ public class ClickGuiScreen extends Screen {
         curY += step;
 
         for (Category cat : Category.values()) {
+            if (cat == Category.FRIENDS) continue;
             if (my >= curY && my <= curY + itemH) {
                 activePage = NavPage.CATEGORY;
                 selectedCategory = cat;
@@ -906,8 +979,8 @@ public class ClickGuiScreen extends Screen {
             if (card != null) {
                 card.triggerFlash();
             }
+            pendingJumpModule = res.module();
         }
-        targetScroll = 0.0f;
     }
 
     private void toggleExpandAllDisplayed() {

@@ -215,6 +215,14 @@ public class HudManager {
         return false;
     }
 
+    public void resetAllLayouts() {
+        for (DraggableWidget w : widgets) {
+            w.resetPosition();
+        }
+        activeSnapLines.clear();
+        ConfigManager.getInstance().saveActiveConfigQuietly();
+    }
+
     public boolean isEditMode() {
         return editMode;
     }
@@ -231,6 +239,19 @@ public class HudManager {
         float screenH = mc.getWindow().getGuiScaledHeight();
         int winW = Math.max(1, mc.getWindow().getWidth());
         int winH = Math.max(1, mc.getWindow().getHeight());
+
+        // Viewport bounds clamping: ensure widgets stay inside visible screen on scale/resolution changes
+        for (DraggableWidget w : widgets) {
+            if (!w.isDragging()) {
+                float maxX = Math.max(2.0f, screenW - w.getWidth() - 2.0f);
+                float maxY = Math.max(2.0f, screenH - w.getHeight() - 2.0f);
+                float curX = net.minecraft.util.Mth.clamp(w.getX(), 2.0f, maxX);
+                float curY = net.minecraft.util.Mth.clamp(w.getY(), 2.0f, maxY);
+                if (Math.abs(curX - w.getX()) > 0.1f || Math.abs(curY - w.getY()) > 0.1f) {
+                    w.setPosition(curX, curY);
+                }
+            }
+        }
 
         float mouseX = (float) (mc.mouseHandler.xpos() * screenW / winW);
         float mouseY = (float) (mc.mouseHandler.ypos() * screenH / winH);

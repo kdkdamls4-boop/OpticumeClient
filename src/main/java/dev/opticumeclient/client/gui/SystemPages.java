@@ -6,7 +6,6 @@ import dev.opticumeclient.client.friend.FriendManager;
 import dev.opticumeclient.client.render.Render2DHelper;
 import dev.opticumeclient.client.render.TextureAssets;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.core.UUIDUtil;
@@ -42,7 +41,6 @@ public final class SystemPages {
     }
 
     public void renderConfigs(GuiGraphicsExtractor context, float x, float y, float w, float h, int mouseX, int mouseY, float alpha) {
-        Font font = Minecraft.getInstance().font;
         float pad = 12.0f;
         float ix = x + pad;
         float iy = y + pad;
@@ -59,7 +57,7 @@ public final class SystemPages {
         String caret = configInputFocused && (System.currentTimeMillis() / 500L) % 2L == 0 ? "_" : "";
         String boxTxt = configInput.isEmpty() && !configInputFocused ? "Enter new config name..." : configInput + caret;
         int txtCol = configInput.isEmpty() && !configInputFocused ? SystemTheme.mutedFg() : SystemTheme.foreground();
-        Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, boxTxt, 0.85f, boxW - 14.0f),
+        Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(boxTxt, 0.85f, boxW - 14.0f),
                 ix + 8.0f, iy + 9.0f, SystemTheme.fade(txtCol, alpha), 0.85f, false);
 
         boolean saveHov = isInside(mouseX, mouseY, ix + boxW + 8.0f, iy, btnW, barH);
@@ -107,7 +105,7 @@ public final class SystemPages {
             float ay = ry + 10.0f;
             float ah = 18.0f;
 
-            if (!"Default".equalsIgnoreCase(name)) {
+            if (!cm.isBuiltInPreset(name)) {
                 curX -= 32.0f;
                 drawSmallBtn(context, curX, ay, 32.0f, ah, "Del", mouseX, mouseY, SystemTheme.DANGER, false, alpha);
                 curX -= 5.0f;
@@ -166,7 +164,7 @@ public final class SystemPages {
                 float ay = ry + 10.0f;
                 float ah = 18.0f;
 
-                if (!"Default".equalsIgnoreCase(name)) {
+                if (!cm.isBuiltInPreset(name)) {
                     curX -= 32.0f;
                     if (isInside(mx, my, curX, ay, 32.0f, ah)) {
                         cm.deleteConfig(name);
@@ -203,23 +201,23 @@ public final class SystemPages {
     }
 
     public void renderFriends(GuiGraphicsExtractor context, float x, float y, float w, float h, int mouseX, int mouseY, float alpha) {
-        Font font = Minecraft.getInstance().font;
         float pad = 12.0f;
         float ix = x + pad;
         float iy = y + pad;
         float iw = w - pad * 2.0f;
 
-        // Add Friend Bar
+        // Add Friend Bar + MiddleClickFriend Chip
+        float chipW = 90.0f;
         float btnW = 76.0f;
         float barH = 26.0f;
-        float boxW = iw - btnW - 8.0f;
+        float boxW = iw - btnW - chipW - 16.0f;
         Render2DHelper.drawRoundedRect(context, ix, iy, boxW, barH, 7.0f, SystemTheme.fade(SystemTheme.bg(), alpha));
         Render2DHelper.drawRoundedOutline(context, ix, iy, boxW, barH, 7.0f, 1.0f,
                 SystemTheme.fade(friendInputFocused ? SystemTheme.primary() : SystemTheme.border(), alpha));
 
         String caret = friendInputFocused && (System.currentTimeMillis() / 500L) % 2L == 0 ? "_" : "";
         String txt = friendInput.isEmpty() && !friendInputFocused ? "Enter player nickname..." : friendInput + caret;
-        Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, txt, 0.85f, boxW - 14.0f),
+        Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(txt, 0.85f, boxW - 14.0f),
                 ix + 8.0f, iy + 9.0f, SystemTheme.fade(friendInput.isEmpty() && !friendInputFocused ? SystemTheme.mutedFg() : SystemTheme.foreground(), alpha), 0.85f, false);
 
         boolean addHov = isInside(mouseX, mouseY, ix + boxW + 8.0f, iy, btnW, barH);
@@ -229,6 +227,19 @@ public final class SystemPages {
                 SystemTheme.fade(SystemTheme.border(), alpha));
         Render2DHelper.drawCenteredText(context, "Add Friend", ix + boxW + 8.0f + btnW * 0.5f, iy + 9.0f,
                 SystemTheme.fade(addHov ? SystemTheme.onPrimary() : SystemTheme.foreground(), alpha), false);
+
+        // MiddleClickFriend quick toggle chip
+        dev.opticumeclient.client.modules.combat.MiddleClickFriendModule mcf =
+                dev.opticumeclient.client.modules.ModuleManager.getInstance().getModule(dev.opticumeclient.client.modules.combat.MiddleClickFriendModule.class);
+        boolean mcfActive = mcf != null && mcf.isEnabled();
+        float chipX = ix + boxW + btnW + 16.0f;
+        boolean chipHov = isInside(mouseX, mouseY, chipX, iy, chipW, barH);
+        Render2DHelper.drawRoundedRect(context, chipX, iy, chipW, barH, 7.0f,
+                SystemTheme.fade(mcfActive ? SystemTheme.primary() : (chipHov ? SystemTheme.elevated() : SystemTheme.bg()), alpha));
+        Render2DHelper.drawRoundedOutline(context, chipX, iy, chipW, barH, 7.0f, 1.0f,
+                SystemTheme.fade(mcfActive ? SystemTheme.primary() : SystemTheme.border(), alpha));
+        Render2DHelper.drawCenteredText(context, mcfActive ? "MMB Friend: ON" : "MMB Friend: OFF", chipX + chipW * 0.5f, iy + 9.0f,
+                SystemTheme.fade(mcfActive ? SystemTheme.onPrimary() : (chipHov ? SystemTheme.foreground() : SystemTheme.mutedFg()), alpha), false);
 
         // Two clean sections side by side: Saved Friends + Online Players
         float listY = iy + barH + 10.0f;
@@ -262,7 +273,7 @@ public final class SystemPages {
             Render2DHelper.drawRoundedRect(context, ix + 8.0f, ry, colW - 16.0f, rowH, 6.0f, SystemTheme.fade(SystemTheme.surface(), alpha));
             UUID uuid = UUIDUtil.createOfflinePlayerUUID(fName);
             Render2DHelper.drawPlayerHeadByUuid(context, uuid, Math.round(ix + 13), Math.round(ry + 5), 16, alpha);
-            Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, fName, 0.82f, colW - 86.0f),
+            Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(fName, 0.82f, colW - 86.0f),
                     ix + 34.0f, ry + 8.5f, SystemTheme.fade(SystemTheme.foreground(), alpha), 0.82f, false);
             drawSmallBtn(context, ix + colW - 44.0f, ry + 5.0f, 30.0f, 16.0f, "Del", mouseX, mouseY, SystemTheme.DANGER, false, alpha);
         }
@@ -284,7 +295,7 @@ public final class SystemPages {
             Render2DHelper.drawRoundedRect(context, rx + 8.0f, ry, colW - 16.0f, rowH, 6.0f, SystemTheme.fade(SystemTheme.surface(), alpha));
             Render2DHelper.drawPlayerHeadByUuid(context, UUIDUtil.createOfflinePlayerUUID(pName),
                     Math.round(rx + 13), Math.round(ry + 5), 16, alpha);
-            Render2DHelper.drawScaledText(context, SystemModuleCard.trimToWidth(font, pName, 0.82f, colW - 92.0f),
+            Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(pName, 0.82f, colW - 92.0f),
                     rx + 34.0f, ry + 8.5f, SystemTheme.fade(SystemTheme.foreground(), alpha), 0.82f, false);
             drawSmallBtn(context, rx + colW - 48.0f, ry + 5.0f, 34.0f, 16.0f,
                     isFr ? "Friend" : "+ Add", mouseX, mouseY, SystemTheme.SUCCESS, isFr, alpha);
@@ -297,9 +308,10 @@ public final class SystemPages {
         float ix = x + pad;
         float iy = y + pad;
         float iw = w - pad * 2.0f;
+        float chipW = 90.0f;
         float btnW = 76.0f;
         float barH = 26.0f;
-        float boxW = iw - btnW - 8.0f;
+        float boxW = iw - btnW - chipW - 16.0f;
 
         if (isInside(mx, my, ix, iy, boxW, barH)) {
             friendInputFocused = true;
@@ -312,6 +324,16 @@ public final class SystemPages {
                 FriendManager.getInstance().addFriend(friendInput.trim());
                 host.showToast("Added friend '" + friendInput.trim() + "'");
                 friendInput = "";
+            }
+            return true;
+        }
+        float chipX = ix + boxW + btnW + 16.0f;
+        if (isInside(mx, my, chipX, iy, chipW, barH)) {
+            dev.opticumeclient.client.modules.combat.MiddleClickFriendModule mcf =
+                    dev.opticumeclient.client.modules.ModuleManager.getInstance().getModule(dev.opticumeclient.client.modules.combat.MiddleClickFriendModule.class);
+            if (mcf != null) {
+                mcf.toggle();
+                host.showToast("MMB Friend " + (mcf.isEnabled() ? "Enabled" : "Disabled"));
             }
             return true;
         }
@@ -441,7 +463,7 @@ public final class SystemPages {
         int tc = active ? (accent == SystemTheme.primary() ? SystemTheme.onPrimary() : 0xFF0A0A0A)
                 : (hov ? accent : SystemTheme.foreground());
         Render2DHelper.drawScaledText(context, label,
-                x + (w - Minecraft.getInstance().font.width(label) * 0.72f) * 0.5f,
+                x + (w - Render2DHelper.getTextWidth(label, 0.72f)) * 0.5f,
                 y + 5.0f, SystemTheme.fade(tc, alpha), 0.72f, false);
     }
 

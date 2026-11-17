@@ -7,7 +7,6 @@ import dev.opticumeclient.client.render.TextureAssets;
 import dev.opticumeclient.client.render.ThemeManager;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
@@ -234,10 +233,9 @@ public class OpticumeMainMenuScreen extends Screen {
         if (alpha <= 0.01f) return;
 
         float k = this.layoutK;
-        Font font = minecraft.font;
         String greeting = "Welcome!";
         float welcomeScale = 1.85f * k;
-        float totalW = font.width(greeting) * welcomeScale;
+        float totalW = Render2DHelper.getTextWidth(greeting, welcomeScale);
         float baseX = width * 0.5f - totalW * 0.5f;
         float baseY = btnY0 - 44.0f * k + (1.0f - intro) * 10.0f * k;
 
@@ -251,13 +249,13 @@ public class OpticumeMainMenuScreen extends Screen {
             float dropY = (1.0f - lp) * 6.0f * k;
             int col = ColorUtils.withAlpha(0xFFFFFFFF, Math.round(245 * lp * alpha));
             Render2DHelper.drawScaledText(context, ch, cx, baseY + waveY + dropY, col, welcomeScale, true);
-            cx += font.width(ch) * welcomeScale;
+            cx += Render2DHelper.getTextWidth(ch, welcomeScale);
         }
 
         // Active account username in animated theme gradient + mini player face
         String username = (minecraft != null && minecraft.getUser() != null) ? minecraft.getUser().getName() : "Player";
         float nameScale = 1.02f * k;
-        float nameW = font.width(username) * nameScale;
+        float nameW = Render2DHelper.getTextWidth(username, nameScale);
         int headSize = Math.max(9, Math.round(11 * k));
         float totalUserW = headSize + 5.0f * k + nameW;
         float ux = width * 0.5f - totalUserW * 0.5f;
@@ -275,7 +273,7 @@ public class OpticumeMainMenuScreen extends Screen {
             float wave = (float) ((Math.sin(time * 2.5f - i * 0.25f) + 1.0) * 0.5);
             int letterColor = ColorUtils.interpolateColor(c1, c2, Mth.clamp(t * 0.65f + wave * 0.35f, 0.0f, 1.0f));
             Render2DHelper.drawScaledText(context, ch, charX, uy, ColorUtils.withAlpha(letterColor, Math.round(245 * alpha)), nameScale, true);
-            charX += font.width(ch) * nameScale;
+            charX += Render2DHelper.getTextWidth(ch, nameScale);
         }
     }
 
@@ -341,7 +339,7 @@ public class OpticumeMainMenuScreen extends Screen {
             String title = BUTTON_TITLES[i];
             float textScale = 0.96f * k;
             float iconSize = 11.5f * k;
-            float labelW = minecraft.font.width(title) * textScale;
+            float labelW = Render2DHelper.getTextWidth(title, textScale);
             float iconX = sx + 14.0f * k - 3.0f * k * hv;
             float iconY = sy + (sh - iconSize) * 0.5f;
             int iconCol = ColorUtils.interpolateColor(
@@ -408,7 +406,7 @@ public class OpticumeMainMenuScreen extends Screen {
         }
 
         float textScale = 0.85f * k;
-        float lw = minecraft.font.width("Gallery") * textScale;
+        float lw = Render2DHelper.getTextWidth("Gallery", textScale);
         float lx = tx + thumbSize + (x + sw - tx - thumbSize - lw) * 0.5f - 2.0f * k;
         float ly = y + (sh - 8.0f * textScale) * 0.5f;
         Render2DHelper.drawScaledText(context, "Gallery", lx, ly,
@@ -433,13 +431,13 @@ public class OpticumeMainMenuScreen extends Screen {
             String title = focused.name();
             float tScale = 1.15f * k;
             float titleY = cardCenterY - baseCardH * 0.5f - 26.0f * k + (1.0f - ease) * 10.0f * k;
-            float tw = minecraft.font.width(title) * tScale;
+            float tw = Render2DHelper.getTextWidth(title, tScale);
             Render2DHelper.drawScaledText(context, title, cardCenterX - tw * 0.5f, titleY,
                     ColorUtils.withAlpha(0xFFFFFFFF, Math.round(240 * open)), tScale, true);
 
             if (centerIdx == MenuWallpapers.selectedIndex()) {
                 float tagScale = 0.78f * k;
-                float tagW = minecraft.font.width("Current") * tagScale;
+                float tagW = Render2DHelper.getTextWidth("Current", tagScale);
                 Render2DHelper.drawScaledText(context, "Current", cardCenterX - tagW * 0.5f, titleY + 11.5f * k,
                         ColorUtils.withAlpha(accent, Math.round(235 * open)), tagScale, false);
             }
@@ -544,7 +542,7 @@ public class OpticumeMainMenuScreen extends Screen {
                 ? "Account: " + minecraft.getUser().getName()
                 : "";
         if (!acc.isEmpty()) {
-            float w = minecraft.font.width(acc);
+            float w = Render2DHelper.getTextWidth(acc, 1.0f);
             Render2DHelper.drawText(context, acc, width - w - 8.0f, height - 14.0f, 0xA8E5E7EB, true);
         }
     }

@@ -68,7 +68,7 @@ public class FriendManager {
         boolean added = friends.add(name.toLowerCase().trim());
         if (added) {
             save();
-            sendFeedback("§a[OpticumeClient] §fИгрок §b" + name + " §fдобавлен в список друзей!");
+            sendFeedback("§a[OpticumeClient] §fAdded §b" + name + " §fto friends list.");
         }
         return added;
     }
@@ -78,7 +78,7 @@ public class FriendManager {
         boolean removed = friends.remove(name.toLowerCase().trim());
         if (removed) {
             save();
-            sendFeedback("§c[OpticumeClient] §fИгрок §e" + name + " §fудален из списка друзей.");
+            sendFeedback("§c[OpticumeClient] §fRemoved §e" + name + " §ffrom friends list.");
         }
         return removed;
     }

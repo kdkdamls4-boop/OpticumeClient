@@ -9,7 +9,7 @@
 Все команды выполняются из корня репозитория:
 
 ```powershell
-# 1. Проверить компиляцию (Java 25, 115 исходных файлов, авто-синхронизация src/ <-> src_26/)
+# 1. Проверить компиляцию (Java 25, 127 исходных файлов, авто-синхронизация src/ <-> src_26/)
 python compile_check_26.py
 
 # 2. Собрать JAR и задеплоить в тестовый инстанс лаунчера (%APPDATA%\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods)
@@ -20,7 +20,7 @@ python test_suite_26.py
 ```
 
 * **Главное меню и AltManager:** кастомное меню в стиле **Desire** поверх живой панорамы Minecraft (плюс выдвижная **Gallery** для выбора обоев), рабочий оффлайн-переключатель ников **AltManager** и стеклянный стиль для всех ванильных кнопок и слайдеров игры.
-* **Открыть ClickGUI в игре:** клавиша `Right Shift` (`Правый Shift`) — меню в стиле **System** со сворачиваемым сайдбаром, тёмной/светлой темой, поиском `Ctrl+F`, 3-колоночной сеткой карточек, страницами `Configs` / `Friends` и режимом `HUD Editor`.
+* **Открыть ClickGUI в игре:** клавиша `Right Shift` (`Правый Shift`) — меню в стиле **System** со сворачиваемым сайдбаром, тёмной/светлой темой, поиском `Ctrl+F`, 3-колоночной сеткой карточек, тултипами, страницами `Configs` / `Friends` и режимом `HUD Editor`.
 * **Перетаскивание виджетов HUD (Drag & Drop):** откройте чат (`T`) или нажмите `HUD Editor` в ClickGUI.
 
 ---
@@ -41,7 +41,7 @@ python test_suite_26.py
 
 ```text
 OpticumeClient/
-├── src/                        # Основной исходный код (115 Java-файлов + 62 ресурса, синхронизирован с src_26/)
+├── src/                        # Основной исходный код (127 Java-файлов + 115 ресурсов, синхронизирован с src_26/)
 │   └── main/
 │       ├── java/dev/opticumeclient/
 │       │   ├── OpticumeClient.java         # Главная точка входа мода (ClientModInitializer, MOD_ID = opticumeclient)
@@ -50,15 +50,15 @@ OpticumeClient/
 │       │   │   ├── friend/                 # FriendManager (<gameDir>/opticumeclient/friends.json)
 │       │   │   ├── gui/                    # System ClickGUI (ClickGuiScreen, SystemTheme, SystemModuleCard, SystemSearchModal, SystemPages)
 │       │   │   ├── hud/                    # HudManager (с автосохранением) и 4 HUD-модуля
-│       │   │   ├── modules/                # 49 модулей по категориям + ModuleManager
-│       │   │   ├── render/                 # Render2DHelper, Render3DHelper, TextureAssets, ThemeManager, Animation
-│       │   │   ├── setting/                # Настройки модулей (Boolean, Number, Mode, MultiBox, Color)
+│       │   │   ├── modules/                # 47 модулей по категориям + ModuleManager + пакет visuals/targetesp (16 классов)
+│       │   │   ├── render/                 # Render2DHelper, Render3DHelper, font/OpticumeFonts, TextureAssets, ThemeManager, Animation
+│       │   │   ├── setting/                # Настройки модулей (Boolean, Number, Mode, MultiBox, Color + visibleWhen)
 │       │   │   └── ui/menu/                # Главное меню Desire, Gallery, оффлайн AltManager, OpticumeButtonStyle
-│       │   └── mixin/                      # 26 Mixin-классов (Official Mojang Mappings, JAVA_25)
+│       │   └── mixin/                      # 27 Mixin-классов (Official Mojang Mappings, JAVA_25)
 │       └── resources/
 │           ├── fabric.mod.json             # Метаданные мода OpticumeClient (id: opticumeclient)
-│           ├── opticumeclient.mixins.json  # Конфигурация 26 миксинов
-│           └── assets/opticumeclient/      # Иконка (icon.png), локализации (en_us, ru_ru), иконки и обои
+│           ├── opticumeclient.mixins.json  # Конфигурация 27 миксинов
+│           └── assets/opticumeclient/      # Иконка, локализации, шрифты MSDF, 35 шейдеров и 12 текстур TargetESP, обои
 ├── src_26/                     # Зеркало исходников для пайплайна сборки 26.3 (авто-синхронизируется с src/)
 ├── compile_check_26.py         # Скрипт проверки компиляции (javac --release 25 + авто-синхронизация)
 ├── deploy_26.py                # Скрипт упаковки JAR и деплоя в инстанс лаунчера
@@ -76,27 +76,27 @@ OpticumeClient/
 ```mermaid
 flowchart TD
     A["Minecraft 26.3 (Java 25 + SDL3 + Vulkan 1.4.323)"] --> B["OpticumeClient (onInitializeClient)"]
-    B --> C["ModuleManager (49 модулей)"]
+    B --> C["ModuleManager (47 модулей)"]
     B --> D["HudManager (Drag & Drop + Smart Snap + AutoSave)"]
-    A --> E["26 Mixins (Official Mojang Mappings)"]
+    A --> E["27 Mixins (Official Mojang Mappings)"]
     E -->|"GuiMixin / AbstractButtonMixin / AbstractSliderButtonMixin"| M["OpticumeMainMenuScreen, AltManager & Стеклянные кнопки"]
-    E -->|"InGameHudMixin"| F["Render2DHelper (GuiGraphicsExtractor + GLOW_RADIAL)"]
-    E -->|"GameRendererMixin / CameraMixin"| G["Render3DHelper & Smooth Zoom"]
+    E -->|"InGameHudMixin / GuiGraphicsExtractorMixin"| F["Render2DHelper & OpticumeFonts (SPIR-V MSDF)"]
+    E -->|"GameRendererMixin / CameraMixin"| G["TargetEspRenderer (Desire 7-Mode Port), Render3DHelper & Smooth Zoom"]
     E -->|"MouseHandlerMixin / KeyboardHandlerMixin"| H["System ClickGuiScreen (SDL3 Input)"]
 ```
 
 ---
 
-## 🧩 Полный список модулей (49 модулей)
+## 🧩 Полный список модулей (47 модулей)
 
 | Категория | Кол-во | Модули |
 | :--- | :---: | :--- |
 | **COMBAT** | 8 | `LegitAuraModule`, `KillAuraModule`, `OpticumeAuraModule`, `TriggerBotModule`, `AimAssistModule`, `AutoTotemModule`, `ShieldBreakerModule`, `MiddleClickPearlModule` |
 | **FRIENDS** | 1 | `MiddleClickFriendModule` *(плюс страница Friends в ClickGUI)* |
 | **MOVEMENT** | 5 | `SprintModule`, `NoSlowModule`, `VelocityModule`, `NoPushModule`, `NoJumpDelayModule` |
-| **VISUALS** | 23 | `PlayerEspModule`, `TargetEspModule`, `ViewModelModule`, `NameTagsModule`, `PopChamsModule`, `AmbienceModule`, `KillEffectModule`, `ItemEspModule`, `TracersModule`, `ChamsModule`, `JumpCirclesModule`, `ParticlesModule`, `ChinaHatModule`, `HitBubblesModule`, `ArrowsModule`, `FullbrightModule`, `HitColorModule`, `TrailsModule`, `CrosshairModule`, `TargetHudModule`, `CustomFontModule`, `NoRenderModule`, `ZoomModule` |
+| **VISUALS** | 23 | `PlayerEspModule`, `TargetEspModule` *(7 режимов Desire, 25 настроек)*, `ViewModelModule`, `NameTagsModule`, `PopChamsModule`, `AmbienceModule`, `KillEffectModule`, `ItemEspModule`, `TracersModule`, `ChamsModule`, `JumpCirclesModule`, `ParticlesModule`, `ChinaHatModule`, `HitBubblesModule`, `ArrowsModule`, `FullbrightModule`, `HitColorModule`, `TrailsModule`, `CrosshairModule`, `TargetHudModule`, `CustomFontModule` *(MSDF)*, `NoRenderModule`, `ZoomModule` |
 | **ANIMATIONS** | 1 | `OldAnimationsModule` |
-| **OPTIMIZATION** | 7 | `LowFireModule`, `NoHurtCamModule`, `MemoryCleanerModule`, `EntityCullingModule`, `ChunkAnimatorModule`, `FastMathModule`, `FrameSyncModule` |
+| **OPTIMIZATION** | 5 | `LowFireModule`, `NoHurtCamModule`, `MemoryCleanerModule`, `EntityCullingModule`, `FrameSyncModule` |
 | **HUD** | 4 | `InfoHud`, `KeystrokesHud`, `ArmorHud`, `PotionHud` |
 
 ---

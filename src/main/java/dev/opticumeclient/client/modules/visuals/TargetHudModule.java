@@ -295,7 +295,7 @@ public class TargetHudModule extends Module {
                                       float curHp, float maxHp, float absorption, float alpha, float tickDelta) {
         Theme theme = ThemeManager.getInstance().getCurrentTheme();
         int c1 = theme.getPrimaryColor();
-        int c2 = theme.getSecondaryColor();
+        int c2 = barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : barColor.getColor();
 
         // 1. 4-Layer Liquid Glass Card
         Render2DHelper.drawLiquidGlass(context, x, y, w, h, 7.0f, (int) (222 * alpha), (int) (46 * alpha));
@@ -341,7 +341,7 @@ public class TargetHudModule extends Module {
                                      float curHp, float maxHp, float absorption, float alpha, float tickDelta) {
         Theme theme = ThemeManager.getInstance().getCurrentTheme();
         int c1 = theme.getPrimaryColor();
-        int c2 = barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : theme.getSecondaryColor();
+        int c2 = barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : barColor.getColor();
 
         // Deep cyber-graphite card with neon left indicator bar
         Render2DHelper.drawLiquidGlass(context, x, y, w, h, 6.0f, (int) (235 * alpha), (int) (55 * alpha));
@@ -387,7 +387,7 @@ public class TargetHudModule extends Module {
                                         float curHp, float maxHp, float absorption, float alpha, float tickDelta) {
         Theme theme = ThemeManager.getInstance().getCurrentTheme();
         int c1 = theme.getPrimaryColor();
-        int c2 = theme.getSecondaryColor();
+        int c2 = barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : barColor.getColor();
 
         // Dual-tone obsidian glass card inspired by ThunderHack Recode
         Render2DHelper.drawGlow(context, x, y, w, h, 8.0f, ColorUtils.withAlpha(c1, (int) (60 * alpha)));

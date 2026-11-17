@@ -1,6 +1,6 @@
 package dev.opticumeclient.client.gui;
 
-import dev.opticumeclient.client.gui.component.BindComponent;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.render.ColorUtils;
 import dev.opticumeclient.client.render.Render2DHelper;
@@ -11,8 +11,6 @@ import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.MultiBoxSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
 import dev.opticumeclient.client.setting.Setting;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.util.Mth;
 
@@ -20,7 +18,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Interactive card widget implementing System's {@code ModuleRow} anatomy:
@@ -198,7 +195,6 @@ public final class SystemModuleCard {
             boolean isBinding,
             ClickGuiScreen.HoverTarget outHover
     ) {
-        Font font = Minecraft.getInstance().font;
         float switchW = 24.0f;
         float switchH = 13.0f;
         float switchX = x + width - PAD_X - switchW;
@@ -220,9 +216,9 @@ public final class SystemModuleCard {
         float rightCursor = starX - 4.0f;
         boolean showBind = isBinding || module.getKeyBind() > 0 || hoverAnim > 0.15f;
         if (showBind) {
-            String bindText = isBinding ? "..." : (module.getKeyBind() > 0 ? BindComponent.getKeyName(module.getKeyBind()) : "+");
+            String bindText = isBinding ? "..." : (module.getKeyBind() > 0 ? getKeyName(module.getKeyBind()) : "+");
             float bindScale = 0.68f;
-            float bw = Math.max(15.0f, font.width(bindText) * bindScale + 7.0f);
+            float bw = Math.max(15.0f, Render2DHelper.getTextWidth(bindText, bindScale) + 7.0f);
             float bh = 12.0f;
             float bx = rightCursor - bw;
             float by = y + (HEADER_HEIGHT - bh) * 0.5f;
@@ -231,7 +227,7 @@ public final class SystemModuleCard {
             int bText = isBinding ? SystemTheme.onPrimary() : SystemTheme.mutedFg();
             Render2DHelper.drawRoundedRect(context, bx, by, bw, bh, 3.0f, SystemTheme.fade(bFill, bAlpha));
             Render2DHelper.drawScaledText(context, bindText,
-                    bx + (bw - font.width(bindText) * bindScale) * 0.5f, by + 3.0f,
+                    bx + (bw - Render2DHelper.getTextWidth(bindText, bindScale)) * 0.5f, by + 3.0f,
                     SystemTheme.fade(bText, bAlpha), bindScale, false);
             rightCursor = bx - 4.0f;
         }
@@ -252,7 +248,7 @@ public final class SystemModuleCard {
         // Module Name (clarity contrast between active & inactive)
         float nameScale = 0.88f;
         float maxTextW = Math.max(24.0f, rightCursor - (x + PAD_X) - 2.0f);
-        String name = trimToWidth(font, module.getName(), nameScale, maxTextW);
+        String name = Render2DHelper.trimToWidth(module.getName(), nameScale, maxTextW);
         int titleCol = ColorUtils.interpolateColor(
                 ColorUtils.interpolateColor(SystemTheme.mutedFg(), SystemTheme.foreground(), 0.45f),
                 SystemTheme.foreground(),
@@ -262,7 +258,7 @@ public final class SystemModuleCard {
 
         // Subtle dot indicating expandable settings
         if (hasVisibleSettings() && expandAnim < 0.05f) {
-            Render2DHelper.drawCircle(context, x + PAD_X + font.width(name) * nameScale + 5.0f,
+            Render2DHelper.drawCircle(context, x + PAD_X + Render2DHelper.getTextWidth(name, nameScale) + 5.0f,
                     y + HEADER_HEIGHT * 0.5f, 1.4f, SystemTheme.fade(SystemTheme.mutedFg(), alpha * 0.7f));
         }
 
@@ -284,7 +280,6 @@ public final class SystemModuleCard {
             float alpha,
             ClickGuiScreen.HoverTarget outHover
     ) {
-        Font font = Minecraft.getInstance().font;
         float labelScale = 0.78f;
 
         if (isInside(mouseX, mouseY, sx, sy, sw, getSettingHeight(s)) && s.getDescription() != null && !s.getDescription().isBlank()) {
@@ -297,7 +292,7 @@ public final class SystemModuleCard {
             anim += ((bs.isEnabled() ? 1.0f : 0.0f) - anim) * (1.0f - (float) Math.exp(-15.0f * dt));
             boolAnims.put(bs, anim);
 
-            String label = trimToWidth(font, bs.getName(), labelScale, sw - 28.0f);
+            String label = Render2DHelper.trimToWidth(bs.getName(), labelScale, sw - 28.0f);
             Render2DHelper.drawScaledText(context, label, sx, sy + 4.0f, SystemTheme.fade(SystemTheme.foreground(), alpha), labelScale, false);
 
             float tw = 22.0f;
@@ -324,8 +319,8 @@ public final class SystemModuleCard {
             sliderVisual.put(ns, vis);
 
             String valStr = ns.getStep() >= 1.0 ? String.valueOf(Math.round(ns.getValue())) : String.format(Locale.ROOT, "%.2f", ns.getValue());
-            float valW = font.width(valStr) * 0.74f;
-            String label = trimToWidth(font, ns.getName(), labelScale, sw - valW - 8.0f);
+            float valW = Render2DHelper.getTextWidth(valStr, 0.74f);
+            String label = Render2DHelper.trimToWidth(ns.getName(), labelScale, sw - valW - 8.0f);
             Render2DHelper.drawScaledText(context, label, sx, sy + 1.0f, SystemTheme.fade(SystemTheme.foreground(), alpha), labelScale, false);
             Render2DHelper.drawScaledText(context, valStr, sx + sw - valW, sy + 1.0f, SystemTheme.fade(SystemTheme.mutedFg(), alpha), 0.74f, false);
 
@@ -347,13 +342,13 @@ public final class SystemModuleCard {
             String curMode = ms.getMode() != null ? ms.getMode() : "";
             float chipScale = 0.72f;
             float maxChipW = sw * 0.56f;
-            String modeTrim = trimToWidth(font, curMode, chipScale, maxChipW - 14.0f);
-            float chipW = Math.max(36.0f, font.width(modeTrim) * chipScale + 14.0f);
+            String modeTrim = Render2DHelper.trimToWidth(curMode, chipScale, maxChipW - 14.0f);
+            float chipW = Math.max(36.0f, Render2DHelper.getTextWidth(modeTrim, chipScale) + 14.0f);
             float chipH = 15.0f;
             float chipX = sx + sw - chipW;
             float chipY = sy + 1.5f;
 
-            String label = trimToWidth(font, ms.getName(), labelScale, sw - chipW - 6.0f);
+            String label = Render2DHelper.trimToWidth(ms.getName(), labelScale, sw - chipW - 6.0f);
             Render2DHelper.drawScaledText(context, label, sx, sy + 5.0f, SystemTheme.fade(SystemTheme.foreground(), alpha), labelScale, false);
 
             Render2DHelper.drawRoundedRect(context, chipX, chipY, chipW, chipH, 4.0f, SystemTheme.fade(SystemTheme.elevated(), alpha));
@@ -380,15 +375,15 @@ public final class SystemModuleCard {
                                 SystemTheme.fade(activeOpt ? SystemTheme.primary() : SystemTheme.elevated(), alpha));
                     }
                     int optCol = activeOpt ? SystemTheme.onPrimary() : SystemTheme.foreground();
-                    Render2DHelper.drawScaledText(context, opt, sx + 7.0f, oy + 3.5f,
-                            SystemTheme.fade(optCol, alpha), 0.72f, false);
+                    Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(opt, 0.72f, sw - 14.0f),
+                            sx + 7.0f, oy + 3.5f, SystemTheme.fade(optCol, alpha), 0.72f, false);
                 }
             }
             return;
         }
 
         if (s instanceof MultiBoxSetting mbs) {
-            Render2DHelper.drawScaledText(context, trimToWidth(font, mbs.getName(), labelScale, sw),
+            Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(mbs.getName(), labelScale, sw),
                     sx, sy + 1.0f, SystemTheme.fade(SystemTheme.foreground(), alpha), labelScale, false);
             List<String> opts = mbs.getOptions();
             float chipW = (sw - 4.0f) * 0.5f;
@@ -404,9 +399,9 @@ public final class SystemModuleCard {
                         SystemTheme.fade(on ? SystemTheme.primary() : SystemTheme.elevated(), alpha));
                 Render2DHelper.drawRoundedOutline(context, cx, cy, chipW, chipH, 4.0f, 1.0f,
                         SystemTheme.fade(on ? SystemTheme.primary() : SystemTheme.border(), alpha));
-                String optTrim = trimToWidth(font, opt, 0.68f, chipW - 6.0f);
+                String optTrim = Render2DHelper.trimToWidth(opt, 0.68f, chipW - 6.0f);
                 int tCol = on ? SystemTheme.onPrimary() : SystemTheme.mutedFg();
-                Render2DHelper.drawScaledText(context, optTrim, cx + (chipW - font.width(optTrim) * 0.68f) * 0.5f,
+                Render2DHelper.drawScaledText(context, optTrim, cx + (chipW - Render2DHelper.getTextWidth(optTrim, 0.68f)) * 0.5f,
                         cy + 3.5f, SystemTheme.fade(tCol, alpha), 0.68f, false);
             }
             return;
@@ -420,7 +415,7 @@ public final class SystemModuleCard {
             float rbwX = swatchX - rbwW - 4.0f;
             float topY = sy + 2.0f;
 
-            Render2DHelper.drawScaledText(context, trimToWidth(font, cs.getName(), labelScale, sw - swatchW - rbwW - 10.0f),
+            Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(cs.getName(), labelScale, sw - swatchW - rbwW - 10.0f),
                     sx, sy + 5.0f, SystemTheme.fade(SystemTheme.foreground(), alpha), labelScale, false);
 
             // Rainbow toggle pill
@@ -504,9 +499,8 @@ public final class SystemModuleCard {
             // Keybind area click (only when bind pill visible)
             boolean showBind = host.isBinding(module) || module.getKeyBind() > 0 || hoverAnim > 0.15f;
             if (showBind) {
-                Font font = Minecraft.getInstance().font;
-                String bindText = host.isBinding(module) ? "..." : (module.getKeyBind() > 0 ? BindComponent.getKeyName(module.getKeyBind()) : "+");
-                float bw = Math.max(15.0f, font.width(bindText) * 0.68f + 7.0f);
+                String bindText = host.isBinding(module) ? "..." : (module.getKeyBind() > 0 ? getKeyName(module.getKeyBind()) : "+");
+                float bw = Math.max(15.0f, Render2DHelper.getTextWidth(bindText, 0.68f) + 7.0f);
                 float bx = starX - 4.0f - bw;
                 if (mx >= bx - 2.0f && mx < starX - 2.0f) {
                     if (button == 1) {
@@ -653,23 +647,43 @@ public final class SystemModuleCard {
         }
     }
 
-    public static String trimToWidth(Font font, String text, float scale, float maxWidth) {
-        if (text == null || text.isEmpty()) return "";
-        if (font.width(text) * scale <= maxWidth) return text;
-        String dots = "..";
-        float dotsW = font.width(dots) * scale;
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            sb.append(text.charAt(i));
-            if (font.width(sb.toString()) * scale + dotsW > maxWidth) {
-                if (sb.length() > 1) sb.setLength(sb.length() - 1);
-                return sb + dots;
-            }
-        }
-        return text;
-    }
-
     private static boolean isInside(double mx, double my, float x, float y, float w, float h) {
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
+    }
+
+    public static String getKeyName(int key) {
+        if (key <= 0 || key == InputConstants.UNKNOWN.getValue()) return "NONE";
+        return switch (key) {
+            case InputConstants.KEY_RSHIFT -> "RSHIFT";
+            case InputConstants.KEY_LSHIFT -> "LSHIFT";
+            case InputConstants.KEY_RCONTROL -> "RCTRL";
+            case InputConstants.KEY_LCONTROL -> "LCTRL";
+            case InputConstants.KEY_RALT -> "RALT";
+            case InputConstants.KEY_LALT -> "LALT";
+            case InputConstants.KEY_SPACE -> "SPACE";
+            case InputConstants.KEY_TAB -> "TAB";
+            case InputConstants.KEY_CAPSLOCK -> "CAPS";
+            case InputConstants.KEY_INSERT -> "INS";
+            case InputConstants.KEY_HOME -> "HOME";
+            case InputConstants.KEY_END -> "END";
+            case InputConstants.KEY_PAGEUP -> "PGUP";
+            case InputConstants.KEY_PAGEDOWN -> "PGDN";
+            case InputConstants.KEY_UP -> "UP";
+            case InputConstants.KEY_DOWN -> "DOWN";
+            case InputConstants.KEY_LEFT -> "LEFT";
+            case InputConstants.KEY_RIGHT -> "RIGHT";
+            default -> {
+                if (key >= InputConstants.KEY_F1 && key <= InputConstants.KEY_F12) {
+                    yield "F" + (key - InputConstants.KEY_F1 + 1);
+                }
+                String glfwName;
+                try {
+                    glfwName = InputConstants.Type.KEYBOARD.getOrCreate(key).getDisplayName().getString();
+                } catch (Throwable t) {
+                    glfwName = null;
+                }
+                yield (glfwName != null && !glfwName.isBlank()) ? glfwName.toUpperCase() : "KEY_" + key;
+            }
+        };
     }
 }

@@ -656,14 +656,11 @@ public class InfoHud extends Module {
         float curW = Math.max(120.0f, islandWidthAnim.getValue());
         float curH = Math.max(18.0f, islandHeightAnim.getValue());
 
-        // Symmetrical expansion around center X
+        // Symmetrical expansion around center X without mutating islandWidget position on render frames
         float anchorCenterX = islandWidget.getX() + islandWidget.getWidth() * 0.5f;
         float drawX = anchorCenterX - curW * 0.5f;
         float drawY = islandWidget.getY();
 
-        if (!islandWidget.isDragging()) {
-            islandWidget.setPosition(drawX, drawY);
-        }
         islandWidget.setBounds(curW, curH);
 
         float radius = curH * 0.5f;

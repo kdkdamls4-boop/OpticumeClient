@@ -8,6 +8,7 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.client.renderer.state.level.SkyRenderState;
+import net.minecraft.util.Mth;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
@@ -46,6 +47,7 @@ public abstract class SkyRendererMixin {
                 float angle = (ambience.getCustomTime() / 24000.0f) * (float) (Math.PI * 2.0);
                 state.sunAngle = angle;
                 state.moonAngle = angle + (float) Math.PI;
+                state.starBrightness = Mth.clamp((float) -Math.cos(angle) * 0.8f + 0.25f, 0.0f, 1.0f);
             }
         }
 

@@ -8,6 +8,10 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.fog.FogRenderer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.level.material.FogType;
 import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,6 +24,16 @@ public abstract class FogRendererMixin {
 
     @Inject(method = "setupFog", at = @At("RETURN"))
     private void opticume$overrideFog(Camera camera, int renderDistance, DeltaTracker deltaTracker, float tickDelta, ClientLevel level, CallbackInfoReturnable<FogData> cir) {
+        if (camera == null || camera.getFluidInCamera() != FogType.NONE) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player != null && (mc.player.hasEffect(MobEffects.BLINDNESS) || mc.player.hasEffect(MobEffects.DARKNESS))) {
+            return;
+        }
+        if (camera.entity() instanceof LivingEntity living && (living.hasEffect(MobEffects.BLINDNESS) || living.hasEffect(MobEffects.DARKNESS))) {
+            return;
+        }
+
         AmbienceModule ambience = AmbienceModule.getInstance();
         if (ambience == null || !ambience.isEnabled() || !ambience.isCustomFogEnabled()) return;
 

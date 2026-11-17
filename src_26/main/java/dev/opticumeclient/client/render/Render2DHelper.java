@@ -1,5 +1,7 @@
 package dev.opticumeclient.client.render;
 
+import dev.opticumeclient.client.modules.visuals.CustomFontModule;
+import dev.opticumeclient.client.render.font.OpticumeFonts;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.RenderPipelines;
@@ -334,17 +336,27 @@ public class Render2DHelper {
 
     public static void drawScaledText(GuiGraphicsExtractor context, String text, float x, float y, int color, float scale, boolean shadow) {
         if (text == null || text.isEmpty()) return;
+        CustomFontModule customFont = CustomFontModule.getInstance();
+        float fontScale = (customFont != null && customFont.isEnabled()) ? customFont.getFontScale() : 1.0f;
+        float effectiveScale = scale * fontScale;
+        boolean actualShadow = shadow && (customFont == null || customFont.isCustomShadow());
+        String style = (customFont != null && customFont.isEnabled()) ? customFont.getFontStyle() : "Vanilla";
+
+        if (OpticumeFonts.tryRender(context, style, text, x, y, effectiveScale, color, actualShadow)) {
+            return;
+        }
+
         Font tr = Minecraft.getInstance().font;
         if (tr == null) return;
-        if (Math.abs(scale - 1.0f) < 0.01f) {
-            context.text(tr, text, Math.round(x), Math.round(y), color, shadow);
+        if (Math.abs(effectiveScale - 1.0f) < 0.01f) {
+            context.text(tr, text, Math.round(x), Math.round(y), color, actualShadow);
             return;
         }
         Matrix3x2fStack matrices = context.pose();
         matrices.pushMatrix();
         matrices.translate(x, y);
-        matrices.scale(scale, scale);
-        context.text(tr, text, 0, 0, color, shadow);
+        matrices.scale(effectiveScale, effectiveScale);
+        context.text(tr, text, 0, 0, color, actualShadow);
         matrices.popMatrix();
     }
 
@@ -353,25 +365,59 @@ public class Render2DHelper {
     }
 
     public static void drawCenteredText(GuiGraphicsExtractor context, String text, float centerX, float y, int color, boolean shadow) {
-        Font tr = Minecraft.getInstance().font;
-        if (tr == null || text == null) return;
-        int w = tr.width(text);
-        context.text(tr, text, Math.round(centerX - w / 2.0f), Math.round(y), color, shadow);
+        if (text == null || text.isEmpty()) return;
+        float w = getTextWidth(text, 1.0f);
+        drawScaledText(context, text, centerX - w * 0.5f, y, color, 1.0f, shadow);
     }
 
     public static float getTextWidth(String text, float scale) {
+        if (text == null || text.isEmpty()) return 0.0f;
+        CustomFontModule customFont = CustomFontModule.getInstance();
+        float fontScale = (customFont != null && customFont.isEnabled()) ? customFont.getFontScale() : 1.0f;
+        float effectiveScale = scale * fontScale;
+        String style = (customFont != null && customFont.isEnabled()) ? customFont.getFontStyle() : "Vanilla";
+
+        float customW = OpticumeFonts.getWidth(style, text, effectiveScale);
+        if (customW >= 0.0f) {
+            return customW;
+        }
+
         Font tr = Minecraft.getInstance().font;
-        if (tr == null || text == null) return 0.0f;
-        return tr.width(text) * scale;
+        if (tr == null) return 0.0f;
+        return tr.width(text) * effectiveScale;
+    }
+
+    public static String trimToWidth(String text, float scale, float maxWidth) {
+        if (text == null || text.isEmpty()) return "";
+        if (getTextWidth(text, scale) <= maxWidth) return text;
+        String dots = "..";
+        float dotsW = getTextWidth(dots, scale);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            sb.append(text.charAt(i));
+            if (getTextWidth(sb.toString(), scale) + dotsW > maxWidth) {
+                if (sb.length() > 1) sb.setLength(sb.length() - 1);
+                return sb + dots;
+            }
+        }
+        return text;
     }
 
     public static void drawString(GuiGraphicsExtractor context, Font textRenderer, String text, int x, int y, int color, boolean shadow) {
-        if (text == null || textRenderer == null) return;
+        if (text == null || text.isEmpty()) return;
+        if (textRenderer == null || textRenderer == Minecraft.getInstance().font) {
+            drawScaledText(context, text, x, y, color, 1.0f, shadow);
+            return;
+        }
         context.text(textRenderer, text, x, y, color, shadow);
     }
 
     public static void drawCenteredString(GuiGraphicsExtractor context, Font textRenderer, String text, int centerX, int y, int color) {
-        if (text == null || textRenderer == null) return;
+        if (text == null || text.isEmpty()) return;
+        if (textRenderer == null || textRenderer == Minecraft.getInstance().font) {
+            drawCenteredText(context, text, centerX, y, color, true);
+            return;
+        }
         int w = textRenderer.width(text);
         context.text(textRenderer, text, centerX - w / 2, y, color, true);
     }

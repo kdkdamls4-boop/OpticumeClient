@@ -7,8 +7,6 @@ import dev.opticumeclient.client.modules.ModuleManager;
 import dev.opticumeclient.client.render.Render2DHelper;
 import dev.opticumeclient.client.render.TextureAssets;
 import dev.opticumeclient.client.setting.Setting;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.util.Mth;
 
@@ -90,12 +88,11 @@ public final class SystemSearchModal {
         Render2DHelper.drawTexture(context, TextureAssets.ICON_SEARCH, mx + 12.0f, my + 10.0f, 12.0f, 12.0f,
                 SystemTheme.fade(SystemTheme.mutedFg(), a));
 
-        Font font = Minecraft.getInstance().font;
         String display = query.isEmpty() ? "Search modules, categories or settings..." : query;
         String caret = open && (System.currentTimeMillis() / 500L) % 2L == 0 ? "_" : "";
         int textCol = query.isEmpty() ? SystemTheme.mutedFg() : SystemTheme.foreground();
         Render2DHelper.drawScaledText(context,
-                SystemModuleCard.trimToWidth(font, query.isEmpty() ? display : display + caret, 0.90f, MODAL_W - 64.0f),
+                Render2DHelper.trimToWidth(query.isEmpty() ? display : display + caret, 0.90f, MODAL_W - 64.0f),
                 mx + 31.0f, my + 12.0f, SystemTheme.fade(textCol, a), 0.90f, false);
 
         Render2DHelper.drawRect(context, mx, my + INPUT_H, MODAL_W, 1.0f, SystemTheme.fade(SystemTheme.border(), a));
@@ -127,16 +124,16 @@ public final class SystemSearchModal {
 
                 // Title & subtitle
                 Render2DHelper.drawScaledText(context,
-                        SystemModuleCard.trimToWidth(font, r.title(), 0.86f, listW - 84.0f),
+                        Render2DHelper.trimToWidth(r.title(), 0.86f, listW - 84.0f),
                         listX + 8.0f, ry + 5.0f, SystemTheme.fade(SystemTheme.foreground(), a), 0.86f, false);
                 Render2DHelper.drawScaledText(context,
-                        SystemModuleCard.trimToWidth(font, r.subtitle(), 0.70f, listW - 84.0f),
+                        Render2DHelper.trimToWidth(r.subtitle(), 0.70f, listW - 84.0f),
                         listX + 8.0f, ry + 15.0f, SystemTheme.fade(SystemTheme.mutedFg(), a), 0.70f, false);
 
                 // Category badge on right
                 String tag = r.category() != null ? r.category().getDisplayName() : "Category";
                 float tagScale = 0.68f;
-                float tw = font.width(tag) * tagScale + 8.0f;
+                float tw = Render2DHelper.getTextWidth(tag, tagScale) + 8.0f;
                 float tx = listX + listW - tw - 6.0f;
                 Render2DHelper.drawRoundedRect(context, tx, ry + 6.5f, tw, 13.0f, 4.0f,
                         SystemTheme.fade(SystemTheme.surface(), a));

@@ -2,6 +2,7 @@ package dev.opticumeclient.client.modules.combat;
 
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.world.entity.player.Player; 
 import net.minecraft.tags.ItemTags; 
 import net.minecraft.world.item.ItemStack; 
@@ -25,9 +26,15 @@ public class ShieldBreakerModule extends Module {
                 if (axeSlot != -1 && axeSlot != mc.player.getInventory().getSelectedSlot()) {
                     int oldSlot = mc.player.getInventory().getSelectedSlot();
                     mc.player.getInventory().setSelectedSlot(axeSlot);
+                    if (mc.player.connection != null) {
+                        mc.player.connection.send(new ServerboundSetCarriedItemPacket(axeSlot));
+                    }
                     mc.gameMode.attack(mc.player, target);
                     mc.player.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
                     mc.player.getInventory().setSelectedSlot(oldSlot);
+                    if (mc.player.connection != null) {
+                        mc.player.connection.send(new ServerboundSetCarriedItemPacket(oldSlot));
+                    }
                 }
             }
         }

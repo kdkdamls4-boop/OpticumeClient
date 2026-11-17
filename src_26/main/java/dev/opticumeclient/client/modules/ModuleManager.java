@@ -78,8 +78,6 @@ public class ModuleManager {
         register(new NoHurtCamModule());
         register(new MemoryCleanerModule());
         register(new EntityCullingModule());
-        register(new ChunkAnimatorModule());
-        register(new FastMathModule());
         register(new FrameSyncModule());
 
         // HUD

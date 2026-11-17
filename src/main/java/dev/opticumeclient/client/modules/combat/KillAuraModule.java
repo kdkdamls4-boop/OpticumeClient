@@ -6,7 +6,6 @@ import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -82,9 +81,6 @@ public class KillAuraModule extends Module {
         if (currentTarget != null && mc.gameMode != null) {
             mc.gameMode.attack(mc.player, currentTarget);
             mc.player.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
-            if (mc.player.connection != null) {
-                mc.player.connection.send(ServerboundPunchPacket.INSTANCE);
-            }
         }
     }
 

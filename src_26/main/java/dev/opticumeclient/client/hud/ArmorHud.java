@@ -20,7 +20,7 @@ import java.util.Locale;
  */
 public class ArmorHud extends Module {
     private final NumberSetting posX = new NumberSetting("PosX", "X позиция", 8.0, 0.0, 1920.0, 1.0);
-    private final NumberSetting posY = new NumberSetting("PosY", "Y позиция", 282.0, 0.0, 1080.0, 1.0);
+    private final NumberSetting posY = new NumberSetting("PosY", "Y позиция", 226.0, 0.0, 1080.0, 1.0);
     private final ModeSetting layout = new ModeSetting("Layout", "Расположение слотов брони", "Vertical", "Vertical", "Horizontal");
 
     private final HudManager.DraggableWidget dragWidget;

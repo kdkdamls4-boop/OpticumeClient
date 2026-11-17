@@ -57,9 +57,17 @@ def test_mixins_configuration():
     pkg = src.get("package", "dev.opticumeclient.mixin").replace(".", "/")
     assert pkg == "dev/opticumeclient/mixin", f"unexpected mixin package: {pkg}"
     mixins = src.get("client", []) + src.get("mixins", []) + src.get("server", [])
-    assert len(mixins) == 26, f"expected 26 mixins, got {len(mixins)}"
-    for req_mixin in ("GuiMixin", "AbstractButtonMixin", "AbstractSliderButtonMixin", "MinecraftAccessor"):
-        assert req_mixin in mixins, f"missing required menu/button mixin: {req_mixin}"
+    assert len(mixins) == 27, f"expected 27 mixins, got {len(mixins)}"
+    for req_mixin in (
+        "GuiMixin",
+        "AbstractButtonMixin",
+        "AbstractSliderButtonMixin",
+        "MinecraftAccessor",
+        "GuiGraphicsExtractorMixin",
+        "LightmapRenderStateExtractorMixin",
+        "GameRendererMixin",
+    ):
+        assert req_mixin in mixins, f"missing required mixin: {req_mixin}"
     missing = [m for m in mixins if not os.path.exists(f"{SRC}/{pkg}/{m}.java")]
     assert not missing, f"declared mixin classes missing: {missing}"
     if os.path.exists(JAR):
@@ -73,7 +81,7 @@ def test_mixins_configuration():
 
 
 def test_modules_registered():
-    print("[3/8] Modules registered in ModuleManager...")
+    print("[3/8] Modules registered in ModuleManager & M9 subsystems...")
     path = f"{SRC}/dev/opticumeclient/client/modules/ModuleManager.java"
     assert os.path.exists(path), path
     content = open(path, encoding="utf-8").read()
@@ -81,20 +89,43 @@ def test_modules_registered():
     names = {os.path.basename(p)[:-5] for p in glob.glob(f"{SRC}/**/*.java", recursive=True)}
     missing = [c for c in classes if c not in names]
     assert not missing, f"registered but missing on disk: {missing}"
-    assert len(classes) == 49, f"expected 49 modules, got {len(classes)}"
+    assert len(classes) == 47, f"expected 47 modules, got {len(classes)}"
     required = (
         "OpticumeAuraModule", "TargetHudModule", "SprintModule", "NoSlowModule",
         "CrosshairModule", "CustomFontModule", "NoRenderModule", "FrameSyncModule",
-        "VelocityModule", "NoPushModule", "NoJumpDelayModule", "MiddleClickPearlModule", "ZoomModule",
+        "VelocityModule", "NoPushModule", "NoJumpDelayModule", "MiddleClickPearlModule",
+        "ZoomModule", "TargetEspModule",
     )
     for req in required:
         assert req in classes, f"{req} not registered"
-    print(f"  PASSED ({len(classes)} classes)")
+    for removed_mod in ("ChunkAnimatorModule", "FastMathModule"):
+        assert removed_mod not in names, f"removed placebo module {removed_mod} still exists on disk"
+
+    # Verify M9 TargetESP subsystem (16 Java classes, 35 shaders, 12 PNGs)
+    targetesp_java = glob.glob(f"{SRC}/dev/opticumeclient/client/modules/visuals/targetesp/*.java")
+    targetesp_shaders = [
+        p for p in glob.glob(f"{RES}/assets/opticumeclient/shaders/core/targetesp/**/*", recursive=True)
+        if os.path.isfile(p)
+    ]
+    targetesp_pngs = [
+        p for p in glob.glob(f"{RES}/assets/opticumeclient/targetesp/**/*.png", recursive=True)
+        if os.path.isfile(p)
+    ]
+    assert len(targetesp_java) == 16, f"expected 16 targetesp Java classes, got {len(targetesp_java)}"
+    assert len(targetesp_shaders) == 35, f"expected 35 targetesp shaders, got {len(targetesp_shaders)}"
+    assert len(targetesp_pngs) == 12, f"expected 12 targetesp PNGs, got {len(targetesp_pngs)}"
+
+    # Verify MSDF font renderer & shaders
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/render/font/OpticumeFonts.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/render/font/MsdfFontFace.java")
+    assert os.path.exists(f"{RES}/assets/opticumeclient/shaders/core/msdf_text.vsh")
+    assert os.path.exists(f"{RES}/assets/opticumeclient/shaders/core/msdf_text.fsh")
+    print(f"  PASSED ({len(classes)} modules, 16 TargetESP classes, 35 shaders, 12 PNGs, MSDF active)")
     return True
 
 
 def test_rebrand_and_no_legacy():
-    print("[4/8] OpticumeClient rebrand & no legacy leftovers...")
+    print("[4/8] OpticumeClient rebrand, zero legacy GL & no hands_fullscreen...")
     for s in ("compile_check_26.py", "deploy_26.py"):
         t = open(s, encoding="utf-8").read()
         assert "tinyremapper" not in t.lower().replace("no tinyremapper", ""), f"{s} references tinyremapper"
@@ -103,6 +134,12 @@ def test_rebrand_and_no_legacy():
     assert not os.path.exists("src_26/main/java/dev/optimusprime"), "legacy dev/optimusprime package still exists"
     assert not os.path.exists("src_26/main/resources/assets/optimusprime"), "legacy assets/optimusprime still exists"
     assert not os.path.exists("src_26/main/resources/optimusprime.mixins.json"), "legacy optimusprime.mixins.json exists"
+
+    for jf in glob.glob(f"{SRC}/**/*.java", recursive=True):
+        txt = open(jf, encoding="utf-8").read()
+        for legacy_gl in ("GL11", "glBegin", "glEnd", "GlStateManager"):
+            assert legacy_gl not in txt, f"legacy OpenGL symbol {legacy_gl} found in {jf}"
+        assert "hands_fullscreen" not in txt, f"hands_fullscreen found in {jf}"
 
     for lang_file in ("en_us.json", "ru_ru.json"):
         lang_path = f"{RES}/assets/opticumeclient/lang/{lang_file}"
@@ -122,7 +159,7 @@ def test_source_parity():
     files_src = {os.path.relpath(p, "src") for p in glob.glob("src/**/*", recursive=True) if os.path.isfile(p)}
     assert files_26 == files_src, f"parity mismatch: 26-only={files_26 - files_src}, src-only={files_src - files_26}"
     java_26 = [p for p in files_26 if p.endswith(".java")]
-    assert len(java_26) == 115, f"expected 115 java files, got {len(java_26)}"
+    assert len(java_26) == 127, f"expected 127 java files, got {len(java_26)}"
     print(f"  PASSED ({len(files_26)} files, {len(java_26)} Java sources)")
     return True
 
@@ -138,7 +175,7 @@ def test_compilation():
 
 
 def test_jar_packaging():
-    print("[7/8] Packaged jar manifest/classes/icon...")
+    print("[7/8] Packaged jar manifest/classes/icon/shaders...")
     assert os.path.exists(JAR), f"{JAR} missing (run deploy_26.py)"
     with zipfile.ZipFile(JAR) as z:
         names = z.namelist()
@@ -153,6 +190,11 @@ def test_jar_packaging():
         assert "dev/opticumeclient/client/gui/SystemTheme.class" in names
         assert "dev/opticumeclient/client/gui/SystemModuleCard.class" in names
         assert "dev/opticumeclient/client/gui/SystemSearchModal.class" in names
+        assert "dev/opticumeclient/client/render/font/OpticumeFonts.class" in names
+        assert "dev/opticumeclient/client/render/font/MsdfFontFace.class" in names
+        assert "dev/opticumeclient/client/modules/visuals/targetesp/TargetEspRenderer.class" in names
+        assert "assets/opticumeclient/shaders/core/targetesp/target_fullscreen.vsh" in names
+        assert "assets/opticumeclient/targetesp/textures/targetesp/zenith_ghost.png" in names
         assert "assets/opticumeclient/icon.png" in names
         assert "assets/opticumeclient/textures/menu/icons/singleplayer.png" in names
         assert "assets/opticumeclient/textures/menu/wallpapers/wallpaper_1.png" in names

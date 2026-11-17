@@ -332,8 +332,8 @@ public class ConfigManager {
 
     public boolean deleteConfig(String name) {
         String clean = sanitizeName(name);
-        if ("Default".equalsIgnoreCase(clean)) {
-            return false; // Protect Default config
+        if (isBuiltInPreset(clean)) {
+            return false; // Protect built-in presets (Default, Dexland, FunTime, HolyWorld, MaxFPS)
         }
         File file = getConfigFile(clean);
         if (file.exists() && file.delete()) {
@@ -371,7 +371,8 @@ public class ConfigManager {
             return;
         }
         try {
-            writeJsonFile(getConfigFile(sanitizeName(activeConfigName)), serializeCurrentState());
+            String target = isBuiltInPreset(activeConfigName) ? "Default" : sanitizeName(activeConfigName);
+            writeJsonFile(getConfigFile(target), serializeCurrentState());
         } catch (Throwable ignored) {
         }
     }

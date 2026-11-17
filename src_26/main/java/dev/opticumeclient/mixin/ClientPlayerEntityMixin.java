@@ -23,13 +23,9 @@ public abstract class ClientPlayerEntityMixin {
         LocalPlayer self = (LocalPlayer) (Object) this;
         NoSlowModule noSlow = ModuleManager.getInstance().getModule(NoSlowModule.class);
         if (noSlow != null && noSlow.shouldCancelItemSlowdown(self)) {
-            if (noSlow.isGrimSafe()) {
-                // Alternating ticks to prevent Grim / modern anticheats from resetting consumption
-                if (self.tickCount % 2 == 0) {
-                    cir.setReturnValue(Math.min(0.75f, noSlow.getSpeedMultiplier()));
-                }
-            } else {
-                cir.setReturnValue(noSlow.getSpeedMultiplier());
+            float multiplier = noSlow.getActiveSpeedMultiplier(self);
+            if (multiplier > 0.2f) {
+                cir.setReturnValue(multiplier);
             }
         }
     }
@@ -39,7 +35,7 @@ public abstract class ClientPlayerEntityMixin {
     private void opticume$noSlowAllowSprint(CallbackInfoReturnable<Boolean> cir) {
         LocalPlayer self = (LocalPlayer) (Object) this;
         NoSlowModule noSlow = ModuleManager.getInstance().getModule(NoSlowModule.class);
-        if (noSlow != null && noSlow.shouldCancelItemSlowdown(self) && !noSlow.isGrimSafe()) {
+        if (noSlow != null && noSlow.shouldCancelItemSlowdown(self) && noSlow.canSprintWhileUsingItem()) {
             cir.setReturnValue(false);
         }
     }

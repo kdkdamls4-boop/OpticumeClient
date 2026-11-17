@@ -7,7 +7,6 @@ import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -30,6 +29,7 @@ public class LegitAuraModule extends Module {
 
     private LivingEntity target = null;
     private String lastPreset = "";
+    private long lastRenderTime = 0L;
 
     public LegitAuraModule() {
         super("LegitAura", "Легитная аура с проверкой FOV и кулдауна", Category.COMBAT);
@@ -63,6 +63,7 @@ public class LegitAuraModule extends Module {
     @Override
     public void onDisable() {
         target = null;
+        lastRenderTime = 0L;
     }
 
     @Override
@@ -101,9 +102,6 @@ public class LegitAuraModule extends Module {
         if (eyeDist <= range.getValue() && mc.gameMode != null) {
             mc.gameMode.attack(mc.player, target);
             mc.player.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
-            if (mc.player.connection != null) {
-                mc.player.connection.send(ServerboundPunchPacket.INSTANCE);
-            }
         }
     }
 
@@ -111,7 +109,13 @@ public class LegitAuraModule extends Module {
     public void onRender3D(PoseStack matrices, float tickDelta) {
         // High refresh rate smooth aim interpolation (240+ FPS)
         if (mc.player != null && target != null && target.isAlive()) {
-            smoothAim(target, 0.25f);
+            long now = System.nanoTime();
+            float dt = lastRenderTime > 0L ? (now - lastRenderTime) / 1_000_000_000.0f : 0.0166f;
+            lastRenderTime = now;
+            float deltaFactor = Math.clamp(dt, 0.0005f, 0.05f) * 20.0f;
+            smoothAim(target, deltaFactor * 0.25f);
+        } else {
+            lastRenderTime = 0L;
         }
     }
 

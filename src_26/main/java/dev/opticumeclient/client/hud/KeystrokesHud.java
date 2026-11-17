@@ -12,8 +12,7 @@ import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
 import net.minecraft.client.gui.GuiGraphicsExtractor; 
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
  * Liquid Glass Keystrokes HUD widget (WASD, LMB, RMB, SPACE)
@@ -25,10 +24,8 @@ public class KeystrokesHud extends Module {
     private final BooleanSetting showSpace = new BooleanSetting("SpaceBar", "Отображать клавишу прыжка SPACE", true);
     private final BooleanSetting showCps = new BooleanSetting("ShowCPS", "Отображать счетчик кликов в секунду (CPS)", true);
 
-    private final List<Long> leftClicks = new ArrayList<>();
-    private final List<Long> rightClicks = new ArrayList<>();
-    private boolean wasLmb = false;
-    private boolean wasRmb = false;
+    private static final ConcurrentLinkedDeque<Long> LEFT_CLICKS = new ConcurrentLinkedDeque<>();
+    private static final ConcurrentLinkedDeque<Long> RIGHT_CLICKS = new ConcurrentLinkedDeque<>();
 
     private final Animation wAnim = new Animation(0.0f, 120L, Easing.EASE_OUT_QUAD);
     private final Animation aAnim = new Animation(0.0f, 120L, Easing.EASE_OUT_QUAD);
@@ -39,6 +36,26 @@ public class KeystrokesHud extends Module {
     private final Animation spaceAnim = new Animation(0.0f, 120L, Easing.EASE_OUT_QUAD);
 
     private final HudManager.DraggableWidget dragWidget;
+
+    public static void recordLeftClick() {
+        LEFT_CLICKS.add(System.currentTimeMillis());
+    }
+
+    public static void recordRightClick() {
+        RIGHT_CLICKS.add(System.currentTimeMillis());
+    }
+
+    public static int getLeftCps() {
+        long now = System.currentTimeMillis();
+        LEFT_CLICKS.removeIf(t -> now - t > 1000L);
+        return LEFT_CLICKS.size();
+    }
+
+    public static int getRightCps() {
+        long now = System.currentTimeMillis();
+        RIGHT_CLICKS.removeIf(t -> now - t > 1000L);
+        return RIGHT_CLICKS.size();
+    }
 
     public KeystrokesHud() {
         super("Keystrokes", "Стеклянные клавиши WASD / LMB / RMB / SPACE со свечением и CPS", Category.HUD);
@@ -64,19 +81,10 @@ public class KeystrokesHud extends Module {
 
     @Override
     public void onTick() {
-        if (mc.options == null) return;
-        boolean lmb = mc.options.keyAttack.isDown();
-        boolean rmb = mc.options.keyUse.isDown();
+        // Clicks are recorded with sub-tick precision in MouseHandlerMixin
         long now = System.currentTimeMillis();
-
-        if (lmb && !wasLmb) leftClicks.add(now);
-        if (rmb && !wasRmb) rightClicks.add(now);
-
-        wasLmb = lmb;
-        wasRmb = rmb;
-
-        leftClicks.removeIf(t -> now - t > 1000L);
-        rightClicks.removeIf(t -> now - t > 1000L);
+        LEFT_CLICKS.removeIf(t -> now - t > 1000L);
+        RIGHT_CLICKS.removeIf(t -> now - t > 1000L);
     }
 
     @Override
@@ -112,8 +120,8 @@ public class KeystrokesHud extends Module {
         // Row 3: LMB & RMB with CPS
         float row3Y = row2Y + keySize + gap;
         float mouseW = (totalW - gap) * 0.5f;
-        String lmbSub = showCps.isEnabled() ? (leftClicks.size() + " CPS") : null;
-        String rmbSub = showCps.isEnabled() ? (rightClicks.size() + " CPS") : null;
+        String lmbSub = showCps.isEnabled() ? (getLeftCps() + " CPS") : null;
+        String rmbSub = showCps.isEnabled() ? (getRightCps() + " CPS") : null;
 
         drawGlassKey(context, "LMB", lmbSub, x, row3Y, mouseW, mouseH,
                 mc.options.keyAttack.isDown(), lmbAnim, false);

@@ -47,7 +47,71 @@ public class NoSlowModule extends Module {
     }
 
     public boolean isGrimSafe() {
-        return !mode.is("Vanilla");
+        return mode.is("Grim Safe");
+    }
+
+    public boolean isFunTime() {
+        return mode.is("FunTime");
+    }
+
+    public boolean isHolyWorld() {
+        return mode.is("HolyWorld");
+    }
+
+    public boolean isMatrix() {
+        return mode.is("Matrix");
+    }
+
+    public boolean isVanilla() {
+        return mode.is("Vanilla");
+    }
+
+    public float getActiveSpeedMultiplier(LocalPlayer player) {
+        if (!shouldCancelItemSlowdown(player)) return 0.2f;
+
+        float baseSetting = getSpeedMultiplier(); // default 1.0f
+
+        if (isVanilla()) {
+            return baseSetting;
+        }
+
+        if (isGrimSafe()) {
+            // Alternating ticks: even ticks 0.75f, odd ticks 0.2f; sprint prohibited
+            if (player.tickCount % 2 == 0) {
+                return Math.min(0.75f, baseSetting);
+            }
+            return 0.2f;
+        }
+
+        if (isFunTime()) {
+            // Adaptive multiplier (0.68f under speed effect, 0.72f on ground, 0.76f in air); sprint prohibited
+            if (player.hasEffect(net.minecraft.world.effect.MobEffects.SPEED)) {
+                return Math.min(0.68f, baseSetting);
+            }
+            return player.onGround() ? Math.min(0.72f, baseSetting) : Math.min(0.76f, baseSetting);
+        }
+
+        if (isHolyWorld()) {
+            // 2-tick initial warmup pause, then smooth 0.82f; sprint prohibited
+            if (player.getTicksUsingItem() <= 2) {
+                return 0.2f;
+            }
+            return Math.min(0.82f, baseSetting);
+        }
+
+        if (isMatrix()) {
+            // 0.62f on ground, vanilla 0.2f in air; sprint prohibited
+            if (player.onGround()) {
+                return Math.min(0.62f, baseSetting);
+            }
+            return 0.2f;
+        }
+
+        return baseSetting;
+    }
+
+    public boolean canSprintWhileUsingItem() {
+        return isEnabled() && isVanilla();
     }
 
     public ModeSetting getModeSetting() {

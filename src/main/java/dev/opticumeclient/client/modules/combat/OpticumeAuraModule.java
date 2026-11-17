@@ -8,7 +8,7 @@ import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
 import net.minecraft.network.protocol.game.ServerboundPlayerCommandPacket;
-import net.minecraft.network.protocol.game.ServerboundPunchPacket;
+import net.minecraft.network.protocol.game.ServerboundSetCarriedItemPacket;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
@@ -52,6 +52,7 @@ public class OpticumeAuraModule extends Module {
 
     private LivingEntity target = null;
     private String lastPreset = "";
+    private long lastRenderTime = 0L;
 
     public OpticumeAuraModule() {
         super("OpticumeAura", "Флагманская комбо-аура: криты, сбитие щитов, блок-хит", Category.COMBAT);
@@ -104,6 +105,7 @@ public class OpticumeAuraModule extends Module {
     @Override
     public void onDisable() {
         target = null;
+        lastRenderTime = 0L;
     }
 
     @Override
@@ -159,8 +161,11 @@ public class OpticumeAuraModule extends Module {
             // Shield breaker: switch to axe if target is blocking with shield
             if (shieldBreaker.isEnabled() && target.isBlocking()) {
                 int axeSlot = findAxeSlot();
-                if (axeSlot != -1) {
+                if (axeSlot != -1 && axeSlot != originalSlot) {
                     mc.player.getInventory().setSelectedSlot(axeSlot);
+                    if (mc.player.connection != null) {
+                        mc.player.connection.send(new ServerboundSetCarriedItemPacket(axeSlot));
+                    }
                 }
             }
 
@@ -170,15 +175,15 @@ public class OpticumeAuraModule extends Module {
             // Attack packet
             mc.gameMode.attack(mc.player, target);
 
-            // Arm swing animation + server punch packet
+            // Arm swing animation
             mc.player.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
-            if (mc.player.connection != null) {
-                mc.player.connection.send(ServerboundPunchPacket.INSTANCE);
-            }
 
             // Restore slot back if we swapped to axe
             if (shieldBreaker.isEnabled() && target.isBlocking() && originalSlot != mc.player.getInventory().getSelectedSlot()) {
                 mc.player.getInventory().setSelectedSlot(originalSlot);
+                if (mc.player.connection != null) {
+                    mc.player.connection.send(new ServerboundSetCarriedItemPacket(originalSlot));
+                }
             }
         }
     }
@@ -187,7 +192,13 @@ public class OpticumeAuraModule extends Module {
     public void onRender3D(PoseStack matrices, float tickDelta) {
         // High refresh rate smooth camera aiming (240+ FPS)
         if (mc.player != null && target != null && target.isAlive() && !aimMode.is("None")) {
-            updateRotation(target, 0.06f);
+            long now = System.nanoTime();
+            float dt = lastRenderTime > 0L ? (now - lastRenderTime) / 1_000_000_000.0f : 0.0166f;
+            lastRenderTime = now;
+            float deltaFactor = Math.clamp(dt, 0.0005f, 0.05f) * 20.0f;
+            updateRotation(target, deltaFactor * 0.06f);
+        } else {
+            lastRenderTime = 0L;
         }
     }
 
