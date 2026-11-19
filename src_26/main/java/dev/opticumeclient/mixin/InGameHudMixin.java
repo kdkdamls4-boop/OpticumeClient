@@ -21,6 +21,7 @@ public abstract class InGameHudMixin {
     @Inject(method = "extractRenderState", at = @At("TAIL"))
     private void opticume$onRenderHud(GuiGraphicsExtractor context, DeltaTracker tickCounter, CallbackInfo ci) {
         ModuleManager.getInstance().onRender2D(context, tickCounter.getGameTimeDeltaPartialTick(false));
+        dev.opticumeclient.client.gps.GpsManager.getInstance().renderOverlay(context);
     }
 
     @Inject(method = "extractCrosshair", at = @At("HEAD"), cancellable = true)

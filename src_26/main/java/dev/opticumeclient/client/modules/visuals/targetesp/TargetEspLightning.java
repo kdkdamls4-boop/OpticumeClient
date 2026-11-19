@@ -71,6 +71,7 @@ public final class TargetEspLightning {
             .fragmentShader(EspResources.shader("target/lightning_blur"))
             .sampler("Sampler0")
             .uniform("LightningBlur", UniformType.UNIFORM_BUFFER)
+            .noBlend()
             .depthTest(CompareOp.ALWAYS_PASS)
             .writeDepth(false)
             .cull(false)

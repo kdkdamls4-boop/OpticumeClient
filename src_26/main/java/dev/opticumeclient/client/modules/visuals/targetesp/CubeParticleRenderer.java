@@ -124,14 +124,14 @@ public final class CubeParticleRenderer {
                 AutoStorageIndexBuffer indexSeq = RenderSystem.getSequentialBuffer(state.primitiveTopology());
                 GpuBuffer indexBuffer = indexSeq.getBuffer(state.indexCount());
                 RenderTarget mainTarget = mc.gameRenderer.mainRenderTarget();
+                AbstractTexture tex = texture != null ? mc.getTextureManager().getTexture(texture) : null;
                 try (RenderPass pass = RenderSystem.getDevice()
                         .createCommandEncoder()
                         .createRenderPass(() -> PASS_LABEL, mainTarget.getColorTextureView(), Optional.empty(), mainTarget.getDepthTextureView(), OptionalDouble.empty())) {
                     RenderSystem.bindDefaultUniforms(pass);
                     RenderPipeline pipeline = (texture != null ? GLOW_PIPELINES : (lines ? LINE_PIPELINES : SOLID_PIPELINES))[depthTest ? 1 : 0];
                     pass.setPipeline(PipelineBuilder.compile(pipeline));
-                    if (texture != null) {
-                        AbstractTexture tex = mc.getTextureManager().getTexture(texture);
+                    if (tex != null) {
                         pass.setUniform(SAMPLER_NAME, tex.getTextureView(), tex.getSampler());
                     }
                     pass.setVertexBuffer(0, vertexBuffer.slice());

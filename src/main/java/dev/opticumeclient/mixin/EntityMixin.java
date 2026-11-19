@@ -3,6 +3,7 @@ package dev.opticumeclient.mixin;
 import dev.opticumeclient.client.modules.ModuleManager;
 import dev.opticumeclient.client.modules.movement.NoPushModule;
 import dev.opticumeclient.client.modules.movement.NoSlowModule;
+import dev.opticumeclient.client.modules.movement.NoWebModule;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.world.level.block.state.BlockState; 
@@ -24,6 +25,11 @@ public abstract class EntityMixin {
         if ((Object) this == Minecraft.getInstance().player) {
             NoSlowModule noSlow = ModuleManager.getInstance().getModule(NoSlowModule.class);
             if (noSlow != null && noSlow.isCobwebEnabled() && state != null && state.is(Blocks.COBWEB)) {
+                ci.cancel();
+                return;
+            }
+            NoWebModule noWeb = NoWebModule.getInstance();
+            if (noWeb != null && noWeb.shouldCancelStuck(state)) {
                 ci.cancel();
             }
         }

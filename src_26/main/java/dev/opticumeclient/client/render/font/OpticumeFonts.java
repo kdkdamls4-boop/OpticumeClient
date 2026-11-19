@@ -19,15 +19,29 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class OpticumeFonts {
     public static final float BASE_EM_PX = 9.0f;
+
+    public static final String KEY_ETERNAL_HEAVEN = "eternal_heaven";
+    public static final String KEY_DREAMLINE_SF = "dreamline_sf";
+    public static final String KEY_MENU_INTER = "menu_inter";
+    public static final String KEY_HUD_REGULAR = "hud_regular";
+    public static final String KEY_HUD_MEDIUM = "hud_medium";
+    public static final String KEY_HUD_SEMIBOLD = "hud_semibold";
+    public static final String KEY_HUD_BOLD = "hud_bold";
+    public static final String KEY_DIMASIK_MEDIUM = "dimasik_medium";
 
     private static volatile MsdfFontFace modernFace;
     private static volatile MsdfFontFace smoothFace;
     private static volatile boolean modernAttempted;
     private static volatile boolean smoothAttempted;
+    private static final Map<String, MsdfFontFace> EXTRA_FACES = new ConcurrentHashMap<>();
+    private static final Map<String, Boolean> EXTRA_ATTEMPTED = new ConcurrentHashMap<>();
+    private static final Map<String, Boolean> PIPELINE_WARNED = new ConcurrentHashMap<>();
 
     private OpticumeFonts() {
     }
@@ -83,11 +97,7 @@ public final class OpticumeFonts {
         if (texView == null || texView.isClosed()) {
             return false;
         }
-        try {
-            if (RenderSystem.getCompiledPipelineNullable(face.getPipeline()) == null) {
-                return false;
-            }
-        } catch (Throwable ignored) {
+        if (!isPipelineReady(face)) {
             return false;
         }
 
@@ -127,10 +137,120 @@ public final class OpticumeFonts {
         return face.getWidth(text, BASE_EM_PX * Math.max(0.1f, scale));
     }
 
+    public static MsdfFontFace getDirectFace(String key) {
+        if (key == null) return null;
+        MsdfFontFace cached = EXTRA_FACES.get(key);
+        if (cached != null) return cached;
+        if (Boolean.TRUE.equals(EXTRA_ATTEMPTED.get(key))) return null;
+        synchronized (OpticumeFonts.class) {
+            cached = EXTRA_FACES.get(key);
+            if (cached != null) return cached;
+            if (Boolean.TRUE.equals(EXTRA_ATTEMPTED.get(key))) return null;
+            EXTRA_ATTEMPTED.put(key, Boolean.TRUE);
+            String base = switch (key) {
+                case KEY_ETERNAL_HEAVEN -> "fonts/desire/eternal/eternal_heaven";
+                case KEY_DREAMLINE_SF -> "fonts/desire/dreamline/dreamlinesf";
+                case KEY_MENU_INTER -> "fonts/desire/mainmenu/mainmenu_inter";
+                case KEY_HUD_REGULAR -> "fonts/desire/blade_sf/sf_pro_regular";
+                case KEY_HUD_MEDIUM -> "fonts/desire/blade_sf/sf_pro_medium";
+                case KEY_HUD_SEMIBOLD -> "fonts/desire/blade_sf/sf_pro_semibold";
+                case KEY_HUD_BOLD -> "fonts/desire/blade_sf/sf_pro_bold";
+                case KEY_DIMASIK_MEDIUM -> "fonts/desire/dimasik/medium";
+                default -> null;
+            };
+            if (base == null) return null;
+            MsdfFontFace loaded = loadFace(key, base + ".json", base + ".png");
+            if (loaded != null) {
+                EXTRA_FACES.put(key, loaded);
+            }
+            return loaded;
+        }
+    }
+
+    public static float getDirectWidth(String key, String text, float pxSize) {
+        if (text == null || text.isEmpty()) return 0.0f;
+        MsdfFontFace face = getDirectFace(key);
+        if (face == null) return 0.0f;
+        return face.getWidth(text, pxSize);
+    }
+
+    public static boolean drawDirect(
+            GuiGraphicsExtractor context,
+            String key,
+            String text,
+            float x,
+            float y,
+            float pxSize,
+            int color
+    ) {
+        return drawDirectGradient(context, key, text, x, y, pxSize, color, color, 0.0f, 3000L, false);
+    }
+
+    public static boolean drawDirectGradient(
+            GuiGraphicsExtractor context,
+            String key,
+            String text,
+            float x,
+            float y,
+            float pxSize,
+            int color1,
+            int color2,
+            float gradientOffset,
+            long gradientPeriod,
+            boolean shadow
+    ) {
+        if (context == null || text == null || text.isEmpty() || (((color1 >>> 24) & 0xFF) == 0)) {
+            return false;
+        }
+        MsdfFontFace face = getDirectFace(key);
+        if (face == null || !face.supportsText(text)) return false;
+        GpuTextureView texView = face.getTextureView();
+        if (texView == null || texView.isClosed()) return false;
+        if (!isPipelineReady(face)) return false;
+        if (!(((Object) context) instanceof OpticumeGuiContext guiCtx)) return false;
+
+        CustomFontRenderState state = new CustomFontRenderState(
+                face,
+                texView,
+                text,
+                x,
+                y,
+                pxSize,
+                color1,
+                color2,
+                gradientOffset,
+                gradientPeriod,
+                true,
+                shadow,
+                new Matrix3x2f(context.pose()),
+                guiCtx.opticume$peekScissor()
+        );
+        guiCtx.opticume$submitElement(state);
+        return true;
+    }
+
+    private static boolean isPipelineReady(MsdfFontFace face) {
+        try {
+            if (RenderSystem.getCompiledPipelineNullable(face.getPipeline()) != null) {
+                return true;
+            }
+            if (PIPELINE_WARNED.putIfAbsent(face.getId(), Boolean.TRUE) == null) {
+                System.err.println("[OpticumeFonts] Compiled pipeline was null for font '" + face.getId() + "'");
+            }
+            return false;
+        } catch (Throwable t) {
+            if (PIPELINE_WARNED.putIfAbsent(face.getId(), Boolean.TRUE) == null) {
+                System.err.println("[OpticumeFonts] Pipeline compile error for font '" + face.getId() + "': " + t);
+            }
+            return false;
+        }
+    }
+
     private static MsdfFontFace loadFace(String key, String jsonPath, String pngPath) {
         try {
             MsdfFontData data = readFontData(jsonPath);
             if (data == null || data.glyphs.isEmpty()) {
+                System.err.println("[OpticumeFonts] Failed to load font metadata '" + key + "' from " + jsonPath);
                 return null;
             }
             Identifier shaderId = Identifier.fromNamespaceAndPath("opticumeclient", "core/msdf_text");
@@ -144,13 +264,16 @@ public final class OpticumeFonts {
                     .withFragmentShader(shaderId)
                     .withShaderDefine("MSDF_RANGE", data.atlas.distanceRange())
                     .withColorTargetState(new ColorTargetState(BlendFunction.TRANSLUCENT))
+                    .withCull(false)
+                    .withDepthStencilState(Optional.empty())
                     .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
                     .withPrimitiveTopology(PrimitiveTopology.QUADS)
                     .build();
 
             Identifier texId = Identifier.fromNamespaceAndPath("opticumeclient", pngPath);
             return new MsdfFontFace(key, texId, pipeline, data);
-        } catch (Throwable ignored) {
+        } catch (Throwable t) {
+            System.err.println("[OpticumeFonts] Failed to initialize font '" + key + "' (" + jsonPath + "): " + t);
             return null;
         }
     }

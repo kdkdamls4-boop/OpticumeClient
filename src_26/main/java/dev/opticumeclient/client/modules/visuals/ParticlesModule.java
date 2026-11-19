@@ -1,300 +1,522 @@
 package dev.opticumeclient.client.modules.visuals;
 
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.math.Axis;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
+import dev.opticumeclient.client.modules.visuals.particles.ClientParticle;
+import dev.opticumeclient.client.modules.visuals.particles.ClientParticleManager;
+import dev.opticumeclient.client.modules.visuals.particles.ClientParticleRenderer;
+import dev.opticumeclient.client.modules.visuals.particles.ParticleCollisionMode;
+import dev.opticumeclient.client.modules.visuals.particles.ParticleInterpolationMode;
+import dev.opticumeclient.client.modules.visuals.targetesp.BufferPool;
+import dev.opticumeclient.client.modules.visuals.targetesp.CubeParticleRenderer;
+import dev.opticumeclient.client.modules.visuals.targetesp.TargetEspFrame;
+import dev.opticumeclient.client.render.WorldPrimitiveRenderer;
 import dev.opticumeclient.client.render.ColorUtils;
-import dev.opticumeclient.client.render.Render3DHelper;
 import dev.opticumeclient.client.render.TextureAssets;
 import dev.opticumeclient.client.render.ThemeManager;
 import dev.opticumeclient.client.setting.BooleanSetting;
-import dev.opticumeclient.client.setting.ColorSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
+import dev.opticumeclient.client.setting.MultiBoxSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
-import com.mojang.blaze3d.vertex.PoseStack; 
-import net.minecraft.world.entity.Entity; 
-import net.minecraft.world.entity.LivingEntity; 
-import net.minecraft.resources.Identifier; 
-import net.minecraft.core.BlockPos; 
-import net.minecraft.util.Mth; 
-import net.minecraft.world.phys.Vec3; 
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import net.minecraft.client.Camera;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.projectile.arrow.Arrow;
+import net.minecraft.world.entity.projectile.throwableitemprojectile.ThrownEnderpearl;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
+import java.awt.Color;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * Unified ParticlesModule combining Desire 3D physics particles (Hit/Idle/Pearl/Arrow, Bounce & Ricochet, 11 elements, Glow)
+ * with Opticume's floating 3D cubes & shooting-star comets.
+ */
 public class ParticlesModule extends Module {
-    private static final int MAX_PARTICLES = 450;
+    private static final String ON_HIT = "Ударе";
+    private static final String ON_IDLE = "Бездействие";
+    private static final String ON_PEARL = "Эндер жемчуг";
+    private static final String ON_ARROW = "Стрела";
 
-    private static final Identifier[] MIXED_POOL = new Identifier[]{
-            TextureAssets.FIREFLY,
-            TextureAssets.STAR,
-            TextureAssets.HEART,
-            TextureAssets.SNOWFLAKE,
-            TextureAssets.DOLLAR
+    private record ElementEntry(String label, Identifier texture) {}
+
+    private static final ElementEntry[] ELEMENTS = {
+            new ElementEntry("Орбиз", TextureAssets.DESIRE_PARTICLE_HEX_ORBIZ),
+            new ElementEntry("Звезды", TextureAssets.DESIRE_PARTICLE_HEX_STAR),
+            new ElementEntry("Сердечки", TextureAssets.DESIRE_PARTICLE_HEX_HEART),
+            new ElementEntry("Доллары", TextureAssets.DESIRE_PARTICLE_HEX_DOLLAR),
+            new ElementEntry("Снежинки", TextureAssets.DESIRE_PARTICLE_HEX_SNOWFLAKE),
+            new ElementEntry("Короны", TextureAssets.DESIRE_PARTICLE_HEX_CROWN),
+            new ElementEntry("Молнии", TextureAssets.DESIRE_PARTICLE_HEX_LIGHTNING),
+            new ElementEntry("Линии", TextureAssets.DESIRE_PARTICLE_HEX_LINE),
+            new ElementEntry("Кругляши", TextureAssets.DESIRE_PARTICLE_HEX_POINT),
+            new ElementEntry("Ромбы", TextureAssets.DESIRE_PARTICLE_HEX_RHOMBUS),
+            new ElementEntry("Искры", TextureAssets.DESIRE_PARTICLE_HEX_SPARK)
     };
 
-    private final ModeSetting texture = new ModeSetting("Texture", "Текстура 3D частиц", "Mixed", "Mixed", "Firefly", "Stars", "Hearts", "Snowflakes", "Dollars");
-    private final ModeSetting colorMode = new ModeSetting("Color Mode", "Цветовая схема частиц", "Theme", "Theme", "Rainbow", "Sync", "Custom");
-    private final ColorSetting customColor = new ColorSetting("Custom Color", "Пользовательский цвет частиц", 0xFF60A5FA);
-    private final BooleanSetting hitParticles = new BooleanSetting("HitParticles", "Разлет частиц при ударе по цели", true);
-    private final BooleanSetting worldFireflies = new BooleanSetting("WorldFireflies", "Атмосферные светлячки вокруг игрока", true);
-    private final BooleanSetting glowHalo = new BooleanSetting("Glow Halo", "Мягкое неоновое свечение и яркое ядро", true);
-    private final NumberSetting count = new NumberSetting("Hit Count", "Количество частиц при ударе", 30.0, 5.0, 150.0, 1.0);
-    private final NumberSetting ambientCount = new NumberSetting("Ambient Count", "Количество атмосферных светлячков", 45.0, 10.0, 200.0, 1.0);
-    private final NumberSetting size = new NumberSetting("Size", "Размер 3D частиц", 0.45, 0.15, 2.0, 0.05);
-    private final NumberSetting speed = new NumberSetting("Speed", "Скорость разлета частиц", 1.0, 0.2, 3.0, 0.1);
-    private final NumberSetting lifetime = new NumberSetting("LifeTime", "Время жизни частиц (сек)", 2.5, 1.0, 10.0, 0.5);
-    private final BooleanSetting physicsBounce = new BooleanSetting("PhysicsBounce", "Отскок частиц от блоков с упругостью", true);
+    private static ParticlesModule instance;
 
-    private final List<Particle> particles = new ArrayList<>();
-    private final Map<Integer, Integer> lastHurtTimes = new HashMap<>();
+    private final MultiBoxSetting spawnOn = new MultiBoxSetting(
+            "Спавнить при",
+            "Триггеры генерации частиц",
+            new String[]{ON_HIT, ON_IDLE, ON_PEARL, ON_ARROW},
+            ON_HIT, ON_IDLE
+    );
+    private final ModeSetting colorMode = new ModeSetting("Цвет", "Палитра оттенков частиц", "Радужные", "От темы", "Радужные");
+    private final ModeSetting hitPhysics = new ModeSetting("Физика удара", "Физика разлёта частиц при атаке", "Рикошет", "Отскок", "Рикошет")
+            .visibleWhen(() -> spawnOn.isEnabled(ON_HIT));
+    private final NumberSetting hitCount = new NumberSetting("Спавнить при ударе", "Количество частиц при одном ударе", 15.0, 5.0, 50.0, 1.0)
+            .visibleWhen(() -> spawnOn.isEnabled(ON_HIT));
+    private final NumberSetting worldCount = new NumberSetting("Спавнить в мире", "Плотность атмосферных частиц в мире", 20.0, 3.0, 50.0, 1.0)
+            .visibleWhen(() -> spawnOn.isEnabled(ON_IDLE));
+    private final MultiBoxSetting elements = new MultiBoxSetting(
+            "Элементы",
+            "Типы текстур частиц",
+            elementNames(),
+            "Орбиз"
+    );
+    private final BooleanSetting glow = new BooleanSetting("Свечение", "Неоновое свечение вокруг частиц", true);
+    private final BooleanSetting worldComets = new BooleanSetting("Кометы и кубы", "Летающие 3D-кубы и падающие кометы (Opticume WorldParticles)", false);
+    private final NumberSetting scaleSetting = new NumberSetting("Размер", "Масштаб частиц и мировых эффектов", 1.0, 0.5, 2.0, 0.05);
+
+    private final ClientParticleRenderer renderer = new ClientParticleRenderer();
+    private final Random random = new Random();
+    private final Set<Block> passableBlocks = Collections.newSetFromMap(new IdentityHashMap<>());
+
+    private final List<FloatingCube> cubes = new ArrayList<>();
+    private final List<ShootingComet> comets = new ArrayList<>();
+
+    private ClientLevel lastLevel;
+    private int idleTicks;
 
     public ParticlesModule() {
-        super("Particles", "Физические 3D частицы при ударах и атмосферные светлячки в мире", Category.VISUALS);
-        addSetting(texture);
+        super("Particles", "3D-частицы при ударах, снарядах и эффекты в мире", Category.VISUALS);
+        instance = this;
+        addSetting(spawnOn);
         addSetting(colorMode);
-        addSetting(customColor);
-        addSetting(hitParticles);
-        addSetting(worldFireflies);
-        addSetting(glowHalo);
-        addSetting(count);
-        addSetting(ambientCount);
-        addSetting(size);
-        addSetting(speed);
-        addSetting(lifetime);
-        addSetting(physicsBounce);
-        setEnabled(false);
+        addSetting(hitPhysics);
+        addSetting(hitCount);
+        addSetting(worldCount);
+        addSetting(elements);
+        addSetting(glow);
+        addSetting(worldComets);
+        addSetting(scaleSetting);
+        fillPassableBlocks();
+    }
+
+    public static ParticlesModule getInstance() {
+        return instance;
+    }
+
+    private static String[] elementNames() {
+        String[] out = new String[ELEMENTS.length];
+        for (int i = 0; i < ELEMENTS.length; i++) {
+            out[i] = ELEMENTS[i].label;
+        }
+        return out;
     }
 
     @Override
-    public String getDisplaySuffix() {
-        return texture.getMode();
+    public void onDisable() {
+        super.onDisable();
+        reset();
+    }
+
+    private void reset() {
+        idleTicks = 0;
+        lastLevel = null;
+        cubes.clear();
+        comets.clear();
+        ClientParticleManager.getInstance().clear();
+    }
+
+    public void onAttack(Entity target) {
+        if (!isEnabled() || mc.player == null || mc.level == null || !spawnOn.isEnabled(ON_HIT)) return;
+        if (!(target instanceof LivingEntity living)) return;
+
+        if (hitPhysics.is("Рикошет")) {
+            spawnRicochetHit(living);
+        } else {
+            spawnBounceHit(living);
+        }
     }
 
     @Override
     public void onTick() {
-        if (mc.player == null || mc.level == null) {
-            particles.clear();
-            lastHurtTimes.clear();
+        if (!isEnabled() || mc.level == null) {
+            reset();
             return;
         }
+        if (mc.level != lastLevel) {
+            ClientParticleManager.getInstance().clear();
+            cubes.clear();
+            comets.clear();
+            lastLevel = mc.level;
+        }
 
+        idleTicks++;
+        if (spawnOn.isEnabled(ON_IDLE)) spawnAmbient();
+        spawnProjectileTrails(spawnOn.isEnabled(ON_PEARL), spawnOn.isEnabled(ON_ARROW));
+        ClientParticleManager.getInstance().tick();
+
+        if (worldComets.isEnabled()) {
+            tickWorldCometsAndCubes();
+        } else {
+            cubes.clear();
+            comets.clear();
+        }
+    }
+
+    public void renderWorld(TargetEspFrame frame) {
+        if (!isEnabled() || mc.level == null || mc.player == null) return;
+        renderer.render(frame, selectedTextures(), glow.isEnabled(), scaleSetting.getFloatValue());
+
+        if (worldComets.isEnabled()) {
+            renderWorldCometsAndCubes(frame);
+        }
+    }
+
+    private void spawnAmbient() {
+        if (idleTicks % 15 != 0 || mc.gameRenderer == null || mc.gameRenderer.mainCamera() == null) return;
+        idleTicks = 0;
+
+        Vec3 camera = mc.gameRenderer.mainCamera().position();
+        float spread = 3.0f;
+        int count = worldCount.getIntValue() * 8;
+
+        for (int i = 0; i < count; i++) {
+            double distance = random.nextFloat(1.0f, 30.0f);
+            double yaw = Math.toRadians(random.nextFloat(0.0f, 360.0f));
+            Vec3 pos = new Vec3(
+                    camera.x - Math.sin(yaw) * distance,
+                    camera.y + random.nextFloat(-15.0f, 15.0f),
+                    camera.z + Math.cos(yaw) * distance);
+            Vec3 motion = new Vec3(
+                    random.nextFloat(-spread, spread),
+                    random.nextFloat(-1.0f, 1.0f),
+                    random.nextFloat(-spread, spread));
+            spawnAmbientParticle(
+                    pos, motion, 8.0E-6f, 2500,
+                    pickColor(ClientParticleManager.getInstance().size() * 50),
+                    random.nextFloat(0.1f, 0.225f)
+            );
+        }
+    }
+
+    private void spawnProjectileTrails(boolean pearls, boolean arrows) {
+        if ((!pearls && !arrows) || mc.level == null) return;
+        for (Entity entity : mc.level.entitiesForRendering()) {
+            if ((pearls && entity instanceof ThrownEnderpearl) || (arrows && entity instanceof Arrow)) {
+                spawnTrail(entity);
+            }
+        }
+    }
+
+    private void spawnTrail(Entity entity) {
+        double dx = entity.getX() - entity.xo;
+        double dy = entity.getY() - entity.yo;
+        double dz = entity.getZ() - entity.zo;
+        if (Math.sqrt(dx * dx + dy * dy + dz * dz) * 20.0 < 0.35) return;
+
+        Vec3 pos = entity.position();
+        Vec3 velocity = entity.getDeltaMovement();
+        for (int i = 0; i < 4; i++) {
+            float spread = random.nextFloat();
+            Vec3 motion = new Vec3(
+                    random.nextFloat(-spread, spread) + velocity.x,
+                    random.nextFloat(-spread, spread) + velocity.y,
+                    random.nextFloat(-spread, spread) + velocity.z);
+            spawnAmbientParticle(
+                    pos, motion, 8.0E-6f, 1000,
+                    pickColor(ClientParticleManager.getInstance().size() * 50),
+                    random.nextFloat(0.1f, 0.225f)
+            );
+        }
+    }
+
+    private void spawnRicochetHit(LivingEntity target) {
+        int lifetime = msToTicks(3000);
+        int count = hitCount.getIntValue();
+
+        for (int i = 0; i < count; i++) {
+            ClientParticle.Builder builder = new ClientParticle.Builder(
+                    target.getX() + (random.nextDouble() - 0.5) * 0.5,
+                    target.getY() + random.nextDouble() * target.getBbHeight(),
+                    target.getZ() + (random.nextDouble() - 0.5) * 0.5)
+                    .motion(
+                            (random.nextDouble() * 0.5 - 0.25) * 0.9,
+                            random.nextDouble() * 0.25 * 0.01,
+                            (random.nextDouble() * 0.5 - 0.25) * 0.9)
+                    .collisionMode(ParticleCollisionMode.RICOCHET)
+                    .interpolation(ParticleInterpolationMode.LINEAR)
+                    .gravity(1.0f)
+                    .collide(true)
+                    .size(0.6f, 0.6f)
+                    .lifetime(lifetime)
+                    .maxDistance(15.0);
+            ClientParticleManager.getInstance().spawn(builder, pickColor(i * 30), 0.15f, lifetime);
+        }
+    }
+
+    private void spawnBounceHit(LivingEntity target) {
+        float spread = 0.5f;
+        Vec3 velocity = target.getDeltaMovement();
+        int count = hitCount.getIntValue();
+
+        for (int i = 0; i < count; i++) {
+            float size = random.nextFloat(0.1f, 0.15f);
+            int lifetime = random.nextInt(40, 60);
+            double motionX = random.nextFloat(-spread, spread) + velocity.x * 0.35;
+            double motionY = random.nextFloat(-0.2f, 0.15f) + Math.max(0.0, velocity.y) * 0.25;
+            double motionZ = random.nextFloat(-spread, spread) + velocity.z * 0.35;
+
+            ClientParticle.Builder builder = new ClientParticle.Builder(
+                    target.getX() + random.nextDouble(-0.25, 0.25),
+                    target.getY() + random.nextDouble(0.1, Math.max(0.2, target.getBbHeight())),
+                    target.getZ() + random.nextDouble(-0.25, 0.25))
+                    .motion(motionX, motionY, motionZ)
+                    .gravity(0.2f)
+                    .groundBoost(true)
+                    .drag(0.9f)
+                    .bounce(1.5f)
+                    .collide(true)
+                    .size(size, size)
+                    .lifetime(lifetime)
+                    .delay(random.nextInt(1, 3));
+            ClientParticleManager.getInstance().spawn(builder, pickColor(random.nextInt()), size, Math.max(12, lifetime / 2));
+        }
+    }
+
+    private void spawnAmbientParticle(Vec3 pos, Vec3 motion, float gravity, int lifeMs, int color, float size) {
+        if (mc.level == null) return;
+        Block block = mc.level.getBlockState(BlockPos.containing(pos.x, pos.y, pos.z)).getBlock();
+        if (!passableBlocks.contains(block)) return;
+
+        float clampedSize = Math.max(0.02f, size);
+        ClientParticle.Builder builder = new ClientParticle.Builder(pos.x, pos.y, pos.z)
+                .motion(motion.x * 0.07, motion.y * 0.07, motion.z * 0.07)
+                .gravity(Math.max(0.0f, gravity * 175.0f))
+                .lifetime(msToTicks(lifeMs))
+                .drag(0.98f)
+                .collide(false)
+                .size(clampedSize, clampedSize);
+        ClientParticleManager.getInstance().spawn(builder, color, size, msToTicks(300));
+    }
+
+    private void tickWorldCometsAndCubes() {
+        if (mc.player == null) return;
         long now = System.currentTimeMillis();
-        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        int targetCount = Math.max(6, worldCount.getIntValue());
+        float radius = 16.0f;
 
-        // 1. Spawn HitParticles when a nearby entity receives a hit (hurtTime == 9)
-        if (hitParticles.isEnabled()) {
-            for (Entity entity : mc.level.entitiesForRendering()) {
-                if (!(entity instanceof LivingEntity living) || entity == mc.player || !living.isAlive()) continue;
-                if (mc.player.distanceTo(living) > 12.0f) continue;
-
-                int prevHurt = lastHurtTimes.getOrDefault(living.getId(), 0);
-                int currHurt = living.hurtTime;
-                lastHurtTimes.put(living.getId(), currHurt);
-
-                if (currHurt == 9 && prevHurt < 9) {
-                    spawnHitBurst(living, now, rng);
-                }
-            }
-        }
-
-        // 2. Spawn ambient WorldFireflies within 14 blocks around the player
-        if (worldFireflies.isEnabled()) {
-            int currentAmbient = 0;
-            for (Particle p : particles) {
-                if (p.ambient) currentAmbient++;
-            }
-            int targetAmbient = ambientCount.getIntValue();
-            float spd = speed.getFloatValue();
-            long baseLifeMs = (long) (lifetime.getValue() * 1500.0);
-            long minLife = Math.max(800L, (long) (baseLifeMs * 0.8));
-            long maxLife = Math.max(minLife + 200L, (long) (baseLifeMs * 1.6));
-
-            for (int i = currentAmbient; i < targetAmbient && particles.size() < MAX_PARTICLES; i++) {
-                double ox = rng.nextDouble(-14.0, 14.0);
-                double oy = rng.nextDouble(-2.5, 6.5);
-                double oz = rng.nextDouble(-14.0, 14.0);
-                Vec3 pos = mc.player.position().add(ox, oy, oz);
-                if (!mc.level.getBlockState(BlockPos.containing(pos.x, pos.y, pos.z)).isAir()) continue;
-
-                Vec3 vel = new Vec3(
-                        rng.nextDouble(-0.025, 0.025) * spd,
-                        rng.nextDouble(-0.015, 0.022) * spd,
-                        rng.nextDouble(-0.025, 0.025) * spd
-                );
-                particles.add(new Particle(
-                        pos,
-                        vel,
-                        now,
-                        rng.nextLong(minLife, maxLife),
-                        pickTexture(rng),
-                        rng.nextFloat(0.0f, 360.0f),
-                        rng.nextFloat(-4.5f, 4.5f),
-                        rng.nextInt(0, 360),
-                        true
-                ));
-            }
-        }
-
-        // 3. Update physics and bounce off blocks
-        boolean bounce = physicsBounce.isEnabled();
-        Iterator<Particle> it = particles.iterator();
-        while (it.hasNext()) {
-            Particle p = it.next();
-            if (now - p.spawnTime > p.maxLife) {
-                it.remove();
+        Iterator<FloatingCube> itCubes = cubes.iterator();
+        while (itCubes.hasNext()) {
+            FloatingCube c = itCubes.next();
+            if (now - c.spawnMs > c.lifeMs || mc.player.position().distanceToSqr(c.x, c.y, c.z) > (radius + 8.0) * (radius + 8.0)) {
+                itCubes.remove();
                 continue;
             }
+            c.x += c.vx;
+            c.y += c.vy;
+            c.z += c.vz;
+            c.rotX += c.rotSpeedX;
+            c.rotY += c.rotSpeedY;
+        }
+        if (cubes.size() < targetCount) {
+            spawnCube(mc.player.position(), radius, now);
+        }
 
-            p.prevPos = p.pos;
-            p.rotation = (p.rotation + p.rotSpeed) % 360.0f;
-
-            if (p.ambient) {
-                double wave = (now - p.spawnTime) * 0.003 + p.colorOffset;
-                float spd = speed.getFloatValue();
-                p.velocity = p.velocity.add(
-                        Math.sin(wave) * 0.0018 * spd,
-                        Math.cos(wave * 0.8) * 0.0012 * spd,
-                        Math.cos(wave) * 0.0018 * spd
-                ).scale(0.96);
-            } else {
-                // Gravity + air drag for hit particles
-                p.velocity = p.velocity.subtract(0.0, 0.016, 0.0).scale(0.96);
+        int maxComets = Math.max(4, targetCount / 3);
+        Iterator<ShootingComet> itComets = comets.iterator();
+        while (itComets.hasNext()) {
+            ShootingComet cm = itComets.next();
+            if (now - cm.spawnMs > cm.lifeMs) {
+                itComets.remove();
+                continue;
             }
-
-            double nextX = p.pos.x + p.velocity.x;
-            double nextY = p.pos.y + p.velocity.y;
-            double nextZ = p.pos.z + p.velocity.z;
-
-            if (bounce) {
-                if (!mc.level.getBlockState(BlockPos.containing(nextX, p.pos.y, p.pos.z)).isAir()) {
-                    p.velocity = new Vec3(p.velocity.x * -0.65, p.velocity.y, p.velocity.z);
-                    nextX = p.pos.x + p.velocity.x;
-                }
-                if (!mc.level.getBlockState(BlockPos.containing(p.pos.x, nextY, p.pos.z)).isAir()) {
-                    p.velocity = new Vec3(p.velocity.x * 0.88, p.velocity.y * -0.65, p.velocity.z * 0.88);
-                    nextY = p.pos.y + p.velocity.y;
-                }
-                if (!mc.level.getBlockState(BlockPos.containing(p.pos.x, p.pos.y, nextZ)).isAir()) {
-                    p.velocity = new Vec3(p.velocity.x, p.velocity.y, p.velocity.z * -0.65);
-                    nextZ = p.pos.z + p.velocity.z;
-                }
-            }
-
-            p.pos = new Vec3(nextX, nextY, nextZ);
+            cm.trail.add(0, new Vec3(cm.x, cm.y, cm.z));
+            if (cm.trail.size() > 10) cm.trail.remove(cm.trail.size() - 1);
+            cm.x += cm.vx;
+            cm.y += cm.vy;
+            cm.z += cm.vz;
+        }
+        if (comets.size() < maxComets && ThreadLocalRandom.current().nextFloat() < 0.25f) {
+            spawnComet(mc.player.position(), radius, now);
         }
     }
 
-    private void spawnHitBurst(LivingEntity target, long now, ThreadLocalRandom rng) {
-        int burstCount = count.getIntValue();
-        float spd = speed.getFloatValue();
-        long lifeBase = (long) (lifetime.getValue() * 1000.0);
-        long minLife = Math.max(500L, (long) (lifeBase * 0.7));
-        long maxLife = Math.max(minLife + 100L, (long) (lifeBase * 1.3));
-        Vec3 center = target.position().add(0.0, target.getBbHeight() * 0.6, 0.0);
-
-        for (int i = 0; i < burstCount && particles.size() < MAX_PARTICLES; i++) {
-            double angle = rng.nextDouble(0.0, Math.PI * 2.0);
-            double speedXZ = rng.nextDouble(0.07, 0.24) * spd;
-            double speedY = rng.nextDouble(0.05, 0.22) * spd;
-            Vec3 vel = new Vec3(Math.cos(angle) * speedXZ, speedY, Math.sin(angle) * speedXZ);
-
-            particles.add(new Particle(
-                    center.add(rng.nextDouble(-0.2, 0.2), rng.nextDouble(-0.2, 0.2), rng.nextDouble(-0.2, 0.2)),
-                    vel,
-                    now,
-                    rng.nextLong(minLife, maxLife),
-                    pickTexture(rng),
-                    rng.nextFloat(0.0f, 360.0f),
-                    rng.nextFloat(-9.0f, 9.0f),
-                    i * 22,
-                    false
-            ));
-        }
-    }
-
-    private Identifier pickTexture(ThreadLocalRandom rng) {
-        return switch (texture.getMode()) {
-            case "Firefly" -> TextureAssets.FIREFLY;
-            case "Stars" -> TextureAssets.STAR;
-            case "Hearts" -> TextureAssets.HEART;
-            case "Snowflakes" -> TextureAssets.SNOWFLAKE;
-            case "Dollars" -> TextureAssets.DOLLAR;
-            default -> MIXED_POOL[rng.nextInt(MIXED_POOL.length)];
-        };
-    }
-
-    @Override
-    public void onRender3D(PoseStack matrices, float tickDelta) {
-        if (mc.player == null || mc.level == null || particles.isEmpty()) return;
-
+    private void renderWorldCometsAndCubes(TargetEspFrame frame) {
+        if (cubes.isEmpty() && comets.isEmpty()) return;
         long now = System.currentTimeMillis();
-        float baseScale = size.getFloatValue();
+        Vec3 camPos = frame.cameraPos();
+        float scale = scaleSetting.getFloatValue() * 0.13f;
 
-        for (Particle p : particles) {
-            float lifeProgress = (float) (now - p.spawnTime) / (float) p.maxLife;
-            if (lifeProgress < 0.0f || lifeProgress >= 1.0f) continue;
+        if (!cubes.isEmpty()) {
+            PoseStack ps = new PoseStack();
+            ps.mulPose(frame.poseStack().last().pose());
+            BufferBuilder solidBuf = BufferPool.getInstance().begin(PrimitiveTopology.QUADS, DefaultVertexFormat.POSITION_COLOR);
+            boolean any = false;
+            for (FloatingCube c : cubes) {
+                float lifeProg = (float) (now - c.spawnMs) / (float) c.lifeMs;
+                float fade = lifeProg < 0.2f ? lifeProg / 0.2f : (lifeProg > 0.8f ? (1.0f - lifeProg) / 0.2f : 1.0f);
+                fade = Mth.clamp(fade, 0.0f, 1.0f);
+                if (fade <= 0.02f) continue;
 
-            float alphaFactor;
-            if (lifeProgress < 0.15f) {
-                alphaFactor = lifeProgress / 0.15f;
-            } else {
-                alphaFactor = 1.0f - ((lifeProgress - 0.15f) / 0.85f);
+                int baseCol = ThemeManager.getInstance().getAccentColor(c.colorOffset);
+                int fillCol = ColorUtils.withAlpha(baseCol, Math.round(145 * fade));
+
+                ps.pushPose();
+                ps.translate((float) (c.x - camPos.x), (float) (c.y - camPos.y), (float) (c.z - camPos.z));
+                ps.rotateDegrees(Axis.XP, c.rotX);
+                ps.rotateDegrees(Axis.YP, c.rotY);
+                CubeParticleRenderer.emitSolidCube(solidBuf, ps.last().pose(), scale, fillCol);
+                ps.popPose();
+                any = true;
             }
-            if (alphaFactor <= 0.02f) continue;
+            if (any) {
+                CubeParticleRenderer.draw(solidBuf, false, null, true);
+            } else {
+                WorldPrimitiveRenderer.discardQuietly(solidBuf);
+            }
+        }
 
-            Vec3 lerpedParticlePos = new Vec3(
-                    Mth.lerp(tickDelta, p.prevPos.x, p.pos.x),
-                    Mth.lerp(tickDelta, p.prevPos.y, p.pos.y),
-                    Mth.lerp(tickDelta, p.prevPos.z, p.pos.z)
-            );
+        if (!comets.isEmpty() && mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null) {
+            Camera cam = mc.gameRenderer.mainCamera();
+            Quaternionf orient = new Quaternionf(cam.rotation());
+            Matrix4f pose = frame.poseStack().last().pose();
+            BufferBuilder cometBuf = WorldPrimitiveRenderer.beginTexturedQuads();
+            boolean any = false;
+            for (ShootingComet cm : comets) {
+                float lifeProg = (float) (now - cm.spawnMs) / (float) cm.lifeMs;
+                float fade = lifeProg < 0.15f ? lifeProg / 0.15f : (lifeProg > 0.75f ? (1.0f - lifeProg) / 0.25f : 1.0f);
+                fade = Mth.clamp(fade, 0.0f, 1.0f);
+                if (fade <= 0.02f) continue;
 
-            int baseColor = switch (colorMode.getMode()) {
-                case "Rainbow" -> ColorUtils.rainbow(p.colorOffset * 10, 0.85f, 1.0f);
-                case "Sync" -> ThemeManager.getInstance().getCurrentTheme().getPrimaryColor();
-                case "Custom" -> customColor.getColor();
-                default -> ThemeManager.getInstance().getAccentColor(p.colorOffset); // "Theme"
-            };
-            int color = ColorUtils.withAlphaFactor(baseColor, alphaFactor);
-            float scale = baseScale * (p.ambient ? 0.85f : 1.0f) * (0.5f + 0.5f * alphaFactor);
-            float rot = p.rotation + p.rotSpeed * tickDelta;
-
-            boolean halo = glowHalo.isEnabled();
-            Render3DHelper.queueBillboardSprite(lerpedParticlePos, scale, p.tex, color, rot, halo);
-            if (halo) {
-                int coreColor = ColorUtils.withAlphaFactor(0xFFFFFFFF, alphaFactor * 0.85f);
-                Render3DHelper.queueBillboardSprite(lerpedParticlePos, scale * 0.45f, p.tex, coreColor, rot, false);
+                int col = pickColor(cm.colorOffset);
+                Vec3 head = new Vec3(cm.x - camPos.x, cm.y - camPos.y, cm.z - camPos.z);
+                WorldPrimitiveRenderer.glowSprite(cometBuf, pose, head.x, head.y, head.z, orient, 0.42f * scaleSetting.getFloatValue(), ColorUtils.withAlpha(col, Math.round(230 * fade)));
+                any = true;
+                for (int i = 0; i < cm.trail.size(); i++) {
+                    Vec3 tp = cm.trail.get(i).subtract(camPos);
+                    float tailScale = Math.max(0.08f, (0.34f - i * 0.028f) * scaleSetting.getFloatValue());
+                    int tCol = ColorUtils.withAlpha(col, Math.round(160 * fade * (1.0f - i / 11.0f)));
+                    WorldPrimitiveRenderer.glowSprite(cometBuf, pose, tp.x, tp.y, tp.z, orient, tailScale, tCol);
+                }
+            }
+            if (any) {
+                WorldPrimitiveRenderer.drawTexturedQuads(cometBuf, TextureAssets.DESIRE_PARTICLE_GLOW, true, true);
+            } else {
+                WorldPrimitiveRenderer.discardQuietly(cometBuf);
             }
         }
     }
 
-    private static class Particle {
-        Vec3 pos;
-        Vec3 prevPos;
-        Vec3 velocity;
-        final long spawnTime;
-        final long maxLife;
-        final Identifier tex;
-        float rotation;
-        final float rotSpeed;
-        final int colorOffset;
-        final boolean ambient;
+    private void spawnCube(Vec3 center, float radius, long now) {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        FloatingCube c = new FloatingCube();
+        double angle = rng.nextDouble(Math.PI * 2.0);
+        double dist = rng.nextDouble(2.5, radius);
+        c.x = center.x + Math.cos(angle) * dist;
+        c.y = center.y + rng.nextDouble(-2.0, 6.5);
+        c.z = center.z + Math.sin(angle) * dist;
+        c.vx = rng.nextDouble(-0.018, 0.018);
+        c.vy = rng.nextDouble(0.005, 0.024);
+        c.vz = rng.nextDouble(-0.018, 0.018);
+        c.rotX = (float) rng.nextDouble(360.0);
+        c.rotY = (float) rng.nextDouble(360.0);
+        c.rotSpeedX = (float) rng.nextDouble(1.5, 4.5);
+        c.rotSpeedY = (float) rng.nextDouble(1.5, 4.5);
+        c.spawnMs = now;
+        c.lifeMs = rng.nextLong(3500L, 7000L);
+        c.colorOffset = rng.nextInt(360);
+        cubes.add(c);
+    }
 
-        Particle(Vec3 pos, Vec3 velocity, long spawnTime, long maxLife, Identifier tex,
-                 float rotation, float rotSpeed, int colorOffset, boolean ambient) {
-            this.pos = pos;
-            this.prevPos = pos;
-            this.velocity = velocity;
-            this.spawnTime = spawnTime;
-            this.maxLife = maxLife;
-            this.tex = tex;
-            this.rotation = rotation;
-            this.rotSpeed = rotSpeed;
-            this.colorOffset = colorOffset;
-            this.ambient = ambient;
+    private void spawnComet(Vec3 center, float radius, long now) {
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
+        ShootingComet cm = new ShootingComet();
+        double angle = rng.nextDouble(Math.PI * 2.0);
+        double dist = rng.nextDouble(3.0, radius * 1.2);
+        cm.x = center.x + Math.cos(angle) * dist;
+        cm.y = center.y + rng.nextDouble(5.0, 12.0);
+        cm.z = center.z + Math.sin(angle) * dist;
+        double dir = angle + rng.nextDouble(-0.8, 0.8);
+        double speed = rng.nextDouble(0.22, 0.42);
+        cm.vx = Math.cos(dir) * speed;
+        cm.vy = -rng.nextDouble(0.16, 0.32);
+        cm.vz = Math.sin(dir) * speed;
+        cm.spawnMs = now;
+        cm.lifeMs = rng.nextLong(1200L, 2400L);
+        cm.colorOffset = rng.nextInt(360);
+        comets.add(cm);
+    }
+
+    private static int msToTicks(int ms) {
+        return Math.max(1, Math.round(ms / 50.0f));
+    }
+
+    private int pickColor(int index) {
+        if (colorMode.is("Радужные")) {
+            return Color.HSBtoRGB(random.nextFloat(), 1.0f, 1.0f);
         }
+        return ThemeManager.getInstance().getAccentColor(index);
+    }
+
+    private List<Identifier> selectedTextures() {
+        List<Identifier> textures = new ArrayList<>();
+        for (ElementEntry entry : ELEMENTS) {
+            if (elements.isEnabled(entry.label)) {
+                textures.add(entry.texture);
+            }
+        }
+        if (textures.isEmpty()) {
+            textures.add(ELEMENTS[0].texture);
+        }
+        return textures;
+    }
+
+    private void fillPassableBlocks() {
+        Collections.addAll(
+                passableBlocks,
+                Blocks.AIR, Blocks.CAVE_AIR, Blocks.VOID_AIR, Blocks.WATER, Blocks.LAVA,
+                Blocks.GRASS_BLOCK, Blocks.TALL_GRASS, Blocks.FERN, Blocks.LARGE_FERN, Blocks.DEAD_BUSH,
+                Blocks.SEAGRASS, Blocks.TALL_SEAGRASS, Blocks.VINE, Blocks.GLOW_LICHEN, Blocks.SUGAR_CANE,
+                Blocks.CACTUS, Blocks.SNOW, Blocks.COBWEB, Blocks.ICE, Blocks.PACKED_ICE, Blocks.BLUE_ICE,
+                Blocks.FROSTED_ICE, Blocks.SLIME_BLOCK, Blocks.HONEY_BLOCK
+        );
+    }
+
+    private static final class FloatingCube {
+        double x, y, z, vx, vy, vz;
+        float rotX, rotY, rotSpeedX, rotSpeedY;
+        long spawnMs, lifeMs;
+        int colorOffset;
+    }
+
+    private static final class ShootingComet {
+        double x, y, z, vx, vy, vz;
+        long spawnMs, lifeMs;
+        int colorOffset;
+        final List<Vec3> trail = new ArrayList<>();
     }
 }

@@ -23,8 +23,11 @@ public abstract class KeyboardHandlerMixin {
 
     @Inject(method = "keyPress", at = @At("HEAD"))
     private void opticume$onKeyPress(long window, int action, KeyEvent keyEvent, CallbackInfo ci) {
-        if (action == 1 && this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null && keyEvent != null) {
-            ModuleManager.getInstance().onKeyPressed(keyEvent.key());
+        if (keyEvent != null && this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null) {
+            if (action == 1) {
+                ModuleManager.getInstance().onKeyPressed(keyEvent.key());
+            }
+            dev.opticumeclient.client.modules.other.AssistModule.onInputKey(keyEvent.key(), action, false);
         }
     }
 }

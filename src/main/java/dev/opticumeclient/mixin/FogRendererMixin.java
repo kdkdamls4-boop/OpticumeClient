@@ -1,6 +1,8 @@
 package dev.opticumeclient.mixin;
 
 import dev.opticumeclient.client.modules.visuals.AmbienceModule;
+import dev.opticumeclient.client.modules.visuals.AtmosphereModule;
+import dev.opticumeclient.client.modules.visuals.ambience.WorldRenderBridge;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Camera;
@@ -8,11 +10,9 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.fog.FogData;
 import net.minecraft.client.renderer.fog.FogRenderer;
-import net.minecraft.client.Minecraft;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.material.FogType;
-import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -23,47 +23,55 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class FogRendererMixin {
 
     @Inject(method = "setupFog", at = @At("RETURN"))
-    private void opticume$overrideFog(Camera camera, int renderDistance, DeltaTracker deltaTracker, float tickDelta, ClientLevel level, CallbackInfoReturnable<FogData> cir) {
-        if (camera == null || camera.getFluidInCamera() != FogType.NONE) return;
+    private void opticume$modifyFog(Camera camera, int renderDistanceChunks, DeltaTracker deltaTracker,
+                                    float darkenWorldAmount, ClientLevel level,
+                                    CallbackInfoReturnable<FogData> cir) {
+        FogData data = cir.getReturnValue();
+        if (data == null) {
+            return;
+        }
 
-        Minecraft mc = Minecraft.getInstance();
-        if (mc.player != null && (mc.player.hasEffect(MobEffects.BLINDNESS) || mc.player.hasEffect(MobEffects.DARKNESS))) {
-            return;
-        }
-        if (camera.entity() instanceof LivingEntity living && (living.hasEffect(MobEffects.BLINDNESS) || living.hasEffect(MobEffects.DARKNESS))) {
-            return;
-        }
+        boolean preserveVanillaFog = camera == null
+                || camera.getFluidInCamera() != FogType.NONE
+                || (camera.entity() instanceof LivingEntity living
+                    && (living.hasEffect(MobEffects.BLINDNESS) || living.hasEffect(MobEffects.DARKNESS)));
 
         AmbienceModule ambience = AmbienceModule.getInstance();
-        if (ambience == null || !ambience.isEnabled() || !ambience.isCustomFogEnabled()) return;
-
-        String fogMode = ambience.getFogMode();
-        if (fogMode.equals("Vanilla")) return;
-
-        FogData data = cir.getReturnValue();
-        if (data == null) return;
-
-        if (fogMode.equals("Sync Sky")) {
-            if (!ambience.getSkyMode().equals("Vanilla")) {
-                int skyColor = ambience.getSkyBaseColor();
-                float bright = ambience.getSkyBrightness();
-                float r = (((skyColor >> 16) & 0xFF) / 255.0f) * bright;
-                float g = (((skyColor >> 8) & 0xFF) / 255.0f) * bright;
-                float b = ((skyColor & 0xFF) / 255.0f) * bright;
-                data.color = new Vector4f(r, g, b, 1.0f);
+        if (ambience != null && ambience.isEnabled()) {
+            if (!preserveVanillaFog && ambience.isCustomFogActive()) {
+                int argb = ambience.resolveFogColor();
+                data.color.set(
+                        WorldRenderBridge.red(argb),
+                        WorldRenderBridge.green(argb),
+                        WorldRenderBridge.blue(argb),
+                        1.0f
+                );
+                float start = ambience.getCustomFogStart();
+                float end = ambience.getCustomFogEnd();
+                data.environmentalStart = start;
+                data.environmentalEnd = end;
+                data.renderDistanceStart = start;
+                data.renderDistanceEnd = end;
+                data.skyEnd = end;
+                data.cloudEnd = end;
             }
-        } else {
-            int color = ambience.getFogBaseColor();
-            float bright = ambience.getFogBrightness();
-            float r = (((color >> 16) & 0xFF) / 255.0f) * bright;
-            float g = (((color >> 8) & 0xFF) / 255.0f) * bright;
-            float b = ((color & 0xFF) / 255.0f) * bright;
-            data.color = new Vector4f(r, g, b, 1.0f);
+            ambience.recordFogDistances(data.renderDistanceStart, data.renderDistanceEnd, data.color);
         }
 
-        float maxDist = ambience.getFogDistance();
-        float density = ambience.getFogDensity();
-        data.environmentalStart = maxDist * (1.0f - density);
-        data.environmentalEnd = maxDist;
+        AtmosphereModule atmo = AtmosphereModule.getInstance();
+        if (!preserveVanillaFog && atmo != null && atmo.isEnabled() && atmo.isFogEnabled()
+                && (ambience == null || !ambience.isCustomFogActive())) {
+            int argb = atmo.getEffectiveFogColor();
+            float blend = 0.55f;
+            float r = WorldRenderBridge.red(argb);
+            float g = WorldRenderBridge.green(argb);
+            float b = WorldRenderBridge.blue(argb);
+            data.color.set(
+                    data.color.x + (r - data.color.x) * blend,
+                    data.color.y + (g - data.color.y) * blend,
+                    data.color.z + (b - data.color.z) * blend,
+                    data.color.w
+            );
+        }
     }
 }

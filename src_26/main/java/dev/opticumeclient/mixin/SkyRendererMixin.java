@@ -1,64 +1,141 @@
 package dev.opticumeclient.mixin;
 
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
+import com.mojang.renderpearl.api.commands.RenderPass;
 import dev.opticumeclient.client.modules.visuals.AmbienceModule;
-import dev.opticumeclient.client.render.ThemeManager;
+import dev.opticumeclient.client.modules.visuals.ambience.SkyPipelines;
+import dev.opticumeclient.client.modules.visuals.ambience.WorldRenderBridge;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Camera;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SkyRenderer;
 import net.minecraft.client.renderer.state.level.SkyRenderState;
-import net.minecraft.util.Mth;
-import org.joml.Vector3f;
-import org.joml.Vector4f;
+import net.minecraft.world.level.MoonPhase;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Environment(EnvType.CLIENT)
 @Mixin(SkyRenderer.class)
 public abstract class SkyRendererMixin {
 
+    @Shadow
+    @Final
+    private RenderTarget renderTarget;
+
     @Inject(method = "extractRenderState", at = @At("TAIL"))
-    private void opticume$overrideSky(ClientLevel level, float partialTicks, Camera camera, SkyRenderState state, CallbackInfo ci) {
+    private void opticume$modifySkyState(ClientLevel level, float partialTick, Camera camera, SkyRenderState state, CallbackInfo ci) {
         AmbienceModule ambience = AmbienceModule.getInstance();
-        if (ambience == null || !ambience.isEnabled()) return;
-
-        // 1. Time of Day override (visual-only, no server desync)
-        switch (ambience.getTimeMode()) {
-            case "Day" -> {
-                state.sunAngle = (float) Math.toRadians(90.0);
-                state.moonAngle = (float) Math.toRadians(270.0);
-                state.starBrightness = 0.0f;
-            }
-            case "Sunset" -> {
-                state.sunAngle = (float) Math.toRadians(0.0);
-                state.moonAngle = (float) Math.toRadians(180.0);
-                state.sunriseAndSunsetColor = new Vector4f(1.0f, 0.42f, 0.22f, 0.9f);
-                state.starBrightness = 0.3f;
-            }
-            case "Night" -> {
-                state.sunAngle = (float) Math.toRadians(270.0);
-                state.moonAngle = (float) Math.toRadians(90.0);
-                state.starBrightness = 1.0f;
-            }
-            case "Custom" -> {
-                float angle = (ambience.getCustomTime() / 24000.0f) * (float) (Math.PI * 2.0);
-                state.sunAngle = angle;
-                state.moonAngle = angle + (float) Math.PI;
-                state.starBrightness = Mth.clamp((float) -Math.cos(angle) * 0.8f + 0.25f, 0.0f, 1.0f);
-            }
+        if (ambience == null || !ambience.isEnabled() || state == null) {
+            return;
         }
-
-        // 2. Custom sky color tint
-        if (!ambience.getSkyMode().equals("Vanilla")) {
-            int color = ambience.getSkyBaseColor();
-            float bright = ambience.getSkyBrightness();
-            float r = (((color >> 16) & 0xFF) / 255.0f) * bright;
-            float g = (((color >> 8) & 0xFF) / 255.0f) * bright;
-            float b = ((color & 0xFF) / 255.0f) * bright;
-            state.skyColor = new Vector3f(r, g, b);
+        if (ambience.isMoonPhaseOverride()) {
+            MoonPhase[] phases = MoonPhase.values();
+            state.moonPhase = phases[ambience.getMoonPhaseIndex() % phases.length];
         }
+        if (ambience.isHideVanillaSky()) {
+            state.shouldRenderDarkDisc = false;
+        }
+    }
+
+    @Inject(method = "render", at = @At("HEAD"))
+    private void opticume$renderCustomShaderSky(GpuBufferSlice fogBuffer, SkyRenderState skyState, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isShaderSkyActive()) {
+            SkyPipelines.getInstance().render(
+                    ambience,
+                    this.renderTarget,
+                    skyState,
+                    WorldRenderBridge.getCurrentCamera()
+            );
+        }
+    }
+
+    @Inject(method = "renderSkyDisc", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelSkyDisc(RenderPass pass, org.joml.Vector3fc skyColor, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideVanillaSky()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "renderDarkDisc", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelDarkDisc(RenderPass pass, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideVanillaSky()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "renderEndSky", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelEndSky(RenderPass pass, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideVanillaSky()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "renderSunriseAndSunset", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelSunrise(RenderPass pass, com.mojang.blaze3d.vertex.PoseStack poseStack, float angle, org.joml.Vector4fc color, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideVanillaSky()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "renderStars", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelStars(RenderPass pass, float brightness, com.mojang.blaze3d.vertex.PoseStack poseStack, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideVanillaSky()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "renderSun", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelSun(RenderPass pass, float brightness, com.mojang.blaze3d.vertex.PoseStack poseStack, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideSunMoon()) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "renderMoon", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelMoon(RenderPass pass, MoonPhase phase, float brightness, com.mojang.blaze3d.vertex.PoseStack poseStack, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideSunMoon()) {
+            ci.cancel();
+        }
+    }
+
+    @ModifyArg(
+            method = "renderSun",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/SkyRenderer;applyCelestialBodyTransform(Lcom/mojang/blaze3d/vertex/PoseStack;FF)Lorg/joml/Matrix4f;"
+            ),
+            index = 2
+    )
+    private float opticume$scaleSun(float size) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        return ambience != null ? size * ambience.getSunScale() : size;
+    }
+
+    @ModifyArg(
+            method = "renderMoon",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/renderer/SkyRenderer;applyCelestialBodyTransform(Lcom/mojang/blaze3d/vertex/PoseStack;FF)Lorg/joml/Matrix4f;"
+            ),
+            index = 2
+    )
+    private float opticume$scaleMoon(float size) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        return ambience != null ? size * ambience.getMoonScale() : size;
     }
 }

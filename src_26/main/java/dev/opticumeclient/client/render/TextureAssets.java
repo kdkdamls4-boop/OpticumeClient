@@ -32,6 +32,62 @@ public final class TextureAssets {
     public static final Identifier MENU_QUIT = Identifier.fromNamespaceAndPath("opticumeclient", "textures/menu/icons/quit.png");
     public static final Identifier MENU_PANORAMA = Identifier.fromNamespaceAndPath("opticumeclient", "textures/menu/icons/panorama.png");
 
+    // Desire pre-baked PNG icons converted from SVGs (assets/opticumeclient/textures/desire/*)
+    public static final Identifier DESIRE_MENU_SINGLEPLAYER = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/title/singleplayer.png");
+    public static final Identifier DESIRE_MENU_MULTIPLAYER = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/title/multiplayer.png");
+    public static final Identifier DESIRE_MENU_ALTMANAGER = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/title/accounts.png");
+    public static final Identifier DESIRE_MENU_SETTINGS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/title/options.png");
+    public static final Identifier DESIRE_MENU_QUIT = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/title/quit.png");
+    public static final Identifier DESIRE_GUI_CHECK = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/check.png");
+    public static final Identifier DESIRE_GUI_CHEVRON = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/chevron.png");
+    public static final Identifier DESIRE_GUI_CHEVRON_DOWN = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/chevron_down.png");
+    public static final Identifier DESIRE_GUI_CHEVRON_UP = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/chevron_up.png");
+    public static final Identifier DESIRE_GUI_INFO = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/info_fill.png");
+    public static final Identifier DESIRE_GUI_KEYBOARD = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/keyboard_small.png");
+    public static final Identifier DESIRE_GUI_KEYBOARD_BIG = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/keyboard.png");
+    public static final Identifier DESIRE_GUI_PENCIL = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/pencil.png");
+    public static final Identifier DESIRE_GUI_SEARCH = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/search.png");
+    public static final Identifier DESIRE_GUI_TRASH = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/gui/trash.png");
+    public static final Identifier DESIRE_GUI_PALETTE = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/clickgui/palette.png");
+    public static final Identifier DESIRE_GUI_AUTOBUY = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/clickgui/cart.png");
+    public static final Identifier DESIRE_GUI_EVENTS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/events/glyphs/sparkle.png");
+    public static final Identifier DESIRE_EVENT_CLOCK = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/events/glyphs/clock.png");
+    public static final Identifier DESIRE_EVENT_PIN = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/events/glyphs/pin.png");
+    public static final Identifier DESIRE_EVENT_SERVER = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/events/glyphs/server.png");
+    public static final Identifier DESIRE_EVENT_SPARKLE = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/events/glyphs/sparkle.png");
+    public static final Identifier DESIRE_HUD_PIN = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_pin.png");
+    public static final Identifier DESIRE_HUD_CROSS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_cross.png");
+    public static final Identifier DESIRE_HUD_USER = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_user.png");
+    public static final Identifier DESIRE_HUD_GAUGE = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_gauge.png");
+    public static final Identifier DESIRE_HUD_CLOCK = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_clock.png");
+    public static final Identifier DESIRE_HUD_HOME = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_home.png");
+    public static final Identifier DESIRE_HUD_GLOBE = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_globe.png");
+    public static final Identifier DESIRE_HUD_LAYERS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_layers.png");
+    public static final Identifier DESIRE_HUD_STAR = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/wm_star.png");
+    public static final Identifier DESIRE_HUD_BOLT = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/hud/logo_bolt.png");
+    public static final Identifier DESIRE_ICON_KEYBINDS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/icons/keybinds.png");
+    public static final Identifier DESIRE_ICON_POTIONS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/icons/potions.png");
+    public static final Identifier DESIRE_ICON_COOLDOWNS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/menu/icons/cooldowns.png");
+    public static final Identifier DESIRE_GLOW = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/esp/glow.png");
+    public static final Identifier DESIRE_GPS_ARROW = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/esp/arrow_gps.png");
+    public static final Identifier DESIRE_ARROWS_TRIANGLE = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/arrows/triangle.png");
+    public static final Identifier DESIRE_NAMETAGS_HEART = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/nametags/heart.png");
+    public static final Identifier DESIRE_CIRCLE_GLOW = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/circle/glow_fat.png");
+    public static final Identifier DESIRE_CIRCLE_LEAN = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/circle/lean.png");
+    public static final Identifier DESIRE_JUMP_RING = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/other_visuals/jump.png");
+    public static final Identifier DESIRE_PARTICLE_GLOW = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/glow.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_ORBIZ = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/orbiznew.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_STAR = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/star.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_HEART = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/heart.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_DOLLAR = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/dollar.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_SNOWFLAKE = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/snowflake.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_CROWN = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/crown.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_LIGHTNING = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/lightning.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_LINE = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/line.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_POINT = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/point.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_RHOMBUS = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/rhombus.png");
+    public static final Identifier DESIRE_PARTICLE_HEX_SPARK = Identifier.fromNamespaceAndPath("opticumeclient", "textures/desire/images/particles/hex/spark.png");
+
     public static final Identifier ICON_ALL = Identifier.fromNamespaceAndPath("opticumeclient", "textures/menu/icons/cat_all.png");
     public static final Identifier ICON_FAVORITES = Identifier.fromNamespaceAndPath("opticumeclient", "textures/menu/icons/cat_favorites.png");
     public static final Identifier ICON_STAR_FILLED = Identifier.fromNamespaceAndPath("opticumeclient", "textures/menu/icons/star_filled.png");
@@ -57,6 +113,12 @@ public final class TextureAssets {
     public static final Identifier CROSSHAIR_RING_HD = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/crosshair_ring_hd");
     public static final Identifier ROUNDED_CORNER_MASK = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/rounded_corner_mask");
     public static final Identifier ROUNDED_OUTLINE_MASK = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/rounded_outline_mask");
+    public static final Identifier ROUNDED_INVERSE_CORNER_MASK = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/rounded_inverse_corner_mask");
+    public static final Identifier COLOR_HUE_STRIP = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/color_hue_strip");
+    public static final Identifier COLOR_SV_SAT_GRAD = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/color_sv_sat_grad");
+    public static final Identifier COLOR_SV_VAL_GRAD = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/color_sv_val_grad");
+    public static final Identifier COLOR_ALPHA_CHECKER = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/color_alpha_checker");
+    public static final Identifier COLOR_ALPHA_GRAD = Identifier.fromNamespaceAndPath("opticumeclient", "dynamic/color_alpha_grad");
 
     public static final int CORNER_ATLAS_W = 512;
     public static final int CORNER_ATLAS_H = 64;
@@ -168,10 +230,12 @@ public final class TextureAssets {
             // 5. Generate 512x64 1:1 multi-radius 4x4-supersampled SDF corner & outline atlases (r = 1..20)
             NativeImage cornerImg = new NativeImage(CORNER_ATLAS_W, CORNER_ATLAS_H, false);
             NativeImage outlineImg = new NativeImage(CORNER_ATLAS_W, CORNER_ATLAS_H, false);
+            NativeImage invCornerImg = new NativeImage(CORNER_ATLAS_W, CORNER_ATLAS_H, false);
             for (int y = 0; y < CORNER_ATLAS_H; y++) {
                 for (int x = 0; x < CORNER_ATLAS_W; x++) {
                     cornerImg.setPixel(x, y, 0x00FFFFFF);
                     outlineImg.setPixel(x, y, 0x00FFFFFF);
+                    invCornerImg.setPixel(x, y, 0x00FFFFFF);
                 }
             }
 
@@ -200,8 +264,10 @@ public final class TextureAssets {
                         }
                         int fillAlpha = Math.max(0, Math.min(255, Math.round((fillCov / 16.0f) * 255.0f)));
                         int outAlpha = Math.max(0, Math.min(255, Math.round((outCov / 16.0f) * 255.0f)));
+                        int invAlpha = 255 - fillAlpha;
                         cornerImg.setPixel(u0 + px, py, (fillAlpha << 24) | 0x00FFFFFF);
                         outlineImg.setPixel(u0 + px, py, (outAlpha << 24) | 0x00FFFFFF);
+                        invCornerImg.setPixel(u0 + px, py, (invAlpha << 24) | 0x00FFFFFF);
                     }
                 }
             }
@@ -211,6 +277,50 @@ public final class TextureAssets {
 
             DynamicTexture outlineTex = new DynamicTexture(() -> "opticume_rounded_outline_mask", outlineImg);
             mc.getTextureManager().register(ROUNDED_OUTLINE_MASK, outlineTex);
+
+            DynamicTexture invCornerTex = new DynamicTexture(() -> "opticume_rounded_inverse_corner_mask", invCornerImg);
+            mc.getTextureManager().register(ROUNDED_INVERSE_CORNER_MASK, invCornerTex);
+
+            // 6. Generate 24-bit smooth Color Picker gradient textures (with 1px clamped edge padding)
+            NativeImage hueImg = new NativeImage(258, 4, false);
+            NativeImage satImg = new NativeImage(258, 4, false);
+            NativeImage alphaGradImg = new NativeImage(258, 4, false);
+            for (int x = 0; x < 258; x++) {
+                float t = Math.max(0.0f, Math.min(1.0f, (x - 1) / 255.0f));
+                int hueCol = ColorUtils.hsbToRgb(Math.min(0.9999f, t), 1.0f, 1.0f, 255);
+                int satAlpha = Math.round((1.0f - t) * 255.0f);
+                int satCol = (satAlpha << 24) | 0x00FFFFFF;
+                int aGradAlpha = Math.round(t * 255.0f);
+                int aGradCol = (aGradAlpha << 24) | 0x00FFFFFF;
+                for (int y = 0; y < 4; y++) {
+                    hueImg.setPixel(x, y, hueCol);
+                    satImg.setPixel(x, y, satCol);
+                    alphaGradImg.setPixel(x, y, aGradCol);
+                }
+            }
+            mc.getTextureManager().register(COLOR_HUE_STRIP, new DynamicTexture(() -> "opticume_color_hue_strip", hueImg));
+            mc.getTextureManager().register(COLOR_SV_SAT_GRAD, new DynamicTexture(() -> "opticume_color_sv_sat_grad", satImg));
+            mc.getTextureManager().register(COLOR_ALPHA_GRAD, new DynamicTexture(() -> "opticume_color_alpha_grad", alphaGradImg));
+
+            NativeImage valImg = new NativeImage(4, 258, false);
+            for (int y = 0; y < 258; y++) {
+                float t = Math.max(0.0f, Math.min(1.0f, (y - 1) / 255.0f));
+                int valAlpha = Math.round(t * 255.0f);
+                int valCol = valAlpha << 24; // black with gradient alpha from transparent top to opaque bottom
+                for (int x = 0; x < 4; x++) {
+                    valImg.setPixel(x, y, valCol);
+                }
+            }
+            mc.getTextureManager().register(COLOR_SV_VAL_GRAD, new DynamicTexture(() -> "opticume_color_sv_val_grad", valImg));
+
+            NativeImage checkerImg = new NativeImage(128, 16, false);
+            for (int y = 0; y < 16; y++) {
+                for (int x = 0; x < 128; x++) {
+                    boolean light = ((x / 4) + (y / 4)) % 2 == 0;
+                    checkerImg.setPixel(x, y, light ? 0xFF3E4250 : 0xFF22252F);
+                }
+            }
+            mc.getTextureManager().register(COLOR_ALPHA_CHECKER, new DynamicTexture(() -> "opticume_color_alpha_checker", checkerImg));
 
             initialized = true;
         } catch (Throwable ignored) {

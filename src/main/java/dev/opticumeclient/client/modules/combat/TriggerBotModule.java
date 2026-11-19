@@ -30,7 +30,7 @@ public class TriggerBotModule extends Module {
         if (hit instanceof EntityHitResult entityHit) {
             Entity target = entityHit.getEntity();
             if (target instanceof LivingEntity living && target.isAlive() && target != mc.player) {
-                if (!FriendManager.getInstance().isFriend(target)) {
+                if (!FriendManager.getInstance().isFriend(target) && !AntiBotModule.isBot(target)) {
                     mc.gameMode.attack(mc.player, living);
                     mc.player.swing(InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
                 }

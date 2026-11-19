@@ -116,12 +116,14 @@ public class ArmorHud extends Module {
         int c1 = theme.getPrimaryColor();
         int c2 = theme.getSecondaryColor();
 
+        HudPanelRenderer.beginWidget("ArmorHUD");
+        try {
         Render2DHelper.drawLiquidGlass(context, x, y, cardW, cardH, 6.0f, 220, 38);
 
         if (horizontal) {
             float curX = x + 5.0f;
             for (int i = 0; i < 6; i++) {
-                Render2DHelper.drawRoundedRect(context, curX, y + 4.0f, 22.0f, 26.0f, 3.0f, 0x40080A10);
+                Render2DHelper.drawRoundedRectFloat(context, curX, y + 4.0f, 22.0f, 26.0f, 3.0f, 0x40080A10);
                 if (cachedNotEmpty[i]) {
                     ItemStack stack = cachedEquipment[i];
                     context.item(stack, (int) Math.round(curX + 3.0f), (int) Math.round(y + 5.0f));
@@ -142,11 +144,11 @@ public class ArmorHud extends Module {
 
         // Vertical Layout with Header + Durability Bars
         Render2DHelper.drawScaledText(context, "Equipment", x + 7.0f, y + 5.0f, 0xFFFFFFFF, 0.78f, true);
-        Render2DHelper.drawGradientRoundedRect(context, x + 6.0f, y + 15.5f, cardW - 12.0f, 1.4f, 0.7f, c1, c2);
+        Render2DHelper.drawGradientRoundedRectFloat(context, x + 6.0f, y + 15.5f, cardW - 12.0f, 1.4f, 0.7f, c1, c1, c2, c2);
 
         float curY = y + 19.0f;
         for (int i = 0; i < 6; i++) {
-            Render2DHelper.drawRoundedRect(context, x + 5.0f, curY, 18.0f, 18.0f, 3.0f, 0x45090B12);
+            Render2DHelper.drawRoundedRectFloat(context, x + 5.0f, curY, 18.0f, 18.0f, 3.0f, 0x45090B12);
 
             if (cachedNotEmpty[i]) {
                 ItemStack stack = cachedEquipment[i];
@@ -164,8 +166,8 @@ public class ArmorHud extends Module {
                     float barX = x + 26.0f;
                     float barY = curY + 12.0f;
                     float barW = cardW - 32.0f;
-                    Render2DHelper.drawRoundedRect(context, barX, barY, barW, 2.8f, 1.4f, 0x35FFFFFF);
-                    Render2DHelper.drawRoundedRect(context, barX, barY, Math.max(2.5f, barW * pct), 2.8f, 1.4f, durCol);
+                    Render2DHelper.drawRoundedRectFloat(context, barX, barY, barW, 2.8f, 1.4f, 0x35FFFFFF);
+                    Render2DHelper.drawRoundedRectFloat(context, barX, barY, Math.max(2.5f, barW * pct), 2.8f, 1.4f, durCol);
                 } else {
                     String itemName = cachedItemName[i];
                     if (itemName != null) {
@@ -176,6 +178,9 @@ public class ArmorHud extends Module {
                 Render2DHelper.drawScaledText(context, "Empty slot", x + 26.0f, curY + 4.0f, 0x669CA3AF, 0.68f, false);
             }
             curY += 20.0f;
+        }
+        } finally {
+            HudPanelRenderer.endWidget();
         }
     }
 

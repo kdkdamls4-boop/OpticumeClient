@@ -113,9 +113,10 @@ public class PotionHud extends Module {
         int c1 = theme.getPrimaryColor();
         int c2 = theme.getSecondaryColor();
 
-        Render2DHelper.drawLiquidGlass(context, x, y, w, h, 6.0f, 220, 38);
-        Render2DHelper.drawScaledText(context, "Active Potions", x + 7.0f, y + 5.5f, 0xFFFFFFFF, 0.80f, true);
-        Render2DHelper.drawGradientRoundedRect(context, x + 6.0f, y + headerH - 1.5f, w - 12.0f, 1.5f, 0.8f, c1, c2);
+        HudPanelRenderer.beginWidget("PotionHUD");
+        try {
+        HudPanelRenderer.drawHeaderPanel(context, "PotionHUD", x, y, w, h, headerH, 6.0f,
+                dev.opticumeclient.client.render.TextureAssets.DESIRE_HUD_STAR, "Effects", 1.0f);
 
         float curY = y + headerH + 3.0f;
         for (PotionLine line : lines) {
@@ -134,10 +135,13 @@ public class PotionHud extends Module {
             float barX = x + 17.0f;
             float barY = curY + 11.0f;
             float barW = w - 24.0f;
-            Render2DHelper.drawRoundedRect(context, barX, barY, barW, 2.2f, 1.1f, 0x28FFFFFF);
-            Render2DHelper.drawRoundedRect(context, barX, barY, Math.max(2.5f, barW * line.progress()), 2.2f, 1.1f, line.color());
+            Render2DHelper.drawRoundedRectFloat(context, barX, barY, barW, 2.2f, 1.1f, 0x28FFFFFF);
+            Render2DHelper.drawRoundedRectFloat(context, barX, barY, Math.max(2.5f, barW * line.progress()), 2.2f, 1.1f, line.color());
 
             curY += rowH;
+        }
+        } finally {
+            HudPanelRenderer.endWidget();
         }
     }
 

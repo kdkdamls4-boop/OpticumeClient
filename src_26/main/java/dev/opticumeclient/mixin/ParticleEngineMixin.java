@@ -1,6 +1,7 @@
 package dev.opticumeclient.mixin;
 
 import dev.opticumeclient.client.modules.optimization.FrameSyncModule;
+import dev.opticumeclient.client.modules.optimization.OptimizationCoordinator;
 import dev.opticumeclient.client.modules.visuals.NoRenderModule;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -30,6 +31,13 @@ public abstract class ParticleEngineMixin {
         NoRenderModule noRender = NoRenderModule.getInstance();
         if (noRender != null && noRender.isExplosions()) {
             if (type != null && (type.getType() == ParticleTypes.EXPLOSION || type.getType() == ParticleTypes.EXPLOSION_EMITTER)) {
+                cir.setReturnValue(null);
+                return;
+            }
+        }
+
+        if (type != null && type.getType() != ParticleTypes.FIREWORK && type.getType() != ParticleTypes.FLASH) {
+            if (OptimizationCoordinator.shouldCullParticle(x, y, z) || OptimizationCoordinator.shouldThinParticle(x, y, z)) {
                 cir.setReturnValue(null);
                 return;
             }

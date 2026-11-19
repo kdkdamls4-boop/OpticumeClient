@@ -6,6 +6,7 @@ import com.mojang.renderpearl.api.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.Mth;
 import org.joml.Matrix3x2fc;
 
 import java.util.HashMap;
@@ -44,15 +45,20 @@ public final class MsdfFontFace {
         public final float maxU;
         public final float maxV;
 
-        public Glyph(MsdfFontData.GlyphEntry entry, float atlasW, float atlasH, boolean yOriginBottom) {
+        public Glyph(MsdfFontData.GlyphEntry entry, float atlasW, float atlasH, boolean yOriginBottom, boolean invertedPlaneY) {
             this.unicode = entry.unicode();
             this.advance = entry.advance();
             if (entry.planeBounds() != null && entry.atlasBounds() != null) {
                 this.visible = true;
                 this.planeLeft = entry.planeBounds().left();
-                this.planeBottom = entry.planeBounds().bottom();
                 this.planeRight = entry.planeBounds().right();
-                this.planeTop = entry.planeBounds().top();
+                if (invertedPlaneY) {
+                    this.planeBottom = -entry.planeBounds().top();
+                    this.planeTop = -entry.planeBounds().bottom();
+                } else {
+                    this.planeBottom = entry.planeBounds().bottom();
+                    this.planeTop = entry.planeBounds().top();
+                }
                 this.minU = entry.atlasBounds().left() / atlasW;
                 this.maxU = entry.atlasBounds().right() / atlasW;
                 if (yOriginBottom) {
@@ -75,6 +81,7 @@ public final class MsdfFontFace {
     private final RenderPipeline pipeline;
     private final float lineHeight;
     private final float ascender;
+    private final float descender;
     private final Glyph[] asciiGlyphs = new Glyph[256];
     private final Map<Integer, Glyph> extraGlyphs = new HashMap<>();
     private final Map<Long, Float> kernings = new HashMap<>();
@@ -85,13 +92,27 @@ public final class MsdfFontFace {
         this.pipeline = pipeline;
         this.lineHeight = data.metrics.lineHeight();
         this.ascender = data.metrics.ascender();
+        this.descender = data.metrics.descender();
 
         float aw = Math.max(1.0f, data.atlas.width());
         float ah = Math.max(1.0f, data.atlas.height());
         boolean yBottom = data.atlas.yOriginBottom();
 
+        int sampleCount = 0;
+        double boundsMidSum = 0.0;
         for (MsdfFontData.GlyphEntry entry : data.glyphs) {
-            Glyph glyph = new Glyph(entry, aw, ah, yBottom);
+            if (entry.planeBounds() != null && entry.atlasBounds() != null) {
+                int cp = entry.unicode();
+                if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) {
+                    boundsMidSum += entry.planeBounds().top() + entry.planeBounds().bottom();
+                    sampleCount++;
+                }
+            }
+        }
+        boolean invertedPlaneY = sampleCount > 0 && (boundsMidSum / sampleCount) < 0.0 && this.ascender > 0.0f;
+
+        for (MsdfFontData.GlyphEntry entry : data.glyphs) {
+            Glyph glyph = new Glyph(entry, aw, ah, yBottom, invertedPlaneY);
             int cp = glyph.unicode;
             if (cp >= 0 && cp < 256) {
                 asciiGlyphs[cp] = glyph;
@@ -219,6 +240,14 @@ public final class MsdfFontFace {
         return width;
     }
 
+    public float getDescender() {
+        return descender;
+    }
+
+    public float getBaselineHeight() {
+        return lineHeight + descender;
+    }
+
     public void emitText(VertexConsumer vc, Matrix3x2fc pose, String text, float x, float y, float pxSize, int baseColor, boolean shadow) {
         if (text == null || text.isEmpty()) return;
         float baselineY = y + this.ascender * pxSize * 0.90f;
@@ -227,6 +256,117 @@ public final class MsdfFontFace {
             emitPass(vc, pose, text, x + shadowOffset, baselineY + shadowOffset, pxSize, baseColor, true);
         }
         emitPass(vc, pose, text, x, baselineY, pxSize, baseColor, false);
+    }
+
+    public void emitDesireText(
+            VertexConsumer vc,
+            Matrix3x2fc pose,
+            String text,
+            float x,
+            float y,
+            float pxSize,
+            int primaryColor,
+            int secondaryColor,
+            float gradientOffset,
+            long gradientPeriod,
+            boolean shadow
+    ) {
+        if (text == null || text.isEmpty()) return;
+        float baselineY = y + getBaselineHeight() * pxSize;
+        if (shadow) {
+            float shadowOffset = Math.max(0.55f, pxSize * 0.075f);
+            emitPass(vc, pose, text, x + shadowOffset, baselineY + shadowOffset, pxSize, primaryColor, true);
+        }
+        if (gradientOffset <= 0.01f || primaryColor == secondaryColor) {
+            emitPass(vc, pose, text, x, baselineY, pxSize, primaryColor, false);
+        } else {
+            emitGradientPass(vc, pose, text, x, baselineY, pxSize, primaryColor, secondaryColor, gradientOffset, Math.max(100L, gradientPeriod));
+        }
+    }
+
+    private void emitGradientPass(
+            VertexConsumer vc,
+            Matrix3x2fc pose,
+            String text,
+            float startX,
+            float baselineY,
+            float pxSize,
+            int color1,
+            int color2,
+            float offset,
+            long period
+    ) {
+        int baseAlpha = (color1 >>> 24) & 0xFF;
+        if (baseAlpha == 0) return;
+
+        float totalWidth = Math.max(1.0f, getWidth(text, pxSize));
+        float phase = (System.currentTimeMillis() % period) / (float) period;
+        float cursorX = startX;
+        int prev = -1;
+        int len = text.length();
+        int explicitRgb = -1;
+
+        for (int i = 0; i < len; i++) {
+            char c = text.charAt(i);
+            if (c == '\u00A7' && i + 1 < len) {
+                char code = Character.toLowerCase(text.charAt(i + 1));
+                int colorIdx = hexIndex(code);
+                if (colorIdx >= 0) {
+                    explicitRgb = MC_COLORS[colorIdx];
+                } else if (code == 'r') {
+                    explicitRgb = -1;
+                }
+                i++;
+                continue;
+            }
+            if (c == '\t') {
+                Glyph sp = getGlyph(' ');
+                cursorX += (sp != null ? sp.advance : 0.28f) * 4.0f * pxSize;
+                prev = ' ';
+                continue;
+            }
+            Glyph g = getGlyph(c);
+            if (g == null) {
+                prev = -1;
+                continue;
+            }
+            if (prev >= 0 && !kernings.isEmpty()) {
+                Float kern = kernings.get((((long) prev) << 32) | (g.unicode & 0xFFFFFFFFL));
+                if (kern != null) {
+                    cursorX += kern * pxSize;
+                }
+            }
+            int curColor;
+            if (explicitRgb >= 0) {
+                curColor = (baseAlpha << 24) | explicitRgb;
+            } else {
+                float progress = ((cursorX - startX) / totalWidth) * (offset * 0.15f) + phase;
+                float wave = 0.5f + 0.5f * (float) Math.sin(progress * Math.PI * 2.0);
+                curColor = lerpArgb(color1, color2, Mth.clamp(wave, 0.0f, 1.0f));
+            }
+            if (g.visible) {
+                float x0 = cursorX + g.planeLeft * pxSize;
+                float x1 = cursorX + g.planeRight * pxSize;
+                float y0 = baselineY - g.planeTop * pxSize;
+                float y1 = baselineY - g.planeBottom * pxSize;
+                vc.addVertexWith2DPose(pose, x0, y0).setUv(g.minU, g.minV).setColor(curColor);
+                vc.addVertexWith2DPose(pose, x0, y1).setUv(g.minU, g.maxV).setColor(curColor);
+                vc.addVertexWith2DPose(pose, x1, y1).setUv(g.maxU, g.maxV).setColor(curColor);
+                vc.addVertexWith2DPose(pose, x1, y0).setUv(g.maxU, g.minV).setColor(curColor);
+            }
+            cursorX += g.advance * pxSize;
+            prev = g.unicode;
+        }
+    }
+
+    private static int lerpArgb(int c1, int c2, float t) {
+        int a1 = (c1 >>> 24) & 0xFF, r1 = (c1 >>> 16) & 0xFF, g1 = (c1 >>> 8) & 0xFF, b1 = c1 & 0xFF;
+        int a2 = (c2 >>> 24) & 0xFF, r2 = (c2 >>> 16) & 0xFF, g2 = (c2 >>> 8) & 0xFF, b2 = c2 & 0xFF;
+        int a = Math.round(a1 + (a2 - a1) * t);
+        int r = Math.round(r1 + (r2 - r1) * t);
+        int g = Math.round(g1 + (g2 - g1) * t);
+        int b = Math.round(b1 + (b2 - b1) * t);
+        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
     private void emitPass(VertexConsumer vc, Matrix3x2fc pose, String text, float startX, float baselineY, float pxSize, int baseColor, boolean shadowPass) {

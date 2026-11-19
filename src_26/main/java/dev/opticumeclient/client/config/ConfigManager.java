@@ -6,18 +6,23 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.opticumeclient.client.hud.HudAlertBus;
 import dev.opticumeclient.client.hud.HudManager;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.modules.ModuleManager;
 import dev.opticumeclient.client.modules.combat.OpticumeAuraModule;
 import dev.opticumeclient.client.render.ThemeManager;
+import dev.opticumeclient.client.setting.BindSetting;
 import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ColorSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.MultiBoxSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
 import dev.opticumeclient.client.setting.Setting;
+import dev.opticumeclient.client.setting.TextSetting;
+import dev.opticumeclient.client.modules.visuals.ToggleSoundsModule;
+import dev.opticumeclient.client.util.ChatUtils;
 import net.minecraft.client.Minecraft;
 
 import java.io.File;
@@ -40,7 +45,8 @@ public class ConfigManager {
     private static final ConfigManager INSTANCE = new ConfigManager();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final List<String> BUILTIN_ORDER = Arrays.asList("Default", "Dexland", "FunTime", "HolyWorld", "MaxFPS");
-    private static final String CONFIG_FORMAT_VERSION = "1.1.0-26.3";
+    private static final String CONFIG_FORMAT_VERSION = "1.2.0-26.3";
+    private static final List<String> SUPPORTED_LEGACY_VERSIONS = Arrays.asList("1.0.0-26.3", "1.1.0-26.3", "1.0.0", "1.1.0");
 
     private File rootDir;
     private File configsDir;
@@ -48,6 +54,7 @@ public class ConfigManager {
     private String activeConfigName = "Default";
     private String autoLoadConfigName = "Default";
     private boolean initialized = false;
+    private boolean activeConfigWritable = false;
 
     private ConfigManager() {}
 
@@ -143,10 +150,15 @@ public class ConfigManager {
                 setAutoLoadConfig("Default");
             }
 
+            boolean loaded = false;
             if (getConfigFile(autoLoadConfigName).exists()) {
-                loadConfig(autoLoadConfigName);
-            } else {
-                loadConfig("Default");
+                loaded = loadConfig(autoLoadConfigName);
+            }
+            if (!loaded && !"Default".equalsIgnoreCase(autoLoadConfigName) && getConfigFile("Default").exists()) {
+                loaded = loadConfig("Default");
+            }
+            if (!loaded) {
+                activeConfigWritable = false;
             }
             System.out.println("[OpticumeClient] ConfigManager initialized. Auto-loaded config: " + activeConfigName);
         } catch (Throwable t) {
@@ -220,7 +232,7 @@ public class ConfigManager {
                         || m.getName().equalsIgnoreCase("Crosshair")
                         || m.getName().equalsIgnoreCase("TargetHUD")
                         || m.getName().equalsIgnoreCase("ViewModel")
-                        || m.getName().equalsIgnoreCase("1.7Animations");
+                        || m.getName().equalsIgnoreCase("SwingAnimations");
                 m.setEnabled(light);
             }
         }
@@ -311,6 +323,7 @@ public class ConfigManager {
         boolean ok = writeJsonFile(file, serializeCurrentState());
         if (ok) {
             activeConfigName = clean;
+            activeConfigWritable = !isBuiltInPreset(clean) || "Default".equalsIgnoreCase(clean);
         }
         return ok;
     }
@@ -321,8 +334,12 @@ public class ConfigManager {
         if (!file.exists()) return false;
         try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
-            deserializeState(root);
+            if (!deserializeState(root)) {
+                System.err.println("[OpticumeClient] Rejected config '" + clean + "': missing or unsupported format version");
+                return false;
+            }
             activeConfigName = clean;
+            activeConfigWritable = !isBuiltInPreset(clean) || "Default".equalsIgnoreCase(clean);
             return true;
         } catch (Throwable t) {
             System.err.println("[OpticumeClient] Failed to load config '" + clean + "': " + t.getMessage());
@@ -367,13 +384,37 @@ public class ConfigManager {
     }
 
     public void saveActiveConfigQuietly() {
-        if (!initialized || activeConfigName == null || activeConfigName.isBlank()) {
+        if (!initialized || !activeConfigWritable || activeConfigName == null || activeConfigName.isBlank()) {
+            return;
+        }
+        String clean = sanitizeName(activeConfigName);
+        if (isBuiltInPreset(clean) && !"Default".equalsIgnoreCase(clean)) {
             return;
         }
         try {
-            String target = isBuiltInPreset(activeConfigName) ? "Default" : sanitizeName(activeConfigName);
+            String target = "Default".equalsIgnoreCase(clean) ? "Default" : clean;
             writeJsonFile(getConfigFile(target), serializeCurrentState());
         } catch (Throwable ignored) {
+        }
+    }
+
+    public void saveHudChangeQuietly() {
+        if (!initialized) return;
+        if (activeConfigWritable) {
+            saveActiveConfigQuietly();
+            return;
+        }
+        String clean = sanitizeName(activeConfigName);
+        if (isBuiltInPreset(clean) && !"Default".equalsIgnoreCase(clean)) {
+            String writableName = clean + " Custom";
+            if (saveConfig(writableName)) {
+                if (isBuiltInPreset(autoLoadConfigName)) {
+                    setAutoLoadConfig(writableName);
+                }
+                ChatUtils.sendClientMessage("§a[Config] §fПресет §e" + clean + " §fтолько для чтения — изменения HUD сохранены в §b" + writableName);
+            }
+        } else {
+            ChatUtils.sendError("[Config] Текущий конфиг не был загружен (неподдерживаемая версия) — сохраните профиль под новым именем в Configs.");
         }
     }
 
@@ -424,9 +465,14 @@ public class ConfigManager {
                     settingsObj.add(s.getName(), arr);
                 } else if (s instanceof ColorSetting cs) {
                     JsonObject cObj = new JsonObject();
-                    cObj.addProperty("color", cs.getColor());
+                    cObj.addProperty("color", cs.getStaticValue());
                     cObj.addProperty("rainbow", cs.isRainbow());
+                    cObj.addProperty("themeSync", cs.isThemeSync());
                     settingsObj.add(s.getName(), cObj);
+                } else if (s instanceof TextSetting ts) {
+                    settingsObj.addProperty(s.getName(), ts.getText());
+                } else if (s instanceof BindSetting bindSetting) {
+                    settingsObj.addProperty(s.getName(), bindSetting.getBindCode());
                 }
             }
             mObj.add("settings", settingsObj);
@@ -445,9 +491,30 @@ public class ConfigManager {
         return root;
     }
 
-    private void deserializeState(JsonObject root) {
-        if (root == null) return;
+    private boolean deserializeState(JsonObject root) {
+        if (root == null) return false;
+        if (!root.has("version") || !root.get("version").isJsonPrimitive()) {
+            return false;
+        }
+        String cfgVersion = root.get("version").getAsString().trim();
+        boolean isCurrent = CONFIG_FORMAT_VERSION.equals(cfgVersion);
+        boolean isSupportedLegacy = !isCurrent && SUPPORTED_LEGACY_VERSIONS.contains(cfgVersion);
+        if (!isCurrent && !isSupportedLegacy) {
+            return false;
+        }
 
+        ToggleSoundsModule.setSuppressSounds(true);
+        HudAlertBus.setSuppressAlerts(true);
+        try {
+            deserializeStateInner(root, isSupportedLegacy);
+            return true;
+        } finally {
+            HudAlertBus.setSuppressAlerts(false);
+            ToggleSoundsModule.setSuppressSounds(false);
+        }
+    }
+
+    private void deserializeStateInner(JsonObject root, boolean isPre120) {
         if (root.has("theme") && root.get("theme").isJsonPrimitive()) {
             ThemeManager.getInstance().setThemeByName(root.get("theme").getAsString());
         }
@@ -491,6 +558,11 @@ public class ConfigManager {
                                 JsonObject cObj = el.getAsJsonObject();
                                 if (cObj.has("color")) cs.setValue(cObj.get("color").getAsInt());
                                 if (cObj.has("rainbow")) cs.setRainbow(cObj.get("rainbow").getAsBoolean());
+                                if (cObj.has("themeSync")) cs.setThemeSync(cObj.get("themeSync").getAsBoolean());
+                            } else if (s instanceof TextSetting ts && el.isJsonPrimitive()) {
+                                ts.setText(el.getAsString());
+                            } else if (s instanceof BindSetting bindSetting && el.isJsonPrimitive()) {
+                                bindSetting.setValue(el.getAsInt());
                             }
                         } catch (Throwable ignored) {
                         }
@@ -499,6 +571,10 @@ public class ConfigManager {
                 if (mObj.has("enabled") && mObj.get("enabled").isJsonPrimitive()) {
                     m.setEnabled(mObj.get("enabled").getAsBoolean());
                 }
+            }
+
+            if (isPre120) {
+                migratePre120Modules(modulesObj);
             }
         }
 
@@ -511,6 +587,64 @@ public class ConfigManager {
                     if (wObj.has("x") && wObj.has("y")) {
                         w.setPosition(wObj.get("x").getAsFloat(), wObj.get("y").getAsFloat());
                     }
+                }
+            }
+        }
+    }
+
+    private void migratePre120Modules(JsonObject modulesObj) {
+        ModuleManager mm = ModuleManager.getInstance();
+
+        // 1. Migrate InfoHUD sub-toggles into standalone Category.HUD modules
+        if (modulesObj.has("InfoHUD") && modulesObj.get("InfoHUD").isJsonObject()) {
+            JsonObject infoObj = modulesObj.getAsJsonObject("InfoHUD");
+            boolean masterOn = !infoObj.has("enabled") || !infoObj.get("enabled").isJsonPrimitive()
+                    || infoObj.get("enabled").getAsBoolean();
+            JsonObject infoSettings = (infoObj.has("settings") && infoObj.get("settings").isJsonObject())
+                    ? infoObj.getAsJsonObject("settings") : null;
+
+            String[][] mappings = {
+                    {"Watermark", "Watermark"},
+                    {"DynamicIsland", "DynamicIsland"},
+                    {"ArrayList", "ArrayList"},
+                    {"StaffList", "StaffList"},
+                    {"Radar", "Radar"},
+                    {"BpsGraph", "BPSGraph"},
+                    {"TotemCounter", "TotemCounter"},
+                    {"Coordinates", "Coordinates"},
+                    {"Notifications", "Notifications"}
+            };
+            for (String[] pair : mappings) {
+                String legacySetting = pair[0];
+                String targetModule = pair[1];
+                if (modulesObj.has(targetModule)) continue;
+                Module m = findModule(mm, targetModule);
+                if (m != null && infoSettings != null && infoSettings.has(legacySetting)
+                        && infoSettings.get(legacySetting).isJsonPrimitive()) {
+                    m.setEnabled(masterOn && infoSettings.get(legacySetting).getAsBoolean());
+                }
+            }
+        }
+
+        // 2. Fix Arrows & NameTags hiding unarmored players by default on pre-1.2.0 configs
+        for (String visualName : new String[]{"Arrows", "NameTags"}) {
+            if (!modulesObj.has(visualName)) continue;
+            Module m = findModule(mm, visualName);
+            if (m != null) {
+                for (Setting<?> s : m.getSettings()) {
+                    if (s instanceof MultiBoxSetting mbs && "Отображать".equals(s.getName())) {
+                        mbs.set("Голых", true);
+                    }
+                }
+            }
+        }
+
+        // 3. Upgrade JumpCircles saved default style ("Double Wave") to Desire Effect
+        Module jumpCircles = findModule(mm, "JumpCircles");
+        if (jumpCircles != null) {
+            for (Setting<?> s : jumpCircles.getSettings()) {
+                if (s instanceof ModeSetting ms && "Style".equals(s.getName()) && ms.is("Double Wave")) {
+                    ms.setMode("Desire Effect");
                 }
             }
         }

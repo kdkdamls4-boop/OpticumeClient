@@ -54,13 +54,13 @@ import java.util.concurrent.ThreadLocalRandom;
 public class TargetHudModule extends Module {
     private static TargetHudModule instance;
 
-    private final ModeSetting style = new ModeSetting("Style", "Визуальный стиль TargetHUD", "Nursultan", "Nursultan", "Catlavan", "ThunderHack");
+    private final ModeSetting style = new ModeSetting("Style", "Визуальный стиль TargetHUD", "Relic", "Relic", "Nursultan", "Catlavan", "ThunderHack");
     private final BooleanSetting particles = new BooleanSetting("HitParticles", "Разлетающиеся светящиеся частицы при ударе", true);
     private final BooleanSetting showEquipment = new BooleanSetting("Equipment", "Отображать броню и предметы в руках цели", true);
     private final BooleanSetting showDistance = new BooleanSetting("Distance", "Отображать дистанцию до цели", true);
     private final NumberSetting posX = new NumberSetting("PosX", "Позиция X на экране", 520.0, 0.0, 1920.0, 2.0);
     private final NumberSetting posY = new NumberSetting("PosY", "Позиция Y на экране", 320.0, 0.0, 1080.0, 2.0);
-    private final ColorSetting barColor = new ColorSetting("BarColor", "Дополнительный цвет полосы здоровья", ColorUtils.OPTICUME_CYAN);
+    private final ColorSetting barColor = new ColorSetting("BarColor", "Дополнительный цвет полосы здоровья (THM = под тему)", ColorUtils.OPTICUME_CYAN, true);
 
     private final Animation openAnim = new Animation(0.0f, 280L, Easing.EASE_OUT_BACK);
     private final List<HeadParticle> headParticles = new ArrayList<>();
@@ -275,12 +275,19 @@ public class TargetHudModule extends Module {
         matrices.scale(scale, scale);
         matrices.translate(-cx, -cy);
 
-        if (mode.equalsIgnoreCase("Catlavan")) {
+        dev.opticumeclient.client.hud.HudPanelRenderer.beginWidget("TargetHUD");
+        try {
+        if (mode.equalsIgnoreCase("Relic")) {
+            renderRelicStyle(context, target, x, y, cardW, cardH, curHp, maxHp, absorption, clampedAlpha, tickDelta);
+        } else if (mode.equalsIgnoreCase("Catlavan")) {
             renderCatlavanStyle(context, target, x, y, cardW, cardH, curHp, maxHp, absorption, clampedAlpha, tickDelta);
         } else if (mode.equalsIgnoreCase("ThunderHack")) {
             renderThunderHackStyle(context, target, x, y, cardW, cardH, curHp, maxHp, absorption, clampedAlpha, tickDelta);
         } else {
             renderNursultanStyle(context, target, x, y, cardW, cardH, curHp, maxHp, absorption, clampedAlpha, tickDelta);
+        }
+        } finally {
+            dev.opticumeclient.client.hud.HudPanelRenderer.endWidget();
         }
 
         // Render & update hit particles on top of avatar
@@ -291,11 +298,60 @@ public class TargetHudModule extends Module {
         matrices.popMatrix();
     }
 
+    private void renderRelicStyle(GuiGraphicsExtractor context, LivingEntity target, float x, float y, float w, float h,
+                                  float curHp, float maxHp, float absorption, float alpha, float tickDelta) {
+        Theme theme = ThemeManager.getInstance().getCurrentTheme();
+        int c1 = theme.getPrimaryColor();
+        int c2 = barColor.isThemeSync() ? theme.getSecondaryColor() : barColor.getColor();
+
+        Render2DHelper.drawLiquidGlass(context, x, y, w, h, 7.5f, Math.round(230.0f * alpha), Math.round(42.0f * alpha));
+        float sideW = h;
+        var iface = dev.opticumeclient.client.modules.hud.InterfaceModule.getInstance();
+        if (iface != null && !iface.isEffectiveLiquidGlass("TargetHUD")) {
+            float rad = iface.getEffectiveRadius(7.5f);
+            Render2DHelper.drawRoundedRectFloat(context, x + sideW, y + 1.0f, w - sideW - 1.0f, h - 2.0f, rad * 0.8f,
+                    ColorUtils.rgba(255, 255, 255, Math.round(7.0f * alpha)));
+        }
+
+        float headSize = h - 14.0f;
+        float headX = x + (sideW - headSize) * 0.5f;
+        float headY = y + (h - headSize) * 0.5f;
+        renderTargetAvatar(context, target, headX, headY, headSize, tickDelta, alpha, c1, c2);
+
+        float contentX = x + sideW + 6.0f;
+        float contentW = w - (contentX - x) - 8.0f;
+
+        boolean isFriend = FriendManager.getInstance().isFriend(target);
+        String rawName = target.getName().getString();
+        if (rawName.length() > 14) rawName = rawName.substring(0, 13) + "..";
+        String displayName = isFriend ? "§a[F] §f" + rawName : rawName;
+        dev.opticumeclient.client.hud.HudPanelRenderer.drawHudText(
+                context, dev.opticumeclient.client.render.font.OpticumeFonts.KEY_HUD_MEDIUM,
+                displayName, contentX, y + 8.0f, 8.2f,
+                ColorUtils.rgba(235, 238, 245, Math.round(255.0f * alpha)));
+
+        String hpText = String.valueOf((int) Math.ceil(curHp))
+                + (absorption > 0.5f ? "+" + (int) Math.ceil(absorption) : "");
+        float hpW = dev.opticumeclient.client.hud.HudPanelRenderer.measureHud(
+                dev.opticumeclient.client.render.font.OpticumeFonts.KEY_HUD_BOLD, hpText, 8.4f);
+        dev.opticumeclient.client.hud.HudPanelRenderer.drawHudText(
+                context, dev.opticumeclient.client.render.font.OpticumeFonts.KEY_HUD_BOLD,
+                hpText, contentX + contentW - hpW, y + 8.0f, 8.4f,
+                ColorUtils.withAlphaFactor(c1, alpha));
+
+        if (showEquipment.isEnabled()) {
+            renderEquipmentRow(context, target, contentX, y + 20.0f, 0.72f);
+        }
+
+        float barY = y + h - 12.0f;
+        renderDualHealthBar(context, contentX, barY, contentW, 5.0f, 2.5f, curHp, maxHp, absorption, c1, c2, alpha, false);
+    }
+
     private void renderNursultanStyle(GuiGraphicsExtractor context, LivingEntity target, float x, float y, float w, float h,
                                       float curHp, float maxHp, float absorption, float alpha, float tickDelta) {
         Theme theme = ThemeManager.getInstance().getCurrentTheme();
         int c1 = theme.getPrimaryColor();
-        int c2 = barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : barColor.getColor();
+        int c2 = barColor.isThemeSync() ? theme.getSecondaryColor() : barColor.getColor();
 
         // 1. 4-Layer Liquid Glass Card
         Render2DHelper.drawLiquidGlass(context, x, y, w, h, 7.0f, (int) (222 * alpha), (int) (46 * alpha));
@@ -341,7 +397,7 @@ public class TargetHudModule extends Module {
                                      float curHp, float maxHp, float absorption, float alpha, float tickDelta) {
         Theme theme = ThemeManager.getInstance().getCurrentTheme();
         int c1 = theme.getPrimaryColor();
-        int c2 = barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : barColor.getColor();
+        int c2 = barColor.isThemeSync() ? theme.getSecondaryColor() : barColor.getColor();
 
         // Deep cyber-graphite card with neon left indicator bar
         Render2DHelper.drawLiquidGlass(context, x, y, w, h, 6.0f, (int) (235 * alpha), (int) (55 * alpha));
@@ -387,7 +443,7 @@ public class TargetHudModule extends Module {
                                         float curHp, float maxHp, float absorption, float alpha, float tickDelta) {
         Theme theme = ThemeManager.getInstance().getCurrentTheme();
         int c1 = theme.getPrimaryColor();
-        int c2 = barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : barColor.getColor();
+        int c2 = barColor.isThemeSync() ? theme.getSecondaryColor() : barColor.getColor();
 
         // Dual-tone obsidian glass card inspired by ThunderHack Recode
         Render2DHelper.drawGlow(context, x, y, w, h, 8.0f, ColorUtils.withAlpha(c1, (int) (60 * alpha)));
@@ -486,7 +542,7 @@ public class TargetHudModule extends Module {
     private void renderDualHealthBar(GuiGraphicsExtractor context, float barX, float barY, float barW, float barH, float radius,
                                      float curHp, float maxHp, float absorption, int c1, int c2, float alpha, boolean drawTextInside) {
         // 1. Dark glass track
-        Render2DHelper.drawRoundedRect(context, barX, barY, barW, barH, radius,
+        Render2DHelper.drawRoundedRectFloat(context, barX, barY, barW, barH, radius,
                 ColorUtils.withAlpha(0xFF090B11, (int) (210 * alpha)));
 
         float hpPct = Math.max(0.0f, Math.min(1.0f, healthLerp / maxHp));
@@ -497,7 +553,7 @@ public class TargetHudModule extends Module {
 
         // 2. Lagging golden-white damage trail bar (trailLerp)
         if (trailW > fillW + 0.5f) {
-            Render2DHelper.drawRoundedRect(context, barX, barY, Math.max(radius * 2.0f, trailW), barH, radius,
+            Render2DHelper.drawRoundedRectFloat(context, barX, barY, Math.max(radius * 2.0f, trailW), barH, radius,
                     ColorUtils.withAlpha(0xFFFFE599, (int) (190 * alpha)));
         }
 
@@ -505,23 +561,25 @@ public class TargetHudModule extends Module {
         if (fillW > 0.5f) {
             float clampedFillW = Math.max(radius * 2.0f, fillW);
             int leftColor = ColorUtils.withAlpha(c1, (int) (255 * alpha));
-            int rightColor = ColorUtils.withAlpha(barColor.isRainbow() ? ColorUtils.rainbow(0, 0.85f, 1.0f) : c2, (int) (255 * alpha));
+            int rightColor = ColorUtils.withAlpha(c2, (int) (255 * alpha));
             Render2DHelper.drawGlow(context, barX, barY, clampedFillW, barH, 4.0f,
                     ColorUtils.withAlpha(c1, (int) (65 * alpha)));
-            Render2DHelper.drawGradientRoundedRect(context, barX, barY, clampedFillW, barH, radius, leftColor, rightColor);
+            Render2DHelper.drawGradientRoundedRectFloat(context, barX, barY, clampedFillW, barH, radius, leftColor, leftColor, rightColor, rightColor);
         }
 
         // 4. Golden Absorption Hearts overlay strip
         if (absorption > 0.05f) {
             float absPct = Math.max(0.08f, Math.min(1.0f, absorption / 20.0f));
             float absW = Math.max(radius * 2.0f, barW * absPct);
-            Render2DHelper.drawGradientRoundedRect(context, barX, barY, absW, Math.max(2.5f, barH * 0.42f), radius * 0.6f,
+            Render2DHelper.drawGradientRoundedRectFloat(context, barX, barY, absW, Math.max(2.5f, barH * 0.42f), radius * 0.6f,
                     ColorUtils.withAlpha(0xFFFFD700, (int) (220 * alpha)),
+                    ColorUtils.withAlpha(0xFFFFD700, (int) (220 * alpha)),
+                    ColorUtils.withAlpha(0xFFFFAB00, (int) (220 * alpha)),
                     ColorUtils.withAlpha(0xFFFFAB00, (int) (220 * alpha)));
         }
 
         // 5. Subtle outline
-        Render2DHelper.drawRoundedOutline(context, barX, barY, barW, barH, radius, 1.0f,
+        Render2DHelper.drawRoundedOutlineFloat(context, barX, barY, barW, barH, radius, 1.0f,
                 ColorUtils.withAlpha(0xFFFFFFFF, (int) (32 * alpha)));
 
         // 6. Exact HP + Absorption text inside/over bar

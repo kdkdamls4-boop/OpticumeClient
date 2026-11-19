@@ -1,5 +1,6 @@
 package dev.opticumeclient.client.modules;
 
+import dev.opticumeclient.client.modules.visuals.ToggleSoundsModule;
 import dev.opticumeclient.client.render.Animation;
 import dev.opticumeclient.client.render.Easing;
 import dev.opticumeclient.client.setting.Setting;
@@ -35,8 +36,9 @@ public abstract class Module {
         this.expanded = false;
     }
 
-    public void addSetting(Setting<?> setting) {
+    public <T extends Setting<?>> T addSetting(T setting) {
         this.settings.add(setting);
+        return setting;
     }
 
     public List<Setting<?>> getSettings() {
@@ -71,6 +73,7 @@ public abstract class Module {
         if (this.enabled != enabled) {
             this.enabled = enabled;
             this.toggleAnimation.animateTo(enabled ? 1.0f : 0.0f, 220L, Easing.EASE_OUT_CUBIC);
+            ToggleSoundsModule.playToggle(enabled);
             if (enabled) {
                 onEnable();
             } else {

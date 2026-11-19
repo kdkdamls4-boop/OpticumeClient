@@ -146,6 +146,8 @@ public class KeystrokesHud extends Module {
         int c1 = theme.getPrimaryColor();
         int c2 = theme.getSecondaryColor();
 
+        HudPanelRenderer.beginWidget("Keystrokes");
+        try {
         // Base Liquid Glass Key
         Render2DHelper.drawLiquidGlass(context, kx, ky, kw, kh, 4.5f, 215, (int) (28 + 52 * progress));
 
@@ -154,7 +156,7 @@ public class KeystrokesHud extends Module {
             int grad1 = ColorUtils.withAlpha(c1, (int) (185 * progress));
             int grad2 = ColorUtils.withAlpha(c2, (int) (185 * progress));
             Render2DHelper.drawGlow(context, kx, ky, kw, kh, 6.0f, ColorUtils.withAlpha(c1, (int) (95 * progress)));
-            Render2DHelper.drawGradientRoundedRect(context, kx + 0.5f, ky + 0.5f, kw - 1.0f, kh - 1.0f, 4.2f, grad1, grad2);
+            Render2DHelper.drawGradientRoundedRectFloat(context, kx + 0.5f, ky + 0.5f, kw - 1.0f, kh - 1.0f, 4.2f, grad1, grad1, grad2, grad2);
         }
 
         if (isSpaceBar) {
@@ -163,8 +165,11 @@ public class KeystrokesHud extends Module {
             float barX = kx + (kw - barW) * 0.5f;
             float barY = ky + (kh - barH) * 0.5f;
             int barCol = ColorUtils.interpolateColor(0xFFD1D5DB, 0xFFFFFFFF, progress);
-            Render2DHelper.drawRoundedRect(context, barX, barY, barW, barH, 1.1f, barCol);
+            Render2DHelper.drawRoundedRectFloat(context, barX, barY, barW, barH, 1.1f, barCol);
             return;
+        }
+        } finally {
+            HudPanelRenderer.endWidget();
         }
 
         if (subLabel != null) {

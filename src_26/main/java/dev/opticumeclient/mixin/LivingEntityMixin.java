@@ -2,6 +2,7 @@ package dev.opticumeclient.mixin;
 
 import dev.opticumeclient.client.modules.ModuleManager;
 import dev.opticumeclient.client.modules.movement.NoJumpDelayModule;
+import dev.opticumeclient.client.modules.visuals.SwingAnimationsModule;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Minecraft;
@@ -11,8 +12,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-import dev.opticumeclient.client.modules.animations.OldAnimationsModule;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Environment(EnvType.CLIENT)
@@ -35,17 +34,21 @@ public abstract class LivingEntityMixin {
     @Inject(method = "getModifiedSwingDuration", at = @At("RETURN"), cancellable = true)
     private void opticume$scaleSwingDuration(CallbackInfoReturnable<Integer> cir) {
         if ((Object) this == Minecraft.getInstance().player) {
-            OldAnimationsModule anim = OldAnimationsModule.getInstance();
-            if (anim == null) {
-                anim = ModuleManager.getInstance().getModule(OldAnimationsModule.class);
-            }
+            SwingAnimationsModule anim = SwingAnimationsModule.getInstance();
             if (anim != null && anim.isEnabled()) {
-                float speed = anim.getSwingSpeed();
-                if (speed > 0.05f) {
-                    int original = cir.getReturnValueI();
-                    cir.setReturnValue(Math.max(1, Math.round(original / speed)));
+                int duration = anim.swingDuration(true);
+                if (duration > 0) {
+                    cir.setReturnValue(duration);
                 }
             }
+        }
+    }
+
+    @Inject(method = "completeUsingItem", at = @At("HEAD"))
+    private void opticume$onCompleteUsingItem(CallbackInfo ci) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (self == Minecraft.getInstance().player) {
+            dev.opticumeclient.client.modules.other.AssistModule.onFinishUsing(self.getUseItem());
         }
     }
 }

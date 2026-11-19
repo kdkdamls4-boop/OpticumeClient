@@ -220,7 +220,7 @@ public class HudManager {
             w.resetPosition();
         }
         activeSnapLines.clear();
-        ConfigManager.getInstance().saveActiveConfigQuietly();
+        ConfigManager.getInstance().saveHudChangeQuietly();
     }
 
     public boolean isEditMode() {
@@ -237,8 +237,6 @@ public class HudManager {
 
         float screenW = mc.getWindow().getGuiScaledWidth();
         float screenH = mc.getWindow().getGuiScaledHeight();
-        int winW = Math.max(1, mc.getWindow().getWidth());
-        int winH = Math.max(1, mc.getWindow().getHeight());
 
         // Viewport bounds clamping: ensure widgets stay inside visible screen on scale/resolution changes
         for (DraggableWidget w : widgets) {
@@ -253,8 +251,8 @@ public class HudManager {
             }
         }
 
-        float mouseX = (float) (mc.mouseHandler.xpos() * screenW / winW);
-        float mouseY = (float) (mc.mouseHandler.ypos() * screenH / winH);
+        float mouseX = (float) mc.mouseHandler.getScaledXPos(mc.getWindow());
+        float mouseY = (float) mc.mouseHandler.getScaledYPos(mc.getWindow());
 
         // ClickGUI window bounds check (avoid grabbing widgets through the ClickGUI window)
         boolean overClickGuiWindow = inClickGui && ClickGuiScreen.isMouseOverWindow(mouseX, mouseY);
@@ -301,7 +299,7 @@ public class HudManager {
                 draggedWidget = null;
                 activeSnapLines.clear();
                 if (moved) {
-                    ConfigManager.getInstance().saveActiveConfigQuietly();
+                    ConfigManager.getInstance().saveHudChangeQuietly();
                 }
             }
 
@@ -313,7 +311,7 @@ public class HudManager {
                 draggedWidget.setDragging(false);
                 draggedWidget = null;
                 if (moved) {
-                    ConfigManager.getInstance().saveActiveConfigQuietly();
+                    ConfigManager.getInstance().saveHudChangeQuietly();
                 }
             }
             activeSnapLines.clear();
@@ -340,6 +338,9 @@ public class HudManager {
             if (inChat) {
                 renderEditorHintBanner(context, screenW, screenH);
             }
+            renderWidgetContextMenu(context, mouseX, mouseY, screenW, screenH);
+        } else {
+            menuWidget = null;
         }
     }
 
@@ -535,6 +536,123 @@ public class HudManager {
         Render2DHelper.drawRoundedOutline(context, boxX, boxY, boxW, boxH, 4.0f, 1.0f,
                 ColorUtils.withAlpha(theme.getPrimaryColor(), 110));
         Render2DHelper.drawScaledText(context, hint, boxX + 8.0f, boxY + 3.5f, theme.getTextColor(), scale, false);
+    }
+
+    private DraggableWidget menuWidget = null;
+    private float menuOpenAnim = 0.0f;
+    private float ctxMenuX, ctxMenuY, ctxMenuW, ctxMenuRowH;
+    private long ctxLastNanos = System.nanoTime();
+
+    public void onMousePress(int button) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.getWindow() == null || mc.gui == null) return;
+        var iface = dev.opticumeclient.client.modules.hud.InterfaceModule.getInstance();
+        if (iface == null || !iface.isRightClickMenuEnabled()) {
+            menuWidget = null;
+            return;
+        }
+        boolean inChat = mc.gui.screen() instanceof ChatScreen;
+        boolean inGui = mc.gui.screen() instanceof ClickGuiScreen;
+        if (!inChat && !inGui) {
+            menuWidget = null;
+            return;
+        }
+
+        float mx = (float) mc.mouseHandler.getScaledXPos(mc.getWindow());
+        float my = (float) mc.mouseHandler.getScaledYPos(mc.getWindow());
+        if (inGui && ClickGuiScreen.isMouseOverWindow(mx, my)) return;
+
+        if (menuWidget != null) {
+            String[] opts = getMenuOptions(menuWidget);
+            if (mx >= ctxMenuX && mx <= ctxMenuX + ctxMenuW && my >= ctxMenuY && my <= ctxMenuY + ctxMenuRowH * opts.length) {
+                int idx = (int) ((my - ctxMenuY) / ctxMenuRowH);
+                if (idx == 0) {
+                    iface.setWidgetBgOverride(menuWidget.getName(), "solid");
+                } else if (idx == 1) {
+                    iface.setWidgetBgOverride(menuWidget.getName(), "glass");
+                } else if (idx == 2) {
+                    iface.setWidgetBgOverride(menuWidget.getName(), "global");
+                } else if (idx == 3 && "Watermark".equals(menuWidget.getName())) {
+                    int sw = mc.getWindow().getGuiScaledWidth();
+                    menuWidget.setPosition((sw - menuWidget.getWidth()) * 0.5f, 6.0f);
+                    menuWidget = null;
+                } else if (idx == 4 && "Watermark".equals(menuWidget.getName())) {
+                    menuWidget.setPosition(6.0f, 6.0f);
+                    menuWidget = null;
+                }
+                return;
+            }
+        }
+
+        if (button == 1) {
+            DraggableWidget hit = null;
+            for (int i = widgets.size() - 1; i >= 0; i--) {
+                DraggableWidget w = widgets.get(i);
+                if (w.isEnabled() && w.isHovered(mx, my)) {
+                    hit = w;
+                    break;
+                }
+            }
+            menuWidget = (hit != null && hit != menuWidget) ? hit : null;
+        } else {
+            menuWidget = null;
+        }
+    }
+
+    private static String[] getMenuOptions(DraggableWidget widget) {
+        if (widget != null && "Watermark".equals(widget.getName())) {
+            return new String[]{"Фон", "Жидкое стекло", "Глобально", "Центр сверху", "В угол"};
+        }
+        return new String[]{"Фон", "Жидкое стекло", "Глобально"};
+    }
+
+    private void renderWidgetContextMenu(GuiGraphicsExtractor context, float mx, float my, float screenW, float screenH) {
+        long now = System.nanoTime();
+        float dt = Math.min(0.05f, Math.max(0.0001f, (now - ctxLastNanos) / 1.0e9f));
+        ctxLastNanos = now;
+
+        boolean wantOpen = menuWidget != null && menuWidget.isEnabled() && !menuWidget.isDragging();
+        menuOpenAnim += ((wantOpen ? 1.0f : 0.0f) - menuOpenAnim) * (1.0f - (float) Math.exp(-18.0f * dt));
+        if (!wantOpen && menuOpenAnim <= 0.01f) return;
+
+        DraggableWidget target = menuWidget;
+        if (target == null) return;
+        var iface = dev.opticumeclient.client.modules.hud.InterfaceModule.getInstance();
+        String curMode = iface != null ? iface.getWidgetBgOverride(target.getName()) : "global";
+
+        String[] opts = getMenuOptions(target);
+        ctxMenuW = 114.0f;
+        ctxMenuRowH = 14.0f;
+        float menuH = ctxMenuRowH * opts.length;
+        ctxMenuX = Math.max(4.0f, Math.min(screenW - ctxMenuW - 4.0f, target.getX()));
+        ctxMenuY = Math.max(4.0f, Math.min(screenH - menuH - 4.0f, target.getY() + target.getHeight() + 3.0f));
+
+        float top = ctxMenuY - (1.0f - menuOpenAnim) * 4.0f;
+        HudPanelRenderer.drawSurface(context, target.getName(), ctxMenuX, top, ctxMenuW, menuH,
+                4.5f, Math.round(230 * menuOpenAnim), Math.round(35 * menuOpenAnim));
+
+        int accent = ThemeManager.getInstance().getAccentColor(0);
+        for (int i = 0; i < opts.length; i++) {
+            float ry = top + i * ctxMenuRowH;
+            boolean hov = mx >= ctxMenuX && mx <= ctxMenuX + ctxMenuW && my >= ry && my < ry + ctxMenuRowH;
+            if (hov) {
+                Render2DHelper.drawRoundedRectFloat(context, ctxMenuX + 2.0f, ry + 1.5f, ctxMenuW - 4.0f, ctxMenuRowH - 3.0f,
+                        2.5f, ColorUtils.withAlpha(accent, Math.round(52 * menuOpenAnim)));
+            }
+            Render2DHelper.drawScaledText(context, opts[i], ctxMenuX + 6.0f, ry + 3.5f,
+                    ColorUtils.rgba(236, 238, 245, Math.round((hov ? 255 : 210) * menuOpenAnim)), 0.72f, false);
+
+            if (i < 3) {
+                boolean active = (i == 0 && "solid".equals(curMode))
+                        || (i == 1 && "glass".equals(curMode))
+                        || (i == 2 && "global".equals(curMode));
+                String tag = active ? "Вкл" : "Выкл";
+                float tw = Render2DHelper.getTextWidth(tag, 0.66f);
+                int col = active ? accent : ColorUtils.rgba(255, 255, 255, Math.round(130 * menuOpenAnim));
+                Render2DHelper.drawScaledText(context, tag, ctxMenuX + ctxMenuW - tw - 6.0f, ry + 4.0f,
+                        ColorUtils.withAlphaFactor(col, menuOpenAnim), 0.66f, false);
+            }
+        }
     }
 
     public List<Module> getHudModules() {

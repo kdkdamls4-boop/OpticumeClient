@@ -1,11 +1,15 @@
 package dev.opticumeclient;
 
+import dev.opticumeclient.client.autobuy.AutoBuyConfig;
+import dev.opticumeclient.client.autobuy.AutoBuyEngine;
+import dev.opticumeclient.client.bots.BotSessionManager;
+import dev.opticumeclient.client.command.CommandManager;
 import dev.opticumeclient.client.config.ConfigManager;
 import dev.opticumeclient.client.gui.ClickGuiScreen;
 import dev.opticumeclient.client.modules.ModuleManager;
-import dev.opticumeclient.client.modules.visuals.targetesp.BufferPool;
-import dev.opticumeclient.client.modules.visuals.targetesp.TargetEspRenderer;
+import dev.opticumeclient.client.services.AnarchyReconnectService;
 import dev.opticumeclient.client.ui.menu.MenuConfigStore;
+import dev.opticumeclient.client.util.SoundUtil;
 import dev.opticumeclient.mixin.MinecraftAccessor;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -27,6 +31,8 @@ public class OpticumeClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         System.out.println("[OpticumeClient] Initializing OpticumeClient v1.0.0 (Minecraft 26.3)...");
+        SoundUtil.register();
+        CommandManager.getInstance().load();
 
         // Register ClickGUI keybind on Right Shift
         clickGuiKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
@@ -53,14 +59,21 @@ public class OpticumeClient implements ClientModInitializer {
             if (!configsInitialized) {
                 configsInitialized = true;
                 ConfigManager.getInstance().init();
+                AutoBuyConfig.ensureLoaded();
             }
         });
 
-        // Clean up TargetESP GPU resources on client shutdown
+        // Save configs & stop background bot sessions on client stopping
+        // (GPU resources & BufferPool are freed later in MinecraftMixin.opticume$releaseGpuResourcesOnClose(),
+        // after disconnectWithProgressScreen() renders the final ProgressScreen frame.)
         ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
             try {
-                TargetEspRenderer.releaseGpuResources();
-                BufferPool.getInstance().close();
+                BotSessionManager.shutdownIfInitialized();
+            } catch (Throwable ignored) {
+            }
+            try {
+                ConfigManager.getInstance().saveActiveConfigQuietly();
+                AutoBuyConfig.save();
             } catch (Throwable ignored) {
             }
         });
@@ -70,6 +83,7 @@ public class OpticumeClient implements ClientModInitializer {
             if (!configsInitialized) {
                 configsInitialized = true;
                 ConfigManager.getInstance().init();
+                AutoBuyConfig.ensureLoaded();
             }
             if (client.player == null) return;
 
@@ -80,7 +94,9 @@ public class OpticumeClient implements ClientModInitializer {
                 }
             }
 
-            // Tick active modules
+            // Tick active modules & services
+            AnarchyReconnectService.getInstance().onTick();
+            AutoBuyEngine.INSTANCE.onTick();
             ModuleManager.getInstance().onTick();
         });
 

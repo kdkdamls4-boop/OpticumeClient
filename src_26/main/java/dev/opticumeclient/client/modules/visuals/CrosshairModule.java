@@ -3,193 +3,134 @@ package dev.opticumeclient.client.modules.visuals;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.render.ColorUtils;
-import dev.opticumeclient.client.render.Render2DHelper;
-import dev.opticumeclient.client.render.Render3DHelper;
-import dev.opticumeclient.client.render.TextureAssets;
-import dev.opticumeclient.client.render.ThemeManager;
 import dev.opticumeclient.client.setting.BooleanSetting;
+import dev.opticumeclient.client.setting.ColorSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
-import net.minecraft.client.gui.GuiGraphicsExtractor; 
-import net.minecraft.world.entity.LivingEntity; 
-import net.minecraft.world.phys.EntityHitResult; 
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ChatScreen;
+import net.minecraft.world.entity.LivingEntity;
+import org.joml.Matrix3x2fStack;
 
+/**
+ * Desire-styled customizable pixel-sharp crosshair with dynamic attack spread and target hover tint.
+ */
 public class CrosshairModule extends Module {
-    private static CrosshairModule INSTANCE;
+    private static CrosshairModule instance;
 
-    private final ModeSetting mode = new ModeSetting(
-            "Style",
-            "Стиль кастомного прицела",
-            "Nursultan Circle",
-            "Nursultan Circle",
-            "Catlavan Cross",
-            "Expensive Modern",
-            "Dot"
-    );
-    private final NumberSetting size = new NumberSetting("Size", "Радиус кольца / длина лучей", 6.5, 3.0, 16.0, 0.5);
-    private final NumberSetting gap = new NumberSetting("Gap", "Базовый зазор от центра", 3.0, 0.5, 10.0, 0.5);
-    private final BooleanSetting dynamicGap = new BooleanSetting("DynamicGap", "Динамическое расширение при ударе и движении", true);
-    private final BooleanSetting targetHighlight = new BooleanSetting("TargetRed", "Покраснение при наведении на сущность", true);
+    private final ModeSetting style = new ModeSetting("Стиль", "Форма прицела", "Desire", "Desire", "T-Style", "Dot");
+    private final NumberSetting length = new NumberSetting("Длина", "Длина лучей прицела", 4.0, 1.0, 10.0, 0.1)
+            .visibleWhen(() -> !style.is("Dot"));
+    private final NumberSetting gap = new NumberSetting("Пробел", "Зазор от центра экрана", 1.0, 0.0, 8.0, 0.1)
+            .visibleWhen(() -> !style.is("Dot"));
+    private final NumberSetting thickness = new NumberSetting("Толщина", "Толщина линий или точки", 1.0, 1.0, 5.0, 0.1);
+    private final BooleanSetting centerDot = new BooleanSetting("Точка", "Рисовать точку в центре прицела", false)
+            .visibleWhen(() -> !style.is("Dot"));
+    private final BooleanSetting dynamic = new BooleanSetting("Динамический", "Расширение при кд удара", true)
+            .visibleWhen(() -> !style.is("Dot"));
+    private final NumberSetting spread = new NumberSetting("Сила расширения", "Дистанция расширения при перезарядке", 10.0, 3.0, 20.0, 1.0)
+            .visibleWhen(() -> !style.is("Dot") && dynamic.isEnabled());
+    private final BooleanSetting hoverColor = new BooleanSetting("Цвет при наведении", "Менять цвет при наведении на цель", false);
+    private final ColorSetting color = new ColorSetting("Цвет", "Основной цвет прицела", 0xFFFFFFFF, false);
+    private final ColorSetting hoveredColor = new ColorSetting("Цвет при наведении (цвет)", "Цвет при наведении на сущность", 0xFFFF0000, false)
+            .visibleWhen(hoverColor::isEnabled);
 
-    private float animatedSpread = 0.0f;
+    private float hoverAnim;
+    private long lastFrameNanos = System.nanoTime();
 
     public CrosshairModule() {
-        super("Crosshair", "Неоновый прицел Nursultan Circle с кулдауном атаки и Catlavan Cross", Category.VISUALS);
-        addSetting(mode);
-        addSetting(size);
+        super("Crosshair", "Кастомный прицел с динамическим расширением", Category.VISUALS);
+        instance = this;
+        addSetting(style);
+        addSetting(length);
         addSetting(gap);
-        addSetting(dynamicGap);
-        addSetting(targetHighlight);
-        INSTANCE = this;
-        setEnabled(true);
+        addSetting(thickness);
+        addSetting(centerDot);
+        addSetting(dynamic);
+        addSetting(spread);
+        addSetting(hoverColor);
+        addSetting(color);
+        addSetting(hoveredColor);
     }
 
     public static CrosshairModule getInstance() {
-        return INSTANCE;
-    }
-
-    @Override
-    public String getDisplaySuffix() {
-        return mode.getMode();
+        return instance;
     }
 
     @Override
     public void onRender2D(GuiGraphicsExtractor context, float tickDelta) {
-        if (!isEnabled() || mc.player == null || mc.level == null) return;
-        if (mc.options.getCameraType() != null && !mc.options.getCameraType().isFirstPerson()) {
-            return;
+        if (!isEnabled() || mc.player == null || mc.level == null || mc.getWindow() == null) return;
+        if (mc.gui.hud.isHidden() || !mc.options.getCameraType().isFirstPerson()) return;
+        if (mc.gui.screen() != null && !(mc.gui.screen() instanceof ChatScreen)) return;
+
+        long now = System.nanoTime();
+        float dt = Math.min((now - lastFrameNanos) / 1.0E9f, 0.1f);
+        lastFrameNanos = now;
+
+        boolean hovering = hoverColor.isEnabled() && mc.crosshairPickEntity instanceof LivingEntity;
+        hoverAnim += ((hovering ? 1.0f : 0.0f) - hoverAnim) * (1.0f - (float) Math.exp(-10.0f * dt));
+
+        double guiScale = Math.max(1.0, mc.getWindow().getGuiScale());
+        int scale = Math.max(2, (int) Math.round(guiScale));
+        int gapPx = Math.round(gap.getFloatValue() * scale);
+        int lengthPx = Math.max(1, Math.round(length.getFloatValue() * scale));
+        int thickPx = Math.max(1, Math.round(thickness.getFloatValue() * scale));
+
+        if (dynamic.isEnabled()) {
+            float strength = mc.player.getAttackStrengthScale(tickDelta);
+            gapPx += Math.round((1.0f - strength) * spread.getFloatValue());
         }
 
-        float cx = mc.getWindow().getGuiScaledWidth() * 0.5f;
-        float cy = mc.getWindow().getGuiScaledHeight() * 0.5f;
+        int cx = mc.getWindow().getWidth() / 2;
+        int cy = mc.getWindow().getHeight() / 2;
+        int half = thickPx / 2;
 
-        float cooldown = mc.player.getAttackStrengthScale(tickDelta);
-        boolean aimingAtEntity = mc.hitResult instanceof EntityHitResult ehr
-                && ehr.getEntity() instanceof LivingEntity living && living.isAlive();
+        int fillColor = ColorUtils.interpolateColor(color.getColor(), hoveredColor.getColor(), hoverAnim);
+        int alpha = (fillColor >>> 24) & 0xFF;
+        int outlineColor = alpha << 24;
 
-        float targetSpread = 0.0f;
-        if (dynamicGap.isEnabled()) {
-            if (mc.player.getDeltaMovement().horizontalDistanceSqr() > 0.0015) {
-                targetSpread += 2.2f;
-            }
-            if (cooldown < 0.99f) {
-                targetSpread += (1.0f - cooldown) * 4.5f;
-            }
-            if (mc.player.hurtTime > 0) {
-                targetSpread += 1.8f;
-            }
-        }
-        animatedSpread += (targetSpread - animatedSpread) * 0.25f;
+        Matrix3x2fStack pose = context.pose();
+        float toGui = (float) (1.0 / guiScale);
 
-        int accent1 = (targetHighlight.isEnabled() && aimingAtEntity)
-                ? 0xFFFF2E54
-                : ThemeManager.getInstance().getAccentColor(0);
-        int accent2 = (targetHighlight.isEnabled() && aimingAtEntity)
-                ? 0xFFFF6B81
-                : ThemeManager.getInstance().getAccentColor(120);
+        pose.pushMatrix();
+        pose.scale(toGui, toGui);
 
-        switch (mode.getMode()) {
-            case "Nursultan Circle" -> renderNursultanCircle(context, cx, cy, cooldown, accent1, accent2);
-            case "Catlavan Cross" -> renderCatlavanCross(context, cx, cy, accent1, accent2);
-            case "Expensive Modern" -> renderExpensiveModern(context, cx, cy, cooldown, accent1, accent2);
-            case "Dot" -> renderDot(context, cx, cy, accent1);
-        }
-    }
-
-    private void renderNursultanCircle(GuiGraphicsExtractor context, float cx, float cy, float cooldown, int accent1, int accent2) {
-        TextureAssets.ensureInitialized();
-        float rad = size.getFloatValue() + animatedSpread * 0.45f;
-        float diameter = rad * 2.0f;
-
-        // Bilinear anti-aliased HD procedural background ring
-        Render2DHelper.drawTexture(context, TextureAssets.CROSSHAIR_RING_HD, cx - rad, cy - rad, diameter, diameter, 0x9010121A);
-
-        // Batched cooldown arc rendering
-        if (cooldown >= 0.99f) {
-            // Full attack cooldown ready: 1 fast batched procedural HD ring + ambient glow (1 blit instead of 48 lines)
-            Render2DHelper.drawGlow(context, cx - rad, cy - rad, diameter, diameter, 3.5f, ColorUtils.withAlpha(accent1, 100));
-            Render2DHelper.drawTexture(context, TextureAssets.CROSSHAIR_RING_HD, cx - rad, cy - rad, diameter, diameter, accent1);
+        if (style.is("Dot")) {
+            int dotSize = Math.max(2, thickPx + 1);
+            int halfDot = dotSize / 2;
+            fillOutlined(context, cx - halfDot, cy - halfDot, dotSize, dotSize, fillColor, outlineColor);
         } else {
-            // Cooldown recharging: 1 ambient background glow for the whole arc
-            Render2DHelper.drawGlow(context, cx - rad, cy - rad, diameter, diameter, 3.0f, ColorUtils.withAlpha(accent1, 65));
-            // Batched 24-segment arc without per-segment glow calls
-            int segments = 24;
-            int activeSegments = Math.max(1, Math.round(segments * Math.min(1.0f, Math.max(0.05f, cooldown))));
-            for (int i = 0; i < activeSegments; i++) {
-                float t = (float) i / segments;
-                int arcColor = ColorUtils.interpolateColor(accent1, accent2, t);
-                double a1 = Math.toRadians(i * (360.0 / segments) - 90.0);
-                double a2 = Math.toRadians((i + 1) * (360.0 / segments) - 90.0);
-                float x1 = cx + (float) Math.cos(a1) * rad;
-                float y1 = cy + (float) Math.sin(a1) * rad;
-                float x2 = cx + (float) Math.cos(a2) * rad;
-                float y2 = cy + (float) Math.sin(a2) * rad;
-                Render3DHelper.drawSmoothLine(context, x1, y1, x2, y2, 1.8f, arcColor, false);
+            boolean tStyle = style.is("T-Style");
+            int[][] bars = tStyle
+                    ? new int[][]{
+                            {cx - gapPx - lengthPx, cy - half, lengthPx, thickPx},
+                            {cx + gapPx + (thickPx % 2), cy - half, lengthPx, thickPx},
+                            {cx - half, cy + gapPx + (thickPx % 2), thickPx, lengthPx}
+                    }
+                    : new int[][]{
+                            {cx - gapPx - lengthPx, cy - half, lengthPx, thickPx},
+                            {cx + gapPx + (thickPx % 2), cy - half, lengthPx, thickPx},
+                            {cx - half, cy - gapPx - lengthPx, thickPx, lengthPx},
+                            {cx - half, cy + gapPx + (thickPx % 2), thickPx, lengthPx}
+                    };
+
+            for (int[] bar : bars) {
+                context.fill(bar[0] - 1, bar[1] - 1, bar[0] + bar[2] + 1, bar[1] + bar[3] + 1, outlineColor);
+            }
+            for (int[] bar : bars) {
+                context.fill(bar[0], bar[1], bar[0] + bar[2], bar[1] + bar[3], fillColor);
+            }
+
+            if (centerDot.isEnabled()) {
+                fillOutlined(context, cx - half, cy - half, thickPx, thickPx, fillColor, outlineColor);
             }
         }
 
-        // Central glowing dot
-        Render2DHelper.drawGlow(context, cx - 2.0f, cy - 2.0f, 4.0f, 4.0f, 5.0f, ColorUtils.withAlpha(accent1, 140));
-        Render2DHelper.drawRoundedRect(context, cx - 1.5f, cy - 1.5f, 3.0f, 3.0f, 1.5f, accent1);
+        pose.popMatrix();
     }
 
-    private void renderExpensiveModern(GuiGraphicsExtractor context, float cx, float cy, float cooldown, int accent1, int accent2) {
-        TextureAssets.ensureInitialized();
-        float baseR = size.getFloatValue() + animatedSpread * 0.4f;
-        float innerRingR = baseR * 0.65f;
-        float ringD = innerRingR * 2.0f;
-
-        // 1. HD Inner Ring with cooldown pulse
-        int ringColor = (cooldown < 0.99f)
-                ? ColorUtils.interpolateColor(accent1, accent2, 1.0f - cooldown)
-                : ColorUtils.withAlpha(accent1, 200);
-        Render2DHelper.drawTexture(context, TextureAssets.CROSSHAIR_RING_HD, cx - innerRingR, cy - innerRingR, ringD, ringD, ringColor);
-
-        // 2. 4 Precision Outer Ticks
-        float tickOffset = innerRingR + 2.5f + animatedSpread * 0.5f;
-        float tickLen = Math.max(3.0f, baseR * 0.45f);
-        float tickThick = 1.4f;
-
-        // Top tick
-        drawSmoothTick(context, cx, cy - tickOffset - tickLen, cx, cy - tickOffset, tickThick, accent1);
-        // Bottom tick
-        drawSmoothTick(context, cx, cy + tickOffset, cx, cy + tickOffset + tickLen, tickThick, accent2);
-        // Left tick
-        drawSmoothTick(context, cx - tickOffset - tickLen, cy, cx - tickOffset, cy, tickThick, accent1);
-        // Right tick
-        drawSmoothTick(context, cx + tickOffset, cy, cx + tickOffset + tickLen, cy, tickThick, accent2);
-
-        // 3. Precision Center Micro-Dot
-        Render2DHelper.drawGlow(context, cx - 1.5f, cy - 1.5f, 3.0f, 3.0f, 4.0f, ColorUtils.withAlpha(accent1, 150));
-        Render2DHelper.drawRoundedRect(context, cx - 1.0f, cy - 1.0f, 2.0f, 2.0f, 1.0f, 0xFFFFFFFF);
-    }
-
-    private void renderCatlavanCross(GuiGraphicsExtractor context, float cx, float cy, int accent1, int accent2) {
-        float g = gap.getFloatValue() + animatedSpread;
-        float len = size.getFloatValue();
-
-        // 4 antialiased neon rays with dark contrast outline and glow
-        // Top ray
-        drawSmoothTick(context, cx, cy - g - len, cx, cy - g, 1.8f, accent1);
-        // Bottom ray
-        drawSmoothTick(context, cx, cy + g, cx, cy + g + len, 1.8f, accent2);
-        // Left ray
-        drawSmoothTick(context, cx - g - len, cy, cx - g, cy, 1.8f, accent1);
-        // Right ray
-        drawSmoothTick(context, cx + g, cy, cx + g + len, cy, 1.8f, accent2);
-
-        // Center micro-dot
-        Render2DHelper.drawRoundedRect(context, cx - 1.0f, cy - 1.0f, 2.0f, 2.0f, 1.0f, 0xFFFFFFFF);
-    }
-
-    private void drawSmoothTick(GuiGraphicsExtractor context, float x1, float y1, float x2, float y2, float thickness, int color) {
-        Render3DHelper.drawSmoothLine(context, x1, y1, x2, y2, thickness + 1.2f, 0xAA000000, false);
-        Render3DHelper.drawSmoothLine(context, x1, y1, x2, y2, thickness, color, true);
-    }
-
-    private void renderDot(GuiGraphicsExtractor context, float cx, float cy, int color) {
-        Render2DHelper.drawGlow(context, cx - 2.5f, cy - 2.5f, 5.0f, 5.0f, 6.0f, ColorUtils.withAlpha(color, 160));
-        Render2DHelper.drawRoundedRect(context, cx - 2.5f, cy - 2.5f, 5.0f, 5.0f, 2.5f, 0xCC000000);
-        Render2DHelper.drawRoundedRect(context, cx - 1.5f, cy - 1.5f, 3.0f, 3.0f, 1.5f, color);
+    private static void fillOutlined(GuiGraphicsExtractor context, int x, int y, int w, int h, int fill, int outline) {
+        context.fill(x - 1, y - 1, x + w + 1, y + h + 1, outline);
+        context.fill(x, y, x + w, y + h, fill);
     }
 }

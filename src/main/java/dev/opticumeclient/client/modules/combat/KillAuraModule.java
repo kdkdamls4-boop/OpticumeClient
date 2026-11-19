@@ -121,8 +121,8 @@ public class KillAuraModule extends Module {
             if (!(e instanceof LivingEntity living) || e == mc.player || !living.isAlive()) continue;
             if (onlyPlayers.isEnabled() && !(living instanceof Player)) continue;
 
-            // Never attack friends!
-            if (FriendManager.getInstance().isFriend(living)) continue;
+            // Never attack friends or anticheat bots!
+            if (FriendManager.getInstance().isFriend(living) || AntiBotModule.isBot(living)) continue;
 
             double dist = getDistanceToBox(eyes, living.getBoundingBox());
             if (dist <= maxDist) {

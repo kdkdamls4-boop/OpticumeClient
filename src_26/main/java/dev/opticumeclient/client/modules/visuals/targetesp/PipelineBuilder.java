@@ -102,6 +102,7 @@ public final class PipelineBuilder {
     }
 
     public RenderPipeline build() {
+        this.hasColorTarget = true;
         this.applyState();
         return this.builder.build();
     }

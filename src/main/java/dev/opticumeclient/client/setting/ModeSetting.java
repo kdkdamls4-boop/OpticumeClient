@@ -35,6 +35,10 @@ public class ModeSetting extends Setting<String> {
         return getValue() != null && getValue().equalsIgnoreCase(mode);
     }
 
+    public boolean isMode(String mode) {
+        return is(mode);
+    }
+
     public void cycle(boolean forward) {
         if (modes.isEmpty()) return;
         if (forward) {

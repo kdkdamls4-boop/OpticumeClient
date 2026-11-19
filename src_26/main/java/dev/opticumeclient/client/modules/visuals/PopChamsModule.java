@@ -1,57 +1,71 @@
 package dev.opticumeclient.client.modules.visuals;
 
-import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
+import dev.opticumeclient.client.modules.visuals.targetesp.TargetEspFrame;
 import dev.opticumeclient.client.render.ColorUtils;
-import dev.opticumeclient.client.render.Render3DHelper;
 import dev.opticumeclient.client.render.TextureAssets;
 import dev.opticumeclient.client.render.ThemeManager;
+import dev.opticumeclient.client.render.WorldPrimitiveRenderer;
 import dev.opticumeclient.client.setting.ColorSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
+/**
+ * Upgraded Totem Pop effect: renders a 3D rising humanoid hologram (translucent quads + glowing edges)
+ * and additive glowing burst particles through RenderPearl WorldPrimitiveRenderer.
+ */
 public class PopChamsModule extends Module {
     private static PopChamsModule INSTANCE;
 
-    private final ModeSetting mode = new ModeSetting("Mode", "Стиль визуализации фантома", "Both", "Hologram Box", "Particles", "Both");
-    private final ModeSetting colorMode = new ModeSetting("ColorMode", "Источник цвета", "Theme", "Theme", "Custom");
-    private final ColorSetting customColor = new ColorSetting("CustomColor", "Пользовательский цвет", 0xCCFF2A85);
-    private final NumberSetting duration = new NumberSetting("Duration", "Время жизни фантома в тиках", 35.0, 15.0, 60.0, 5.0);
-    private final NumberSetting riseSpeed = new NumberSetting("RiseSpeed", "Скорость всплытия вверх", 0.035, 0.01, 0.10, 0.005);
-    private final NumberSetting particles = new NumberSetting("Particles", "Число разлетающихся светлячков", 20.0, 5.0, 50.0, 5.0);
-    private final NumberSetting size = new NumberSetting("Size", "Размер светящихся частиц", 0.20, 0.05, 0.50, 0.02);
+    private final ModeSetting mode = new ModeSetting("Mode", "Стиль визуализации тотема", "Both", "Hologram", "Particles", "Both");
+    private final ModeSetting colorMode = new ModeSetting("ColorMode", "Источник цвета", "Theme", "Theme", "Totem", "Rainbow", "Custom");
+    private final ColorSetting customColor = (ColorSetting) new ColorSetting("CustomColor", "Пользовательский цвет", 0xCCFF2A85)
+            .visibleWhen(() -> colorMode.is("Custom"));
+    private final NumberSetting duration = new NumberSetting("Duration", "Время жизни эффекта в тиках", 35.0, 15.0, 60.0, 5.0);
+    private final NumberSetting riseSpeed = new NumberSetting("RiseSpeed", "Скорость всплытия голограммы", 0.035, 0.01, 0.10, 0.005);
+    private final NumberSetting particles = new NumberSetting("Particles", "Число разлетающихся частиц", 28.0, 5.0, 60.0, 5.0);
+    private final NumberSetting size = new NumberSetting("Size", "Размер светящихся частиц", 0.24, 0.08, 0.50, 0.02);
 
-    private static class PopParticle {
+    private static final class PopParticle {
         Vec3 pos;
+        Vec3 prevPos;
         Vec3 vel;
-        float rotation;
+        float sizeMul;
+        int colorVariant;
 
-        PopParticle(Vec3 pos, Vec3 vel, float rotation) {
+        PopParticle(Vec3 pos, Vec3 vel, float sizeMul, int colorVariant) {
             this.pos = pos;
+            this.prevPos = pos;
             this.vel = vel;
-            this.rotation = rotation;
+            this.sizeMul = sizeMul;
+            this.colorVariant = colorVariant;
         }
     }
 
-    private static class TotemPopGhost {
-        final AABB baseBox;
+    private static final class TotemPopGhost {
         final Vec3 origin;
+        final float yawDeg;
+        final float scaleH;
         final int maxAge;
         final List<PopParticle> particles;
         int age = 0;
-        float yOffset = 0.0f;
 
-        TotemPopGhost(AABB baseBox, Vec3 origin, int maxAge, List<PopParticle> particles) {
-            this.baseBox = baseBox;
+        TotemPopGhost(Vec3 origin, float yawDeg, float scaleH, int maxAge, List<PopParticle> particles) {
             this.origin = origin;
+            this.yawDeg = yawDeg;
+            this.scaleH = scaleH;
             this.maxAge = maxAge;
             this.particles = particles;
         }
@@ -60,7 +74,7 @@ public class PopChamsModule extends Module {
     private final List<TotemPopGhost> activeGhosts = new ArrayList<>();
 
     public PopChamsModule() {
-        super("PopChams", "Светящийся фантом и взрыв неоновых частиц при срабатывании Тотема Бессмертия", Category.VISUALS);
+        super("PopChams", "3D-голограмма игрока и неоновые частицы при срабатывании Тотема Бессмертия", Category.VISUALS);
         addSetting(mode);
         addSetting(colorMode);
         addSetting(customColor);
@@ -81,23 +95,35 @@ public class PopChamsModule extends Module {
         return mode.getMode();
     }
 
+    @Override
+    public void onDisable() {
+        activeGhosts.clear();
+        super.onDisable();
+    }
+
     public void onTotemPop(Entity entity) {
         if (!isEnabled() || entity == null) return;
 
-        AABB box = entity.getBoundingBox();
-        Vec3 center = entity.position().add(0.0, entity.getBbHeight() * 0.5, 0.0);
+        Vec3 base = entity.position();
+        Vec3 center = base.add(0.0, entity.getBbHeight() * 0.55, 0.0);
         int count = particles.getIntValue();
         List<PopParticle> partList = new ArrayList<>(count);
+        ThreadLocalRandom rng = ThreadLocalRandom.current();
 
         for (int i = 0; i < count; i++) {
-            double vx = (Math.random() - 0.5) * 0.18;
-            double vy = Math.random() * 0.16 + 0.04;
-            double vz = (Math.random() - 0.5) * 0.18;
-            float rot = (float) (Math.random() * 360.0);
-            partList.add(new PopParticle(center, new Vec3(vx, vy, vz), rot));
+            double theta = rng.nextDouble(Math.PI * 2.0);
+            double horiz = rng.nextDouble(0.05, 0.18);
+            double vy = rng.nextDouble(0.04, 0.22);
+            Vec3 pPos = center.add((rng.nextDouble() - 0.5) * 0.35, (rng.nextDouble() - 0.5) * 0.55, (rng.nextDouble() - 0.5) * 0.35);
+            Vec3 vel = new Vec3(Math.cos(theta) * horiz, vy, Math.sin(theta) * horiz);
+            partList.add(new PopParticle(pPos, vel, rng.nextFloat(0.75f, 1.35f), i));
         }
 
-        activeGhosts.add(new TotemPopGhost(box, center, duration.getIntValue(), partList));
+        float scaleH = Mth.clamp(entity.getBbHeight() / 1.8f, 0.65f, 1.3f);
+        activeGhosts.add(new TotemPopGhost(base, entity.getYRot(), scaleH, duration.getIntValue(), partList));
+        if (activeGhosts.size() > 12) {
+            activeGhosts.remove(0);
+        }
     }
 
     @Override
@@ -108,12 +134,11 @@ public class PopChamsModule extends Module {
         while (it.hasNext()) {
             TotemPopGhost ghost = it.next();
             ghost.age++;
-            ghost.yOffset += riseSpeed.getFloatValue();
 
             for (PopParticle p : ghost.particles) {
+                p.prevPos = p.pos;
                 p.pos = p.pos.add(p.vel);
-                p.vel = new Vec3(p.vel.x * 0.94, p.vel.y * 0.94 - 0.003, p.vel.z * 0.94);
-                p.rotation = (p.rotation + 4.0f) % 360.0f;
+                p.vel = new Vec3(p.vel.x * 0.92, p.vel.y * 0.92 - 0.004, p.vel.z * 0.92);
             }
 
             if (ghost.age >= ghost.maxAge) {
@@ -122,33 +147,156 @@ public class PopChamsModule extends Module {
         }
     }
 
-    @Override
-    public void onRender3D(PoseStack matrices, float tickDelta) {
-        if (!isEnabled() || activeGhosts.isEmpty()) return;
+    public void renderWorld(TargetEspFrame frame) {
+        if (!isEnabled() || mc.level == null || activeGhosts.isEmpty()) return;
 
-        int baseColor = colorMode.is("Theme")
-                ? ThemeManager.getInstance().getAccentColor(0)
-                : customColor.getColor();
+        String m = mode.getMode();
+        boolean doHolo = "Hologram".equalsIgnoreCase(m) || "Hologram Box".equalsIgnoreCase(m) || "Both".equalsIgnoreCase(m);
+        boolean doParticles = "Particles".equalsIgnoreCase(m) || "Both".equalsIgnoreCase(m);
 
-        boolean doBox = mode.is("Hologram Box") || mode.is("Both");
-        boolean doParticles = mode.is("Particles") || mode.is("Both");
+        Vec3 cam = frame.cameraPos();
+        Matrix4f pose = frame.poseStack().last().pose();
+        float tickDelta = frame.partialTicks();
+        float risePerTick = riseSpeed.getFloatValue();
         float partSize = size.getFloatValue();
 
-        for (TotemPopGhost ghost : activeGhosts) {
-            float fade = 1.0f - Math.min(1.0f, (ghost.age + tickDelta) / ghost.maxAge);
-            int ghostColor = ColorUtils.withAlphaFactor(baseColor, Math.max(0.05f, fade));
+        if (doHolo) {
+            BufferBuilder quadBuf = WorldPrimitiveRenderer.beginQuads();
+            BufferBuilder lineBuf = WorldPrimitiveRenderer.beginLines();
+            boolean any = false;
 
-            if (doBox) {
-                float yOff = ghost.yOffset + riseSpeed.getFloatValue() * tickDelta;
-                AABB shiftedBox = ghost.baseBox.move(0.0, yOff, 0.0);
-                Render3DHelper.drawBoxColor(shiftedBox, ghostColor, 1.8f, true);
+            for (TotemPopGhost ghost : activeGhosts) {
+                float progress = Mth.clamp((ghost.age + tickDelta) / ghost.maxAge, 0.0f, 1.0f);
+                float fade = 1.0f - progress;
+                if (fade <= 0.02f) continue;
+
+                int baseColor = resolveColor(0);
+                int fillCol = ColorUtils.withAlphaFactor(baseColor, fade * 0.28f);
+                int lineCol = ColorUtils.withAlphaFactor(baseColor, fade * 0.85f);
+
+                float yOff = (ghost.age + tickDelta) * risePerTick;
+                float expand = 1.0f + progress * 0.16f;
+                float s = ghost.scaleH * expand;
+                double cx = ghost.origin.x - cam.x;
+                double cy = ghost.origin.y + yOff - cam.y;
+                double cz = ghost.origin.z - cam.z;
+                double yawRad = Math.toRadians(-ghost.yawDeg);
+                float cos = (float) Math.cos(yawRad);
+                float sin = (float) Math.sin(yawRad);
+
+                // Humanoid proportions (head, torso, left/right arms, left/right legs)
+                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.0f, 1.44f, 0.0f, 0.22f, 0.44f, 0.22f, fillCol, lineCol); // Head
+                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.0f, 0.72f, 0.0f, 0.24f, 0.70f, 0.13f, fillCol, lineCol); // Torso
+                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, -0.35f, 0.72f, 0.0f, 0.11f, 0.68f, 0.11f, fillCol, lineCol); // Right Arm
+                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.35f, 0.72f, 0.0f, 0.11f, 0.68f, 0.11f, fillCol, lineCol); // Left Arm
+                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, -0.12f, 0.0f, 0.0f, 0.11f, 0.70f, 0.11f, fillCol, lineCol); // Right Leg
+                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.12f, 0.0f, 0.0f, 0.11f, 0.70f, 0.11f, fillCol, lineCol); // Left Leg
+                any = true;
             }
 
-            if (doParticles) {
-                for (PopParticle p : ghost.particles) {
-                    Render3DHelper.queueBillboardSprite(p.pos, partSize * fade, TextureAssets.GLOW_RADIAL, ghostColor, p.rotation, true);
-                }
+            if (any) {
+                WorldPrimitiveRenderer.drawQuads(quadBuf, true, true);
+                WorldPrimitiveRenderer.drawLines(lineBuf, true);
+            } else {
+                WorldPrimitiveRenderer.discardQuietly(quadBuf);
+                WorldPrimitiveRenderer.discardQuietly(lineBuf);
             }
         }
+
+        if (doParticles && mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null) {
+            Quaternionf orient = new Quaternionf(mc.gameRenderer.mainCamera().rotation());
+            BufferBuilder starBuf = WorldPrimitiveRenderer.beginTexturedQuads();
+            BufferBuilder glowBuf = WorldPrimitiveRenderer.beginTexturedQuads();
+            boolean any = false;
+
+            for (TotemPopGhost ghost : activeGhosts) {
+                float progress = Mth.clamp((ghost.age + tickDelta) / ghost.maxAge, 0.0f, 1.0f);
+                float fade = 1.0f - progress;
+                if (fade <= 0.02f) continue;
+
+                for (PopParticle p : ghost.particles) {
+                    double px = Mth.lerp(tickDelta, p.prevPos.x, p.pos.x) - cam.x;
+                    double py = Mth.lerp(tickDelta, p.prevPos.y, p.pos.y) - cam.y;
+                    double pz = Mth.lerp(tickDelta, p.prevPos.z, p.pos.z) - cam.z;
+                    int pCol = ColorUtils.withAlphaFactor(resolveColor(p.colorVariant * 22), fade);
+                    float sz = partSize * p.sizeMul * (0.45f + 0.55f * fade);
+                    WorldPrimitiveRenderer.glowSprite(starBuf, pose, px, py, pz, orient, sz, pCol);
+                    WorldPrimitiveRenderer.glowSprite(glowBuf, pose, px, py, pz, orient, sz * 2.1f, ColorUtils.withAlphaFactor(pCol, 0.45f));
+                    any = true;
+                }
+            }
+
+            if (any) {
+                WorldPrimitiveRenderer.drawTexturedQuads(starBuf, TextureAssets.DESIRE_PARTICLE_HEX_SPARK, true, true);
+                WorldPrimitiveRenderer.drawTexturedQuads(glowBuf, TextureAssets.DESIRE_PARTICLE_GLOW, true, true);
+            } else {
+                WorldPrimitiveRenderer.discardQuietly(starBuf);
+                WorldPrimitiveRenderer.discardQuietly(glowBuf);
+            }
+        }
+    }
+
+    private int resolveColor(int indexOffset) {
+        return switch (colorMode.getMode()) {
+            case "Rainbow" -> ColorUtils.getRainbow(4.0f, 0.85f, 1.0f, indexOffset * 40L);
+            case "Totem" -> ((indexOffset / 22) % 3 == 0) ? 0xFFFACC15 : 0xFF22C55E;
+            case "Custom" -> customColor.getColor();
+            default -> ThemeManager.getInstance().getAccentColor(indexOffset);
+        };
+    }
+
+    private static void emitPartBox(
+            BufferBuilder quads, BufferBuilder lines, Matrix4f pose,
+            double bx, double by, double bz, float cos, float sin, float scale,
+            float lx, float ly, float lz, float halfW, float h, float halfD,
+            int fillCol, int lineCol
+    ) {
+        float xMin = (lx - halfW) * scale, xMax = (lx + halfW) * scale;
+        float zMin = (lz - halfD) * scale, zMax = (lz + halfD) * scale;
+        float y0 = (float) (by + ly * scale);
+        float y1 = (float) (by + (ly + h) * scale);
+
+        float rx0 = (float) (bx + xMin * cos - zMin * sin), rz0 = (float) (bz + xMin * sin + zMin * cos);
+        float rx1 = (float) (bx + xMax * cos - zMin * sin), rz1 = (float) (bz + xMax * sin + zMin * cos);
+        float rx2 = (float) (bx + xMax * cos - zMax * sin), rz2 = (float) (bz + xMax * sin + zMax * cos);
+        float rx3 = (float) (bx + xMin * cos - zMax * sin), rz3 = (float) (bz + xMin * sin + zMax * cos);
+
+        // 6 faces
+        addQuad(quads, pose, rx0, y0, rz0, rx1, y0, rz1, rx2, y0, rz2, rx3, y0, rz3, fillCol);
+        addQuad(quads, pose, rx0, y1, rz0, rx1, y1, rz1, rx2, y1, rz2, rx3, y1, rz3, fillCol);
+        addQuad(quads, pose, rx0, y0, rz0, rx1, y0, rz1, rx1, y1, rz1, rx0, y1, rz0, fillCol);
+        addQuad(quads, pose, rx1, y0, rz1, rx2, y0, rz2, rx2, y1, rz2, rx1, y1, rz1, fillCol);
+        addQuad(quads, pose, rx2, y0, rz2, rx3, y0, rz3, rx3, y1, rz3, rx2, y1, rz2, fillCol);
+        addQuad(quads, pose, rx3, y0, rz3, rx0, y0, rz0, rx0, y1, rz0, rx3, y1, rz3, fillCol);
+
+        // 12 edges
+        addLine(lines, pose, rx0, y0, rz0, rx1, y0, rz1, lineCol);
+        addLine(lines, pose, rx1, y0, rz1, rx2, y0, rz2, lineCol);
+        addLine(lines, pose, rx2, y0, rz2, rx3, y0, rz3, lineCol);
+        addLine(lines, pose, rx3, y0, rz3, rx0, y0, rz0, lineCol);
+
+        addLine(lines, pose, rx0, y1, rz0, rx1, y1, rz1, lineCol);
+        addLine(lines, pose, rx1, y1, rz1, rx2, y1, rz2, lineCol);
+        addLine(lines, pose, rx2, y1, rz2, rx3, y1, rz3, lineCol);
+        addLine(lines, pose, rx3, y1, rz3, rx0, y1, rz0, lineCol);
+
+        addLine(lines, pose, rx0, y0, rz0, rx0, y1, rz0, lineCol);
+        addLine(lines, pose, rx1, y0, rz1, rx1, y1, rz1, lineCol);
+        addLine(lines, pose, rx2, y0, rz2, rx2, y1, rz2, lineCol);
+        addLine(lines, pose, rx3, y0, rz3, rx3, y1, rz3, lineCol);
+    }
+
+    private static void addQuad(BufferBuilder b, Matrix4f p,
+                                float x0, float y0, float z0, float x1, float y1, float z1,
+                                float x2, float y2, float z2, float x3, float y3, float z3, int col) {
+        b.addVertex(p, x0, y0, z0).setColor(col);
+        b.addVertex(p, x1, y1, z1).setColor(col);
+        b.addVertex(p, x2, y2, z2).setColor(col);
+        b.addVertex(p, x3, y3, z3).setColor(col);
+    }
+
+    private static void addLine(BufferBuilder b, Matrix4f p, float x0, float y0, float z0, float x1, float y1, float z1, int col) {
+        b.addVertex(p, x0, y0, z0).setColor(col);
+        b.addVertex(p, x1, y1, z1).setColor(col);
     }
 }

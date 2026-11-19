@@ -1,0 +1,62 @@
+{
+  "akrien_on": {
+    "sounds": [
+      "opticumeclient:akrien_on"
+    ]
+  },
+  "akrien_off": {
+    "sounds": [
+      "opticumeclient:akrien_off"
+    ]
+  },
+  "blop_on": {
+    "sounds": [
+      "opticumeclient:blop_on"
+    ]
+  },
+  "blop_off": {
+    "sounds": [
+      "opticumeclient:blop_off"
+    ]
+  },
+  "celestial_on": {
+    "sounds": [
+      "opticumeclient:celestial_on"
+    ]
+  },
+  "celestial_off": {
+    "sounds": [
+      "opticumeclient:celestial_off"
+    ]
+  },
+  "nursultan_on": {
+    "sounds": [
+      "opticumeclient:nursultan_on"
+    ]
+  },
+  "nursultan_off": {
+    "sounds": [
+      "opticumeclient:nursultan_off"
+    ]
+  },
+  "smooth_on": {
+    "sounds": [
+      "opticumeclient:smooth_on"
+    ]
+  },
+  "smooth_off": {
+    "sounds": [
+      "opticumeclient:smooth_off"
+    ]
+  },
+  "tech_on": {
+    "sounds": [
+      "opticumeclient:tech_on"
+    ]
+  },
+  "tech_off": {
+    "sounds": [
+      "opticumeclient:tech_off"
+    ]
+  }
+}

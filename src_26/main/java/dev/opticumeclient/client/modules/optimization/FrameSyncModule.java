@@ -12,16 +12,30 @@ public class FrameSyncModule extends Module {
     private static FrameSyncModule INSTANCE;
 
     private final BooleanSetting disableVsync = new BooleanSetting("Disable VSync Overhead", "Отключение ожидания swapchain и снятие лимита FPS", true);
-    private final NumberSetting particleCap = new NumberSetting("Particle Cap", "Лимит ванильных частиц", 128.0, 32.0, 512.0, 32.0);
+    private final NumberSetting particleCap = new NumberSetting("Particle Cap", "Лимит ванильных частиц", 256.0, 32.0, 2048.0, 32.0);
+    private final BooleanSetting particleCulling = new BooleanSetting("Particle Culling", "Отсечение далёких частиц", true);
+    private final NumberSetting particleDistance = new NumberSetting("Particle Distance", "Дистанция видимости частиц", 28.0, 8.0, 64.0, 4.0);
+    private final BooleanSetting particleThinning = new BooleanSetting("Thin Distant Particles", "Прореживание далёких частиц в 2–4 раза", true);
+    private final BooleanSetting simpleParticlePhysics = new BooleanSetting("Simple Particle Physics", "Упрощённая физика частиц дальше 16 блоков", true);
+    private final BooleanSetting particleLightCache = new BooleanSetting("Particle Light Cache", "Кэширование освещённости частиц на тик", true);
     private final BooleanSetting dynamicEntityDistance = new BooleanSetting("Dynamic Entity Distance", "Динамическое снижение дистанции сущностей при FPS < 60", true);
-    private final BooleanSetting skipUnfocused = new BooleanSetting("Skip Unfocused Load", "Снижение нагрузки при неактивном окне", true);
+    private final BooleanSetting skipUnfocused = new BooleanSetting("Background FPS Limit", "Снижение FPS при неактивном окне", true);
+    private final NumberSetting backgroundFps = new NumberSetting("Background FPS", "Лимит FPS в свёрнутом окне", 20.0, 5.0, 60.0, 5.0);
 
     public FrameSyncModule() {
         super("FrameSync", "Оптимизация синхронизации кадров, swapchain и частиц", Category.OPTIMIZATION);
+        particleDistance.visibleWhen(particleCulling::isEnabled);
+        backgroundFps.visibleWhen(skipUnfocused::isEnabled);
         addSetting(disableVsync);
         addSetting(particleCap);
+        addSetting(particleCulling);
+        addSetting(particleDistance);
+        addSetting(particleThinning);
+        addSetting(simpleParticlePhysics);
+        addSetting(particleLightCache);
         addSetting(dynamicEntityDistance);
         addSetting(skipUnfocused);
+        addSetting(backgroundFps);
         INSTANCE = this;
         setEnabled(true);
     }
@@ -30,28 +44,9 @@ public class FrameSyncModule extends Module {
         return INSTANCE;
     }
 
-    private int savedFramerateLimit = -1;
-
     @Override
     public void onTick() {
         if (!isEnabled() || mc.options == null) return;
-
-        if (skipUnfocused.isEnabled() && mc.getWindow() != null) {
-            if (!mc.getWindow().isFocused()) {
-                if (savedFramerateLimit == -1) {
-                    savedFramerateLimit = mc.options.framerateLimit().get();
-                }
-                if (mc.options.framerateLimit().get() > 30) {
-                    mc.options.framerateLimit().set(30);
-                }
-                return;
-            } else if (savedFramerateLimit != -1) {
-                if (!disableVsync.isEnabled()) {
-                    mc.options.framerateLimit().set(savedFramerateLimit);
-                }
-                savedFramerateLimit = -1;
-            }
-        }
 
         if (disableVsync.isEnabled()) {
             if (mc.options.enableVsync().get()) {
@@ -65,10 +60,6 @@ public class FrameSyncModule extends Module {
 
     @Override
     public void onDisable() {
-        if (savedFramerateLimit != -1 && mc.options != null && !disableVsync.isEnabled()) {
-            mc.options.framerateLimit().set(savedFramerateLimit);
-        }
-        savedFramerateLimit = -1;
     }
 
     public boolean isParticleCapReached(int currentCount) {
@@ -111,5 +102,33 @@ public class FrameSyncModule extends Module {
 
     public BooleanSetting getSkipUnfocused() {
         return skipUnfocused;
+    }
+
+    public boolean isParticleCullingEnabled() {
+        return isEnabled() && particleCulling.isEnabled();
+    }
+
+    public double getParticleDistance() {
+        return particleDistance.getValue();
+    }
+
+    public boolean isParticleThinningEnabled() {
+        return isEnabled() && particleThinning.isEnabled();
+    }
+
+    public boolean isSimpleParticlePhysicsEnabled() {
+        return isEnabled() && simpleParticlePhysics.isEnabled();
+    }
+
+    public boolean isParticleLightCacheEnabled() {
+        return isEnabled() && particleLightCache.isEnabled();
+    }
+
+    public boolean isSkipUnfocusedEnabled() {
+        return isEnabled() && skipUnfocused.isEnabled();
+    }
+
+    public int getBackgroundFpsLimit() {
+        return Math.max(5, backgroundFps.getIntValue());
     }
 }

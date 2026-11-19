@@ -9,7 +9,7 @@
 Все команды выполняются из корня репозитория:
 
 ```powershell
-# 1. Проверить компиляцию (Java 25, 127 исходных файлов, авто-синхронизация src/ <-> src_26/)
+# 1. Проверить компиляцию (Java 25, 257 исходных файлов, авто-синхронизация src/ <-> src_26/)
 python compile_check_26.py
 
 # 2. Собрать JAR и задеплоить в тестовый инстанс лаунчера (%APPDATA%\ElyPrismLauncher\instances\OPTIMUSPRIME\minecraft\mods)
@@ -20,8 +20,8 @@ python test_suite_26.py
 ```
 
 * **Главное меню и AltManager:** кастомное меню в стиле **Desire** поверх живой панорамы Minecraft (плюс выдвижная **Gallery** для выбора обоев), рабочий оффлайн-переключатель ников **AltManager** и стеклянный стиль для всех ванильных кнопок и слайдеров игры.
-* **Открыть ClickGUI в игре:** клавиша `Right Shift` (`Правый Shift`) — меню в стиле **System** со сворачиваемым сайдбаром, тёмной/светлой темой, поиском `Ctrl+F`, 3-колоночной сеткой карточек, тултипами, страницами `Configs` / `Friends` и режимом `HUD Editor`.
-* **Перетаскивание виджетов HUD (Drag & Drop):** откройте чат (`T`) или нажмите `HUD Editor` в ClickGUI.
+* **Открыть ClickGUI в игре:** клавиша `Right Shift` (`Правый Shift`) — меню в стиле **System** со сворачиваемым сайдбаром / macOS Dock, тёмной/светлой темой, поиском `Ctrl+F`, 3-колоночной сеткой карточек, тултипами, страницами `Themes`, `Events`, `AutoBuy`, `Configs`, `Friends` и режимом `HUD Editor`.
+* **Перетаскивание виджетов HUD (Drag & Drop):** откройте чат (`T`) или нажмите `HUD Editor` в ClickGUI (правый клик по виджету открывает настройки фона/стекла).
 
 ---
 
@@ -30,6 +30,7 @@ python test_suite_26.py
 | Файл | Назначение | Кто читает |
 | :--- | :--- | :--- |
 | [`README.md`](README.md) | Обзор проекта, быстрый старт, структура папок, таблицы всех модулей и миксинов | Человек, GitHub, IDE, ИИ |
+| [`CHANGELOG.md`](CHANGELOG.md) | Подробная история версий и исправлений по релизам | Человек, GitHub |
 | [`AGENTS.md`](AGENTS.md) | Главный свод правил, ограничений безопасности, архитектуры и пайплайна сборки | Antigravity, Codex, Windsurf, Copilot |
 | [`CLAUDE.md`](CLAUDE.md) | Точка входа и инструкции для агентов Claude Code | Claude Code |
 | [`.cursorrules`](.cursorrules) | Системные правила для IDE Cursor | Cursor AI |
@@ -41,25 +42,31 @@ python test_suite_26.py
 
 ```text
 OpticumeClient/
-├── src/                        # Основной исходный код (127 Java-файлов + 115 ресурсов, синхронизирован с src_26/)
+├── src/                        # Основной исходный код (257 Java-файлов + 403 ресурса, синхронизирован с src_26/)
 │   └── main/
 │       ├── java/dev/opticumeclient/
 │       │   ├── OpticumeClient.java         # Главная точка входа мода (ClientModInitializer, MOD_ID = opticumeclient)
 │       │   ├── client/
-│       │   │   ├── config/                 # ConfigManager (<gameDir>/opticumeclient/)
+│       │   │   ├── autobuy/                # Подсистема AutoBuy (движок, база предметов, парсер цен, автоселлер)
+│       │   │   ├── bots/                   # Менеджер мульти-сессионных ботов (BotSessionManager, BotContext)
+│       │   │   ├── command/                # Клиентские команды Brigadier (.help, .gps, .rct, .autobuy)
+│       │   │   ├── config/                 # ConfigManager (<gameDir>/opticumeclient/, формат 1.2.0-26.3)
 │       │   │   ├── friend/                 # FriendManager (<gameDir>/opticumeclient/friends.json)
-│       │   │   ├── gui/                    # System ClickGUI (ClickGuiScreen, SystemTheme, SystemModuleCard, SystemSearchModal, SystemPages)
-│       │   │   ├── hud/                    # HudManager (с автосохранением) и 4 HUD-модуля
-│       │   │   ├── modules/                # 47 модулей по категориям + ModuleManager + пакет visuals/targetesp (16 классов)
-│       │   │   ├── render/                 # Render2DHelper, Render3DHelper, font/OpticumeFonts, TextureAssets, ThemeManager, Animation
-│       │   │   ├── setting/                # Настройки модулей (Boolean, Number, Mode, MultiBox, Color + visibleWhen)
-│       │   │   └── ui/menu/                # Главное меню Desire, Gallery, оффлайн AltManager, OpticumeButtonStyle
-│       │   └── mixin/                      # 27 Mixin-классов (Official Mojang Mappings, JAVA_25)
+│       │   │   ├── gps/                    # GPS-метки и кликабельные координаты в чате
+│       │   │   ├── gui/                    # System ClickGUI, SystemModuleCard, SystemSearchModal, ThemesPage, EventsPage, AutoBuyPage, SystemPages
+│       │   │   ├── hud/                    # HudManager, HudAlertBus, HudPanelRenderer и 16 HUD-виджетов
+│       │   │   ├── modules/                # 80 модулей по 7 категориям + ModuleManager + пакеты visuals/targetesp, ambience, atmosphere, hands, particles
+│       │   │   ├── render/                 # Render2DHelper, Render3DHelper, KawaseBlurRenderer, WorldPrimitiveRenderer, font/OpticumeFonts, TextureAssets, ThemeManager
+│       │   │   ├── services/               # ServerEventsService (FT/HW API) и AnarchyReconnectService (.rct)
+│       │   │   ├── setting/                # Настройки модулей (Boolean, Number, Mode, MultiBox, Color, Bind, Run, Text + visibleWhen)
+│       │   │   └── ui/                     # Главное меню Desire, Gallery, оффлайн AltManager, OpticumeButtonStyle, ScreenBots
+│       │   └── mixin/                      # 51 Mixin-класс (Official Mojang Mappings, JAVA_25)
 │       └── resources/
 │           ├── fabric.mod.json             # Метаданные мода OpticumeClient (id: opticumeclient)
-│           ├── opticumeclient.mixins.json  # Конфигурация 27 миксинов
-│           └── assets/opticumeclient/      # Иконка, локализации, шрифты MSDF, 35 шейдеров и 12 текстур TargetESP, обои
+│           ├── opticumeclient.mixins.json  # Конфигурация 51 миксина
+│           └── assets/opticumeclient/      # Иконка, локализации, шрифты MSDF, шейдеры TargetESP/UI/PostFX, звуки и текстуры Desire, обои
 ├── src_26/                     # Зеркало исходников для пайплайна сборки 26.3 (авто-синхронизируется с src/)
+├── CHANGELOG.md                # История версий и изменений
 ├── compile_check_26.py         # Скрипт проверки компиляции (javac --release 25 + авто-синхронизация)
 ├── deploy_26.py                # Скрипт упаковки JAR и деплоя в инстанс лаунчера
 └── test_suite_26.py            # Автоматический тест-сьют (8/8 проверок)
@@ -76,28 +83,28 @@ OpticumeClient/
 ```mermaid
 flowchart TD
     A["Minecraft 26.3 (Java 25 + SDL3 + Vulkan 1.4.323)"] --> B["OpticumeClient (onInitializeClient)"]
-    B --> C["ModuleManager (47 модулей)"]
-    B --> D["HudManager (Drag & Drop + Smart Snap + AutoSave)"]
-    A --> E["27 Mixins (Official Mojang Mappings)"]
+    B --> C["ModuleManager (80 модулей) & CommandManager"]
+    B --> D["HudManager (17 HUD-модулей + HudAlertBus)"]
+    A --> E["51 Mixin (Official Mojang Mappings)"]
     E -->|"GuiMixin / AbstractButtonMixin / AbstractSliderButtonMixin"| M["OpticumeMainMenuScreen, AltManager & Стеклянные кнопки"]
-    E -->|"InGameHudMixin / GuiGraphicsExtractorMixin"| F["Render2DHelper & OpticumeFonts (SPIR-V MSDF)"]
-    E -->|"GameRendererMixin / CameraMixin"| G["TargetEspRenderer (Desire 7-Mode Port), Render3DHelper & Smooth Zoom"]
+    E -->|"InGameHudMixin / GuiGraphicsExtractorMixin"| F["Render2DHelper, KawaseBlur & OpticumeFonts (MSDF)"]
+    E -->|"GameRendererMixin / LevelRendererMixin / CameraMixin"| G["TargetEspRenderer, JumpCircles PostFX, Ambience/Atmosphere & WorldPrimitiveRenderer"]
     E -->|"MouseHandlerMixin / KeyboardHandlerMixin"| H["System ClickGuiScreen (SDL3 Input)"]
 ```
 
 ---
 
-## 🧩 Полный список модулей (47 модулей)
+## 🧩 Полный список модулей (80 модулей)
 
 | Категория | Кол-во | Модули |
 | :--- | :---: | :--- |
-| **COMBAT** | 8 | `LegitAuraModule`, `KillAuraModule`, `OpticumeAuraModule`, `TriggerBotModule`, `AimAssistModule`, `AutoTotemModule`, `ShieldBreakerModule`, `MiddleClickPearlModule` |
-| **FRIENDS** | 1 | `MiddleClickFriendModule` *(плюс страница Friends в ClickGUI)* |
-| **MOVEMENT** | 5 | `SprintModule`, `NoSlowModule`, `VelocityModule`, `NoPushModule`, `NoJumpDelayModule` |
-| **VISUALS** | 23 | `PlayerEspModule`, `TargetEspModule` *(7 режимов Desire, 25 настроек)*, `ViewModelModule`, `NameTagsModule`, `PopChamsModule`, `AmbienceModule`, `KillEffectModule`, `ItemEspModule`, `TracersModule`, `ChamsModule`, `JumpCirclesModule`, `ParticlesModule`, `ChinaHatModule`, `HitBubblesModule`, `ArrowsModule`, `FullbrightModule`, `HitColorModule`, `TrailsModule`, `CrosshairModule`, `TargetHudModule`, `CustomFontModule` *(MSDF)*, `NoRenderModule`, `ZoomModule` |
-| **ANIMATIONS** | 1 | `OldAnimationsModule` |
-| **OPTIMIZATION** | 5 | `LowFireModule`, `NoHurtCamModule`, `MemoryCleanerModule`, `EntityCullingModule`, `FrameSyncModule` |
-| **HUD** | 4 | `InfoHud`, `KeystrokesHud`, `ArmorHud`, `PotionHud` |
+| **COMBAT** | 11 | `LegitAuraModule`, `KillAuraModule`, `OpticumeAuraModule`, `TriggerBotModule`, `AimAssistModule`, `AutoTotemModule`, `AutoSwapModule`, `ShieldBreakerModule`, `AntiBotModule`, `NoFriendDamageModule`, `MiddleClickPearlModule` |
+| **FRIENDS** | 1 | `MiddleClickFriendModule` *(плюс страница `Friends` в ClickGUI)* |
+| **MOVEMENT** | 10 | `SprintModule`, `NoSlowModule`, `VelocityModule`, `NoPushModule`, `NoJumpDelayModule`, `GuiMoveModule`, `AutoToolModule`, `ItemScrollerModule`, `NoWebModule`, `ElytraHelperModule` |
+| **VISUALS** | 32 | `PlayerEspModule`, `TargetEspModule` *(7 режимов Desire, 25 настроек)*, `ViewModelModule`, `NameTagsModule`, `PopChamsModule`, `KillEffectModule`, `ItemEspModule`, `TracersModule`, `GlowEspModule`, `JumpCirclesModule` *(Desire Effect PostFX + 3D)*, `ParticlesModule`, `ChinaHatModule`, `HitBubblesModule`, `ArrowsModule`, `FullbrightModule`, `TrailsModule`, `CrosshairModule`, `SwingAnimationsModule`, `TargetHudModule`, `CustomFontModule` *(MSDF)*, `ToggleSoundsModule`, `NoRenderModule`, `ZoomModule`, `PredictionsModule`, `AspectRatioModule`, `InterpolateF5Module`, `BlockOverlayModule`, `DamageTintModule`, `SeeInvisiblesModule`, `HandsModule`, `AmbienceModule`, `AtmosphereModule` |
+| **OPTIMIZATION** | 6 | `LowFireModule`, `NoHurtCamModule`, `MemoryCleanerModule`, `EntityCullingModule`, `FrameSyncModule`, `VideoOptimizerModule` |
+| **OTHER** | 3 | `AssistModule`, `AutoBuyModule`, `BotsModule` |
+| **HUD** | 17 | `InterfaceModule`, `WatermarkHud`, `DynamicIslandHud`, `ArrayListHud`, `StaffListHud`, `RadarHud`, `BpsGraphHud`, `TotemCounterHud`, `CoordinatesHud`, `NotificationsHud`, `KeystrokesHud`, `ArmorHud`, `PotionHud`, `CooldownsHud`, `BindsHud`, `InventoryHud`, `AutoBuyReportHud` |
 
 ---
 

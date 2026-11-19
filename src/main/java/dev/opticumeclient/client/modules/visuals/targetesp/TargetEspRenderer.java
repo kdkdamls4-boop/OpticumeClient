@@ -4853,4 +4853,151 @@ public final class TargetEspRenderer {
          this.f_26510 = var15;
       }
    }
+
+   public static void renderPredictionVisuals(
+      TargetEspFrame frame,
+      List<List<Vec3>> worldPaths,
+      List<Integer> pathColors,
+      List<Vec3> landingCenters,
+      List<Integer> landingColors,
+      List<Vec3> pearlCenters,
+      List<Integer> pearlColors,
+      float beamWidth,
+      boolean throughWalls
+   ) {
+      if (MC.gameRenderer == null || MC.gameRenderer.mainCamera() == null) {
+         return;
+      }
+      Vec3 camPos = MC.gameRenderer.mainCamera().position();
+      Matrix4f pose = frame.poseStack().last().pose();
+      double timeSec = (System.currentTimeMillis() % 1000000L) / 1000.0;
+
+      // 1. 3D Volumetric Beam + EspBloomPass along trajectory paths (sequential BufferBuilder usage to prevent shared ByteBufferBuilder overwrite)
+      if (!worldPaths.isEmpty()) {
+         float baseRadius = 0.026F * Math.max(0.35F, beamWidth);
+         int primaryCol = pathColors.get(0);
+
+         List<List<Vec3>> relPaths = new ArrayList<>(worldPaths.size());
+         for (List<Vec3> path : worldPaths) {
+            List<Vec3> relPath = new ArrayList<>(path.size());
+            for (Vec3 p : path) {
+               relPath.add(p.subtract(camPos));
+            }
+            relPaths.add(relPath);
+         }
+
+         RenderTarget mainTarget = MC.gameRenderer.mainRenderTarget();
+         if (mainTarget != null && mainTarget.getColorTextureView() != null && mainTarget.getDepthTextureView() != null) {
+            // Pass 1A: Build & render outer bloom tubes into offscreen bloom target
+            TextureTarget bloomTarget = m_7824(mainTarget.width, mainTarget.height);
+            bloomTarget.copyDepthFrom(mainTarget);
+            BufferBuilder bloomBuf = m_7952();
+            for (int i = 0; i < relPaths.size(); i++) {
+               List<Vec3> relPath = relPaths.get(i);
+               if (relPath.size() < 2) continue;
+               int col = pathColors.get(i);
+               float seed = (float) (timeSec * 2.5 + i * 1.7);
+               m_7834(bloomBuf, pose, relPath, 1.0F, baseRadius * 1.85F, m_7887(col, 0.95F), seed + 1.1F, 0.0F);
+            }
+            m_7929(bloomBuf, f_26537, bloomTarget, true);
+            EspBloomPass.renderSimple(bloomTarget, mainTarget, primaryCol, f_27375, f_27376, 1.0F);
+
+            // Pass 1B: Build & render colored 3D core tubes + inner highlight (sequentially after bloomBuf is closed)
+            BufferBuilder coreBuf = m_7952();
+            for (int i = 0; i < relPaths.size(); i++) {
+               List<Vec3> relPath = relPaths.get(i);
+               if (relPath.size() < 2) continue;
+               int col = pathColors.get(i);
+               int brightCol = m_7817(col, 0.28F);
+               int hotCoreCol = m_7817(col, 0.62F);
+               float seed = (float) (timeSec * 2.5 + i * 1.7);
+               m_7834(coreBuf, pose, relPath, 1.0F, baseRadius * 1.15F, m_7887(col, 0.95F), seed, 0.0F);
+               m_7834(coreBuf, pose, relPath, 1.0F, baseRadius * 0.55F, m_7887(brightCol, 0.96F), seed + 1.5F, 0.0F);
+               m_7834(coreBuf, pose, relPath, 1.0F, baseRadius * 0.25F, m_7887(hotCoreCol, 0.92F), seed + 2.2F, 0.0F);
+            }
+            m_7825(coreBuf, f_26537);
+
+            // Pass 1C: Composite offscreen bloom
+            CommandEncoder enc = RenderSystem.getDevice().createCommandEncoder();
+            try (RenderPass pass = enc.createRenderPass(() -> f_27887, mainTarget.getColorTextureView(), Optional.empty())) {
+               pass.setPipeline(PipelineBuilder.compile(f_26538));
+               pass.setUniform(f_27377, bloomTarget.getColorTextureView(), RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST));
+               pass.draw(3, 1, 0, 0);
+            }
+         }
+      }
+
+      // 2. TargetESP Procedural 3D Shader Ring (target_esp_ring) + Orbiting Bloom Comet at landing points (sequential buffers!)
+      if (!landingCenters.isEmpty()) {
+         Vec3 axisX = new Vec3(1.0, 0.0, 0.0);
+         Vec3 axisZ = new Vec3(0.0, 0.0, 1.0);
+         float ringRadius = 0.48F;
+         double cometBaseAngle = timeSec * 4.8;
+
+         // Pass 2A: Build & draw all landing rings first
+         BufferBuilder ringBuf = m_7952();
+         for (int i = 0; i < landingCenters.size(); i++) {
+            Vec3 relCenter = landingCenters.get(i).subtract(camPos).add(0.0, 0.03, 0.0);
+            int col = landingColors.get(i);
+            int brightCol = m_7817(col, 0.48F);
+
+            m_7955(ringBuf, pose, relCenter, axisX, axisZ, ringRadius * 2.72F, m_7887(col, 0.28F));
+            m_7955(ringBuf, pose, relCenter, axisX, axisZ, ringRadius * 2.66F, m_7887(brightCol, 0.96F));
+         }
+         m_7825(ringBuf, throughWalls ? f_26530 : f_26531);
+
+         // Pass 2B: Build & draw all orbiting comet tails after ringBuf is closed
+         BufferBuilder cometBuf = m_7952();
+         for (int i = 0; i < landingCenters.size(); i++) {
+            Vec3 relCenter = landingCenters.get(i).subtract(camPos).add(0.0, 0.03, 0.0);
+            int col = landingColors.get(i);
+
+            for (int c = 0; c < 2; c++) {
+               double headAngle = cometBaseAngle + c * Math.PI + i * 0.9;
+               for (int t = 0; t < 13; t++) {
+                  float fade = 1.0F - t / 13.0F;
+                  double a = headAngle - t * 0.085;
+                  Vec3 pt = relCenter.add(axisX.scale(Math.cos(a) * ringRadius)).add(axisZ.scale(Math.sin(a) * ringRadius));
+                  float alpha = fade * fade * 0.55F;
+                  float size = 0.065F + fade * 0.095F;
+                  m_7893(cometBuf, pose, pt.x, pt.y, pt.z, size, m_7887(m_7817(col, 0.72F), alpha));
+               }
+            }
+         }
+         m_7942(cometBuf, f_26515, false);
+      }
+
+      // 3. TargetESP Bloom & Tilted Shader Ring around flying / floating pearls (sequential buffers!)
+      if (!pearlCenters.isEmpty()) {
+         double tiltRad = Math.toRadians(24.0);
+
+         // Pass 3A: Build & draw tilted rings around all pearls
+         BufferBuilder pearlRingBuf = m_7952();
+         for (int i = 0; i < pearlCenters.size(); i++) {
+            Vec3 relPearl = pearlCenters.get(i).subtract(camPos);
+            int col = pearlColors.get(i);
+            int brightCol = m_7817(col, 0.55F);
+
+            double spin = timeSec * 3.6 + i * 0.7;
+            Vec3 normal = new Vec3(Math.sin(tiltRad) * Math.cos(spin), Math.cos(tiltRad), Math.sin(tiltRad) * Math.sin(spin));
+            Vec3[] basis = m_7860(normal);
+            float hoopR = 0.28F;
+            m_7955(pearlRingBuf, pose, relPearl, basis[0], basis[1], hoopR * 2.72F, m_7887(col, 0.26F));
+            m_7955(pearlRingBuf, pose, relPearl, basis[0], basis[1], hoopR * 2.66F, m_7887(brightCol, 0.94F));
+         }
+         m_7825(pearlRingBuf, throughWalls ? f_26530 : f_26531);
+
+         // Pass 3B: Build & draw bloom spheres around all pearls
+         BufferBuilder pearlBloomBuf = m_7952();
+         for (int i = 0; i < pearlCenters.size(); i++) {
+            Vec3 relPearl = pearlCenters.get(i).subtract(camPos);
+            int col = pearlColors.get(i);
+            int brightCol = m_7817(col, 0.55F);
+
+            m_7893(pearlBloomBuf, pose, relPearl.x, relPearl.y, relPearl.z, 0.52F, m_7887(col, 0.55F));
+            m_7893(pearlBloomBuf, pose, relPearl.x, relPearl.y, relPearl.z, 0.24F, m_7887(brightCol, 0.92F));
+         }
+         m_7942(pearlBloomBuf, f_26515, false);
+      }
+   }
 }

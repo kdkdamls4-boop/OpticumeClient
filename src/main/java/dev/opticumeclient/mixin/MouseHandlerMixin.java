@@ -37,7 +37,22 @@ public abstract class MouseHandlerMixin {
         if (buttonInfo != null) {
             int button = buttonInfo.button();
             boolean pressed = (action == 1);
+            if (pressed && this.minecraft != null && this.minecraft.gui != null) {
+                var curScreen = this.minecraft.gui.screen();
+                if (curScreen instanceof net.minecraft.client.gui.screens.ChatScreen) {
+                    dev.opticumeclient.client.gps.GpsManager.getInstance().onChatScreenClick(
+                            dev.opticumeclient.client.gui.ClickGuiScreen.normalizeMouseButton(button));
+                }
+                if (curScreen instanceof net.minecraft.client.gui.screens.ChatScreen
+                        || curScreen instanceof dev.opticumeclient.client.gui.ClickGuiScreen) {
+                    dev.opticumeclient.client.hud.HudManager.getInstance().onMousePress(
+                            dev.opticumeclient.client.gui.ClickGuiScreen.normalizeMouseButton(button));
+                }
+            }
             boolean inGame = pressed && this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null;
+            if (this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null) {
+                dev.opticumeclient.client.modules.other.AssistModule.onInputKey(button, action, true);
+            }
             if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 this.isLeftPressed = pressed;
                 if (inGame) {

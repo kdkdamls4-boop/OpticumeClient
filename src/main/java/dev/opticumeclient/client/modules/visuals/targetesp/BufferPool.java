@@ -10,6 +10,7 @@ public final class BufferPool implements AutoCloseable {
     private static final BufferPool INSTANCE = new BufferPool(DEFAULT_CAPACITY);
 
     private final ByteBufferBuilder byteBufferBuilder;
+    private boolean closed;
 
     public BufferPool(int capacity) {
         this.byteBufferBuilder = new ByteBufferBuilder(capacity);
@@ -20,15 +21,23 @@ public final class BufferPool implements AutoCloseable {
     }
 
     public BufferBuilder begin(PrimitiveTopology topology, VertexFormat format) {
+        if (this.closed) {
+            throw new IllegalStateException("BufferPool has been closed");
+        }
         return new BufferBuilder(this.byteBufferBuilder, topology, format);
     }
 
     public void clear() {
-        this.byteBufferBuilder.clear();
+        if (!this.closed) {
+            this.byteBufferBuilder.clear();
+        }
     }
 
     @Override
     public void close() {
-        this.byteBufferBuilder.close();
+        if (!this.closed) {
+            this.closed = true;
+            this.byteBufferBuilder.close();
+        }
     }
 }

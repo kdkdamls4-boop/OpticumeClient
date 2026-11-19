@@ -50,7 +50,7 @@ public class AimAssistModule extends Module {
 
         for (Player player : mc.level.players()) {
             if (player == mc.player || !player.isAlive()) continue;
-            if (FriendManager.getInstance().isFriend(player)) continue;
+            if (FriendManager.getInstance().isFriend(player) || AntiBotModule.isBot(player)) continue;
 
             double dist = mc.player.distanceTo(player);
             if (dist <= bestDist && isInFov(player, fov.getValue())) {

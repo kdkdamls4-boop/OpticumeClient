@@ -230,6 +230,52 @@ public class Render2DHelper {
     }
 
     /**
+     * Submits a true blurred Liquid Glass rounded rectangle via {@link BlurredRectRenderState}
+     * sampling {@link KawaseBlurRenderer}. Falls back to a solid translucent rounded rect if
+     * the backdrop buffer is unavailable.
+     */
+    public static void drawBlurredRoundedRect(
+            GuiGraphicsExtractor context,
+            float x, float y, float w, float h, float radius,
+            int tintArgb, float overallAlpha
+    ) {
+        if (BlurredRectRenderState.trySubmit(context, x, y, w, h, radius, tintArgb, overallAlpha)) {
+            return;
+        }
+        int baseA = (tintArgb >>> 24) & 0xFF;
+        int fallbackA = Math.max(0, Math.min(255, Math.round(baseA * overallAlpha)));
+        drawRoundedRectFloat(context, x, y, w, h, radius, ColorUtils.withAlpha(tintArgb, fallbackA));
+    }
+
+    public static void drawRoundedRectFloat(GuiGraphicsExtractor context, float x, float y, float w, float h, float radius, int color) {
+        if (RoundedRectRenderState.submitFill(context, x, y, w, h, radius, color)) {
+            return;
+        }
+        drawRoundedRect(context, x, y, w, h, radius, color);
+    }
+
+    public static void drawGradientRoundedRectFloat(
+            GuiGraphicsExtractor context,
+            float x, float y, float w, float h, float radius,
+            int colTL, int colBL, int colBR, int colTR
+    ) {
+        if (RoundedRectRenderState.submitGradient(context, x, y, w, h, radius, colTL, colBL, colBR, colTR)) {
+            return;
+        }
+        drawGradientRoundedRect(context, x, y, w, h, radius, colTL, colTR);
+    }
+
+    public static void drawRoundedOutlineFloat(
+            GuiGraphicsExtractor context,
+            float x, float y, float w, float h, float radius, float thickness, int color
+    ) {
+        if (RoundedRectRenderState.submitOutline(context, x, y, w, h, radius, thickness, color)) {
+            return;
+        }
+        drawRoundedOutline(context, x, y, w, h, radius, thickness, color);
+    }
+
+    /**
      * Nursultan Nextgen & Catlavan 4-Layer Liquid Glass Card:
      * 1. Outer ambient theme glow (only when glowAlpha >= 45 to preserve high FPS)
      * 2. Deep frosted dark glass fill
@@ -237,27 +283,7 @@ public class Render2DHelper {
      * 4. 1px gradient glass border with anti-aliased SDF corners
      */
     public static void drawLiquidGlass(GuiGraphicsExtractor context, float x, float y, float w, float h, float radius, int baseAlpha, int glowAlpha) {
-        Theme theme = ThemeManager.getInstance().getCurrentTheme();
-        int accent1 = theme.getPrimaryColor();
-        int accent2 = theme.getSecondaryColor();
-
-        if (glowAlpha >= 45) {
-            drawGlow(context, x, y, w, h, 7.0f, ColorUtils.withAlpha(accent1, glowAlpha));
-        }
-
-        int bg = ColorUtils.withAlpha(theme.getCardColor(), Math.max(0, Math.min(255, baseAlpha)));
-        drawRoundedRect(context, x, y, w, h, radius, bg);
-
-        // Smooth single-fill inner top sheen (harmonized with card radius and outline)
-        float r = Math.max(0.0f, Math.min(radius, Math.min(w, h) * 0.5f));
-        if (w > r * 2.0f + 4.0f) {
-            int sheenColor = ColorUtils.withAlpha(accent1, Math.min(48, glowAlpha + 14));
-            drawRect(context, x + r + 1.0f, y + 1.0f, w - r * 2.0f - 2.0f, 1.0f, sheenColor);
-        }
-
-        // Glass bevel outline perfectly aligned with background radius
-        int outlineColor = ColorUtils.withAlpha(ColorUtils.interpolateColor(accent1, accent2, 0.5f), Math.min(125, glowAlpha + 42));
-        drawRoundedOutline(context, x, y, w, h, radius, 1.0f, outlineColor);
+        dev.opticumeclient.client.hud.HudPanelRenderer.drawSurface(context, x, y, w, h, radius, baseAlpha, glowAlpha);
     }
 
     public static void drawGlassCard(GuiGraphicsExtractor context, int x, int y, int width, int height, int accentColor) {
@@ -297,6 +323,57 @@ public class Render2DHelper {
         }
     }
 
+    /**
+     * Sub-pixel floating-point texture blit without integer position/size rounding.
+     */
+    public static void drawTextureFloat(GuiGraphicsExtractor context, Identifier texture, float x, float y, float width, float height, int color) {
+        if (context == null || texture == null || width <= 0.1f || height <= 0.1f) return;
+        final int texVirtual = 128;
+        try {
+            Matrix3x2fStack pose = context.pose();
+            pose.pushMatrix();
+            pose.translate(x, y);
+            pose.scale(width / texVirtual, height / texVirtual);
+            context.blit(RenderPipelines.GUI_TEXTURED, texture, 0, 0, 0.0f, 0.0f, texVirtual, texVirtual, texVirtual, texVirtual, color);
+            pose.popMatrix();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static void drawCroppedTextureFloat(
+            GuiGraphicsExtractor context, Identifier texture,
+            float x, float y, float width, float height,
+            float u, float v, float uw, float uh, int color
+    ) {
+        if (context == null || texture == null || width <= 0.1f || height <= 0.1f) return;
+        float safeUw = Math.max(0.001f, uw);
+        float safeUh = Math.max(0.001f, uh);
+        final int virtualRegion = 256;
+        int fullW = Math.max(1, Math.round(virtualRegion / safeUw));
+        int fullH = Math.max(1, Math.round(virtualRegion / safeUh));
+        try {
+            Matrix3x2fStack pose = context.pose();
+            pose.pushMatrix();
+            pose.translate(x, y);
+            pose.scale(width / virtualRegion, height / virtualRegion);
+            context.blit(RenderPipelines.GUI_TEXTURED, texture, 0, 0, u * fullW, v * fullH, virtualRegion, virtualRegion, fullW, fullH, color);
+            pose.popMatrix();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static void drawTextureRegion(GuiGraphicsExtractor context, Identifier texture, float x, float y, float width, float height,
+                                         float u, float v, int srcW, int srcH, int texW, int texH, int color) {
+        int ix = Math.round(x);
+        int iy = Math.round(y);
+        int iw = Math.max(1, Math.round(width));
+        int ih = Math.max(1, Math.round(height));
+        try {
+            context.blit(RenderPipelines.GUI_TEXTURED, texture, ix, iy, u, v, iw, ih, srcW, srcH, texW, texH, color);
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static void drawCroppedTexture(GuiGraphicsExtractor context, Identifier texture, float x, float y, float width, float height, float u, float v, float uw, float uh, int color) {
         int ix = Math.round(x);
         int iy = Math.round(y);
@@ -320,6 +397,39 @@ public class Render2DHelper {
             PlayerFaceExtractor.extractRenderState(context, DefaultPlayerSkin.get(uuid), x, y, size, tint);
         } catch (Throwable t) {
             drawRoundedRect(context, x, y, size, size, 3.0f, ThemeManager.getInstance().getAccentColor(0));
+        }
+    }
+
+    public static void drawRoundedPlayerHeadByUuid(GuiGraphicsExtractor context, UUID uuid, int x, int y, int size, float radius, int maskBgColor, int borderColor, float alpha) {
+        drawPlayerHeadByUuid(context, uuid, x, y, size, alpha);
+        drawRoundedCornerCutout(context, x, y, size, size, radius, maskBgColor);
+        if (((borderColor >>> 24) & 0xFF) > 0) {
+            drawRoundedOutline(context, x, y, size, size, radius, 1.0f, borderColor);
+        }
+    }
+
+    public static void drawRoundedCornerCutout(GuiGraphicsExtractor context, float x, float y, float w, float h, float radius, int maskBgColor) {
+        if (w <= 0 || h <= 0) return;
+        int alpha = (maskBgColor >>> 24) & 0xFF;
+        if (alpha == 0) return;
+        int ix = Math.round(x);
+        int iy = Math.round(y);
+        int iw = Math.round(w);
+        int ih = Math.round(h);
+        int ir = Math.max(1, Math.min(Math.round(radius), Math.min(iw, ih) / 2));
+
+        TextureAssets.ensureInitialized();
+        int cr = TextureAssets.clampCornerRadius(ir);
+        int u0 = TextureAssets.getCornerAtlasU(cr);
+        int aw = TextureAssets.CORNER_ATLAS_W;
+        int ah = TextureAssets.CORNER_ATLAS_H;
+
+        try {
+            context.blit(RenderPipelines.GUI_TEXTURED, TextureAssets.ROUNDED_INVERSE_CORNER_MASK, ix, iy, (float) u0, 0.0f, ir, ir, cr, cr, aw, ah, maskBgColor);
+            context.blit(RenderPipelines.GUI_TEXTURED, TextureAssets.ROUNDED_INVERSE_CORNER_MASK, ix + iw - ir, iy, (float) (u0 + cr), 0.0f, ir, ir, cr, cr, aw, ah, maskBgColor);
+            context.blit(RenderPipelines.GUI_TEXTURED, TextureAssets.ROUNDED_INVERSE_CORNER_MASK, ix, iy + ih - ir, (float) u0, (float) cr, ir, ir, cr, cr, aw, ah, maskBgColor);
+            context.blit(RenderPipelines.GUI_TEXTURED, TextureAssets.ROUNDED_INVERSE_CORNER_MASK, ix + iw - ir, iy + ih - ir, (float) (u0 + cr), (float) cr, ir, ir, cr, cr, aw, ah, maskBgColor);
+        } catch (Throwable ignored) {
         }
     }
 

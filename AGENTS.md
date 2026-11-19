@@ -1,7 +1,7 @@
 # 🚀 OpticumeClient — Документация и Инструкции для ИИ-Агентов
 
-> **Статус проекта:** Полный ребрендинг в **OpticumeClient**, главное меню в стиле **Desire**, глобальный стеклянный стиль кнопок/слайдеров, оффлайн **AltManager**, **ClickGUI в стиле System**, **MSDF-рендер шрифта** и полный порт **TargetESP из Desire** (7 режимов, 25 настроек, 35 SPIR-V шейдеров) завершены.  
-> Проект собран под **Minecraft 26.3 / Java 25 / Sodium 0.9.3 + Vulkan 1.4.323** (`127` исходных Java-файлов, `115` ресурсов, `47` модулей, `27` миксинов, `0` ошибок компиляции, `8/8` тестов пройдено).
+> **Статус проекта:** Полный ребрендинг в **OpticumeClient**, главное меню в стиле **Desire**, глобальный стеклянный стиль кнопок/слайдеров, оффлайн **AltManager**, **ClickGUI в стиле System**, **MSDF-рендер шрифта**, порт **TargetESP / JumpCircles / Ambience / Atmosphere / Hands / GlowESP**, подсистемы **AutoBuy**, **Bots**, **GPS & Чат-команды**, **Server Events** и модульная система **HUD (17 модулей)** завершены.  
+> Проект собран под **Minecraft 26.3 / Java 25 / Sodium 0.9.3 + Vulkan 1.4.323** (`257` исходных Java-файлов, `403` ресурса, `80` модулей, `51` миксин, `0` ошибок компиляции, `8/8` тестов пройдено).
 
 ---
 
@@ -10,11 +10,12 @@
 * **Корень репозитория:** текущая рабочая директория проекта (`./`)
 * **Навигация по документации:**
   - [`README.md`](README.md) — человекочитаемый обзор проекта, таблицы модулей и структура папок.
+  - [`CHANGELOG.md`](CHANGELOG.md) — история версий и список всех изменений проекта.
   - [`AGENTS.md`](AGENTS.md) — инструкции и правила для ИИ-Агентов (Antigravity, Codex, Windsurf, Copilot).
   - [`TASK_LIST_NEXT.md`](TASK_LIST_NEXT.md) — архив технического плана M6 (все 8 задач выполнены).
   - [`CLAUDE.md`](CLAUDE.md) и [`.cursorrules`](.cursorrules) — точки входа для Claude Code и Cursor IDE.
   - [`VISUAL_DATABASE.md`](VISUAL_DATABASE.md) — полная база данных визуальной архитектуры, цветов и рендер-пайплайна.
-* **Исходный код:** `src/` и `src_26/` (`127` Java-файлов и `115` ресурсов под Minecraft 26.3 в пакете `dev.opticumeclient.*`; автоматически двусторонне синхронизируются скриптом `compile_check_26.py`, при переименовании/удалении файлов удаляйте старые копии в обеих папках).
+* **Исходный код:** `src/` и `src_26/` (`257` Java-файлов и `403` ресурса под Minecraft 26.3 в пакете `dev.opticumeclient.*`; автоматически двусторонне синхронизируются скриптом `compile_check_26.py`, при переименовании/удалении файлов удаляйте старые копии в обеих папках).
 * **Целевая версия игры:** Minecraft **26.3** (Game Drop 2026).
 * **Рантайм Java:** Java **25** (Microsoft OpenJDK 25): `%APPDATA%\ElyPrismLauncher\java\java-runtime-epsilon\bin\javac.exe`
 * **Графический стек:** Fabric Loader `0.20.1`, Fabric API `0.165.2+26.3`, Sodium `0.9.3-beta.1+mc26.3` + **Vulkan 1.4.323** (RenderPearl / Blaze3D).
@@ -58,7 +59,7 @@
 
 ---
 
-## ✅ 4. Полный список реализованных подсистем (M1 – M9)
+## ✅ 4. Полный список реализованных подсистем (M1 – M10)
 
 1. **M1 — Управление, ввод и Input:**
    * Нормализация кнопок мыши SDL3 (`1=LMB, 2=MMB, 3=RMB` $\to$ `0=LMB, 1=RMB, 2=MMB`) в [`ClickGuiScreen.java`](src_26/main/java/dev/opticumeclient/client/gui/ClickGuiScreen.java).
@@ -79,5 +80,9 @@
 6. **M9 — Кастомный MSDF-шрифт, порт Desire TargetESP, анимации HUD и очистка плацебо-модулей:**
    * Полноценный **MSDF-рендер шрифта** [`OpticumeFonts.java`](src_26/main/java/dev/opticumeclient/client/render/font/OpticumeFonts.java) и [`MsdfFontFace.java`](src_26/main/java/dev/opticumeclient/client/render/font/MsdfFontFace.java) (`Inter Medium`, `Inter Regular`, `Inter SemiBold`, `Outfit SemiBold`) с SPIR-V шейдерами `msdf_text.vsh`/`.fsh` и интеграцией в [`CustomFontModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/CustomFontModule.java) и [`GuiGraphicsExtractorMixin.java`](src_26/main/java/dev/opticumeclient/mixin/GuiGraphicsExtractorMixin.java).
    * Полный порт **Desire TargetESP** в пакете `dev.opticumeclient.client.modules.visuals.targetesp.*` (`16` классов во главе с [`TargetEspRenderer.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/targetesp/TargetEspRenderer.java), `35` SPIR-V шейдеров, `12` PNG-текстур, `7` режимов и `25` динамически скрываемых настроек в [`TargetEspModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/TargetEspModule.java)).
-   * Очистка плацебо-модулей (`ChunkAnimatorModule`, `FastMathModule`), фикс `FullbrightModule` через [`LightmapRenderStateExtractorMixin.java`](src_26/main/java/dev/opticumeclient/mixin/LightmapRenderStateExtractorMixin.java), каскадные slide-in анимации в [`InfoHud.java`](src_26/main/java/dev/opticumeclient/client/hud/InfoHud.java), тултипы и предикаты видимости (`visibleWhen`) в [`SystemModuleCard.java`](src_26/main/java/dev/opticumeclient/client/gui/SystemModuleCard.java).
+   * Очистка плацебо-модулей (`ChunkAnimatorModule`, `FastMathModule`), фикс `FullbrightModule` через [`LightmapRenderStateExtractorMixin.java`](src_26/main/java/dev/opticumeclient/mixin/LightmapRenderStateExtractorMixin.java), тултипы и предикаты видимости (`visibleWhen`) в [`SystemModuleCard.java`](src_26/main/java/dev/opticumeclient/client/gui/SystemModuleCard.java).
+7. **M10 (`1.2.0-mc26.3`) — Модульный HUD, AutoBuy, Bots, Чат-команды, Server Events и RenderPearl-визуалы:**
+   * **Модульный HUD (17 модулей):** единый стиль [`InterfaceModule.java`](src_26/main/java/dev/opticumeclient/client/modules/hud/InterfaceModule.java), [`HudPanelRenderer.java`](src_26/main/java/dev/opticumeclient/client/hud/HudPanelRenderer.java), [`KawaseBlurRenderer.java`](src_26/main/java/dev/opticumeclient/client/render/KawaseBlurRenderer.java) и шина [`HudAlertBus.java`](src_26/main/java/dev/opticumeclient/client/hud/HudAlertBus.java); монолитный `InfoHud` разделён на `9` самостоятельных модулей ([`WatermarkHud.java`](src_26/main/java/dev/opticumeclient/client/hud/WatermarkHud.java), симметричный [`DynamicIslandHud.java`](src_26/main/java/dev/opticumeclient/client/hud/DynamicIslandHud.java), [`ArrayListHud.java`](src_26/main/java/dev/opticumeclient/client/hud/ArrayListHud.java), [`StaffListHud.java`](src_26/main/java/dev/opticumeclient/client/hud/StaffListHud.java), [`RadarHud.java`](src_26/main/java/dev/opticumeclient/client/hud/RadarHud.java), [`BpsGraphHud.java`](src_26/main/java/dev/opticumeclient/client/hud/BpsGraphHud.java), [`TotemCounterHud.java`](src_26/main/java/dev/opticumeclient/client/hud/TotemCounterHud.java), [`CoordinatesHud.java`](src_26/main/java/dev/opticumeclient/client/hud/CoordinatesHud.java), [`NotificationsHud.java`](src_26/main/java/dev/opticumeclient/client/hud/NotificationsHud.java)), плюс `BindsHud`, `CooldownsHud`, `InventoryHud`, `AutoBuyReportHud`.
+   * **AutoBuy & Bots & Commands:** подсистема `client/autobuy/*` + [`AutoBuyPage.java`](src_26/main/java/dev/opticumeclient/client/gui/AutoBuyPage.java), мульти-сессионные боты `client/bots/*` + [`ScreenBots.java`](src_26/main/java/dev/opticumeclient/client/ui/bots/ScreenBots.java), диспетчер `.`-команд (`CommandManager`: `.help`, `.gps`, `.rct`, `.autobuy`), GPS-метки `client/gps/*`, живые ивенты FunTime/HolyWorld [`ServerEventsService.java`](src_26/main/java/dev/opticumeclient/client/services/ServerEventsService.java) + [`EventsPage.java`](src_26/main/java/dev/opticumeclient/client/gui/EventsPage.java) и авто-перезаход [`AnarchyReconnectService.java`](src_26/main/java/dev/opticumeclient/client/services/AnarchyReconnectService.java).
+   * **Шейдеры, визуалы и менеджер тем:** `Desire Effect` в [`JumpCirclesModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/JumpCirclesModule.java) (`jump_effect.fsh`), [`AmbienceModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/AmbienceModule.java), [`AtmosphereModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/AtmosphereModule.java), [`HandsModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/HandsModule.java), [`GlowEspModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/GlowEspModule.java), [`SwingAnimationsModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/SwingAnimationsModule.java), [`PopChamsModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/PopChamsModule.java), [`TrailsModule.java`](src_26/main/java/dev/opticumeclient/client/modules/visuals/TrailsModule.java), [`ThemesPage.java`](src_26/main/java/dev/opticumeclient/client/gui/ThemesPage.java) (удаление/восстановление пресетов + кастомные темы в [`ThemeManager.java`](src_26/main/java/dev/opticumeclient/client/render/ThemeManager.java)) и миграция конфигов `1.2.0-26.3`.
 

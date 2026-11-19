@@ -158,7 +158,7 @@ public class LegitAuraModule extends Module {
         for (Entity e : mc.level.entitiesForRendering()) {
             if (!(e instanceof LivingEntity living) || e == mc.player || !living.isAlive()) continue;
             if (onlyPlayers.isEnabled() && !(living instanceof Player)) continue;
-            if (FriendManager.getInstance().isFriend(living)) continue;
+            if (FriendManager.getInstance().isFriend(living) || AntiBotModule.isBot(living)) continue;
 
             double dist = getDistanceToBox(eyes, living.getBoundingBox());
             if (dist <= bestDist && isInFov(living, fov.getValue())) {

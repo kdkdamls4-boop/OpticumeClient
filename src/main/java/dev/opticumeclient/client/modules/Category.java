@@ -6,6 +6,7 @@ public enum Category {
     OPTIMIZATION("Optimization", 0xFF76FF03),
     HUD("HUD", 0xFFFFD600),
     MOVEMENT("Movement", 0xFFD500F9),
+    OTHER("Other", 0xFFAB47BC),
     FRIENDS("Friends", 0xFF00E676);
 
     private final String displayName;

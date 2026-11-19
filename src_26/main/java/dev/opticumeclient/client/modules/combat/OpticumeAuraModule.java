@@ -310,7 +310,7 @@ public class OpticumeAuraModule extends Module {
 
         for (Entity e : mc.level.entitiesForRendering()) {
             if (!(e instanceof LivingEntity living) || e == mc.player || !living.isAlive()) continue;
-            if (FriendManager.getInstance().isFriend(e)) continue;
+            if (FriendManager.getInstance().isFriend(e) || AntiBotModule.isBot(e)) continue;
 
             boolean isPlayer = living instanceof Player;
             if (isPlayer && !targetPlayers.isEnabled()) continue;

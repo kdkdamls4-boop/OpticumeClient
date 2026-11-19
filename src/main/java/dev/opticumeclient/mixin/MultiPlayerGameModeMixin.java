@@ -1,7 +1,10 @@
 package dev.opticumeclient.mixin;
 
 import dev.opticumeclient.client.modules.ModuleManager;
+import dev.opticumeclient.client.modules.combat.AntiBotModule;
+import dev.opticumeclient.client.modules.combat.NoFriendDamageModule;
 import dev.opticumeclient.client.modules.visuals.KillEffectModule;
+import dev.opticumeclient.client.modules.visuals.ParticlesModule;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -16,11 +19,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(MultiPlayerGameMode.class)
 public abstract class MultiPlayerGameModeMixin {
 
-    @Inject(method = "attack", at = @At("HEAD"))
+    @Inject(method = "attack", at = @At("HEAD"), cancellable = true)
     private void opticume$onAttack(Player player, Entity target, CallbackInfo ci) {
+        NoFriendDamageModule noFriend = NoFriendDamageModule.getInstance();
+        if (noFriend != null && noFriend.shouldCancelAttack(target)) {
+            ci.cancel();
+            return;
+        }
+        if (AntiBotModule.isBot(target)) {
+            ci.cancel();
+            return;
+        }
         KillEffectModule kill = ModuleManager.getInstance().getModule(KillEffectModule.class);
         if (kill != null && kill.isEnabled()) {
             kill.recordAttack(target);
+        }
+        ParticlesModule particles = ParticlesModule.getInstance();
+        if (particles != null && particles.isEnabled()) {
+            particles.onAttack(target);
         }
     }
 }

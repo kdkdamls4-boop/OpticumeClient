@@ -39,11 +39,15 @@ public class KillEffectModule extends Module {
     private final NumberSetting volume = new NumberSetting("Volume", "Громкость", 1.0, 0.1, 1.0, 0.1);
     private final ModeSetting filter = new ModeSetting("Filter", "Фильтр целей", "Players Only", "Players Only", "All Living");
     private final NumberSetting particles = new NumberSetting("Particles", "Количество частиц", 35.0, 10.0, 80.0, 5.0);
-    private final ModeSetting colorMode = new ModeSetting("ColorMode", "Цвет партиклов Theme Bloom", "Theme", "Theme", "Red", "Custom");
-    private final ColorSetting customColor = new ColorSetting("CustomColor", "Пользовательский цвет", 0xFFFF2244);
+    private final ModeSetting colorMode = new ModeSetting("ColorMode", "Цвет партиклов Theme Bloom", "Theme", "Theme", "Red", "Rainbow", "Custom");
+    private final ColorSetting customColor = (ColorSetting) new ColorSetting("CustomColor", "Пользовательский цвет", 0xFFFF2244)
+            .visibleWhen(() -> colorMode.is("Custom"));
 
     private Entity lastAttackedEntity = null;
     private long lastAttackTime = 0L;
+    private int lastTriggeredEntityId = Integer.MIN_VALUE;
+    private long lastTriggeredTimeMs = 0L;
+    private int nextClientLightningId = -1_000_000;
 
     private static class BloomParticle {
         Vec3 pos;
@@ -90,7 +94,8 @@ public class KillEffectModule extends Module {
     }
 
     public void onEntityDeath(Entity target) {
-        if (!isEnabled() || target == null || mc.level == null) return;
+        if (!isEnabled() || target == null || mc.level == null || !mc.isSameThread()) return;
+        if (target == mc.player) return;
 
         // Check target filter
         if (filter.is("Players Only") && !(target instanceof Player)) {
@@ -101,6 +106,10 @@ public class KillEffectModule extends Module {
         }
 
         long now = System.currentTimeMillis();
+        if (target.getId() == lastTriggeredEntityId && (now - lastTriggeredTimeMs) < 500L) {
+            return;
+        }
+
         boolean validKill = (lastAttackedEntity == target && (now - lastAttackTime) <= 4000L);
 
         // Also check if Aura target matches
@@ -114,25 +123,35 @@ public class KillEffectModule extends Module {
         }
 
         if (validKill) {
+            lastTriggeredEntityId = target.getId();
+            lastTriggeredTimeMs = now;
+            if (lastAttackedEntity == target) {
+                lastAttackedEntity = null;
+            }
             triggerKillEffect(target.position());
         }
     }
 
     public void triggerKillEffect(Vec3 pos) {
         ClientLevel level = mc.level;
-        if (level == null) return;
+        if (level == null || pos == null || !mc.isSameThread()) return;
 
         String mode = effect.getMode();
         float vol = volume.getFloatValue();
         boolean playSound = sound.isEnabled();
         int partCount = particles.getIntValue();
 
-        // 1. Lightning Bolt (Visual Only)
+        // 1. Lightning Bolt (Visual Only, isolated negative client ID so it NEVER deletes server entities/player!)
         if (mode.equals("Lightning") || mode.equals("All")) {
-            LightningBolt bolt = new LightningBolt(EntityTypes.LIGHTNING_BOLT, level);
-            bolt.setVisualOnly(true);
-            bolt.setPos(pos.x, pos.y, pos.z);
-            level.addEntity(bolt);
+            try {
+                LightningBolt bolt = new LightningBolt(EntityTypes.LIGHTNING_BOLT, level);
+                bolt.setId(nextClientLightningId--);
+                if (nextClientLightningId < -1_900_000) nextClientLightningId = -1_000_000;
+                bolt.setVisualOnly(true);
+                bolt.setPos(pos.x, pos.y, pos.z);
+                level.addEntity(bolt);
+            } catch (Throwable ignored) {
+            }
 
             if (playSound) {
                 level.playLocalSound(pos.x, pos.y, pos.z, SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.PLAYERS, vol, 1.0f, false);
@@ -151,7 +170,8 @@ public class KillEffectModule extends Module {
 
         // 3. Blood (Damage Indicator & Redstone Shards)
         if (mode.equals("Blood") || mode.equals("All")) {
-            for (int i = 0; i < partCount; i++) {
+            int bloodCount = Math.min(28, partCount);
+            for (int i = 0; i < bloodCount; i++) {
                 double vx = (Math.random() - 0.5) * 0.45;
                 double vy = Math.random() * 0.35 + 0.12;
                 double vz = (Math.random() - 0.5) * 0.45;
@@ -162,7 +182,7 @@ public class KillEffectModule extends Module {
 
         // 4. Theme Bloom (Ascending Glowing Particles)
         if (mode.equals("Theme Bloom") || mode.equals("All")) {
-            for (int i = 0; i < partCount; i++) {
+            for (int i = 0; i < partCount && activeBloomParticles.size() < 200; i++) {
                 double vx = (Math.random() - 0.5) * 0.22;
                 double vy = Math.random() * 0.20 + 0.05;
                 double vz = (Math.random() - 0.5) * 0.22;
@@ -202,6 +222,8 @@ public class KillEffectModule extends Module {
             baseColor = ThemeManager.getInstance().getAccentColor(0);
         } else if (colorMode.is("Red")) {
             baseColor = 0xFFFF2E54;
+        } else if (colorMode.is("Rainbow")) {
+            baseColor = ColorUtils.getRainbow(4.0f, 0.85f, 1.0f, 0L);
         } else {
             baseColor = customColor.getColor();
         }

@@ -1,10 +1,11 @@
 package dev.opticumeclient.client.modules;
 
 import dev.opticumeclient.client.hud.*;
-import dev.opticumeclient.client.modules.animations.OldAnimationsModule;
+import dev.opticumeclient.client.modules.hud.InterfaceModule;
 import dev.opticumeclient.client.modules.combat.*;
 import dev.opticumeclient.client.modules.movement.*;
 import dev.opticumeclient.client.modules.optimization.*;
+import dev.opticumeclient.client.modules.other.*;
 import dev.opticumeclient.client.modules.visuals.*;
 import dev.opticumeclient.client.render.Render3DHelper;
 import net.minecraft.client.gui.GuiGraphicsExtractor; 
@@ -36,7 +37,10 @@ public class ModuleManager {
         register(new TriggerBotModule());
         register(new AimAssistModule());
         register(new AutoTotemModule());
+        register(new AutoSwapModule());
         register(new ShieldBreakerModule());
+        register(new AntiBotModule());
+        register(new NoFriendDamageModule());
         register(new MiddleClickFriendModule());
         register(new MiddleClickPearlModule());
 
@@ -46,6 +50,11 @@ public class ModuleManager {
         register(new VelocityModule());
         register(new NoPushModule());
         register(new NoJumpDelayModule());
+        register(new GuiMoveModule());
+        register(new AutoToolModule());
+        register(new ItemScrollerModule());
+        register(new NoWebModule());
+        register(new ElytraHelperModule());
 
         // Visuals & Animations
         register(new PlayerEspModule());
@@ -53,25 +62,33 @@ public class ModuleManager {
         register(new ViewModelModule());
         register(new NameTagsModule());
         register(new PopChamsModule());
-        register(new AmbienceModule());
         register(new KillEffectModule());
         register(new ItemEspModule());
         register(new TracersModule());
-        register(new ChamsModule());
+        register(new GlowEspModule());
         register(new JumpCirclesModule());
         register(new ParticlesModule());
         register(new ChinaHatModule());
         register(new HitBubblesModule());
         register(new ArrowsModule());
         register(new FullbrightModule());
-        register(new HitColorModule());
         register(new TrailsModule());
         register(new CrosshairModule());
-        register(new OldAnimationsModule());
+        register(new SwingAnimationsModule());
         register(new TargetHudModule());
         register(new CustomFontModule());
+        register(new ToggleSoundsModule());
         register(new NoRenderModule());
         register(new ZoomModule());
+        register(new PredictionsModule());
+        register(new AspectRatioModule());
+        register(new InterpolateF5Module());
+        register(new BlockOverlayModule());
+        register(new DamageTintModule());
+        register(new SeeInvisiblesModule());
+        register(new HandsModule());
+        register(new AmbienceModule());
+        register(new AtmosphereModule());
 
         // Optimization
         register(new LowFireModule());
@@ -79,22 +96,66 @@ public class ModuleManager {
         register(new MemoryCleanerModule());
         register(new EntityCullingModule());
         register(new FrameSyncModule());
+        register(new VideoOptimizerModule());
+
+        // Other
+        register(new AssistModule());
+        register(new AutoBuyModule());
+        register(new BotsModule());
 
         // HUD
+        InterfaceModule iface = new InterfaceModule();
         KeystrokesHud keystrokes = new KeystrokesHud();
         ArmorHud armor = new ArmorHud();
         PotionHud potion = new PotionHud();
-        InfoHud info = new InfoHud();
+        CooldownsHud cooldowns = new CooldownsHud();
+        BindsHud binds = new BindsHud();
+        InventoryHud inventoryHud = new InventoryHud();
+        AutoBuyReportHud autoBuyReport = new AutoBuyReportHud();
+        WatermarkHud watermarkHud = new WatermarkHud();
+        DynamicIslandHud dynamicIslandHud = new DynamicIslandHud();
+        ArrayListHud arrayListHud = new ArrayListHud();
+        StaffListHud staffListHud = new StaffListHud();
+        RadarHud radarHud = new RadarHud();
+        BpsGraphHud bpsGraphHud = new BpsGraphHud();
+        TotemCounterHud totemCounterHud = new TotemCounterHud();
+        CoordinatesHud coordinatesHud = new CoordinatesHud();
+        NotificationsHud notificationsHud = new NotificationsHud();
 
+        register(iface);
         register(keystrokes);
         register(armor);
         register(potion);
-        register(info);
+        register(cooldowns);
+        register(binds);
+        register(inventoryHud);
+        register(autoBuyReport);
+        register(watermarkHud);
+        register(dynamicIslandHud);
+        register(arrayListHud);
+        register(staffListHud);
+        register(radarHud);
+        register(bpsGraphHud);
+        register(totemCounterHud);
+        register(coordinatesHud);
+        register(notificationsHud);
 
         HudManager.getInstance().register(keystrokes);
         HudManager.getInstance().register(armor);
         HudManager.getInstance().register(potion);
-        HudManager.getInstance().register(info);
+        HudManager.getInstance().register(cooldowns);
+        HudManager.getInstance().register(binds);
+        HudManager.getInstance().register(inventoryHud);
+        HudManager.getInstance().register(autoBuyReport);
+        HudManager.getInstance().register(watermarkHud);
+        HudManager.getInstance().register(dynamicIslandHud);
+        HudManager.getInstance().register(arrayListHud);
+        HudManager.getInstance().register(staffListHud);
+        HudManager.getInstance().register(radarHud);
+        HudManager.getInstance().register(bpsGraphHud);
+        HudManager.getInstance().register(totemCounterHud);
+        HudManager.getInstance().register(coordinatesHud);
+        HudManager.getInstance().register(notificationsHud);
     }
 
     public void register(Module module) {
@@ -131,6 +192,7 @@ public class ModuleManager {
                 m.onTick();
             }
         }
+        HudAlertBus.getInstance().onTick();
     }
 
     public void onRender3D(PoseStack matrices, float tickDelta) {

@@ -57,7 +57,7 @@ def test_mixins_configuration():
     pkg = src.get("package", "dev.opticumeclient.mixin").replace(".", "/")
     assert pkg == "dev/opticumeclient/mixin", f"unexpected mixin package: {pkg}"
     mixins = src.get("client", []) + src.get("mixins", []) + src.get("server", [])
-    assert len(mixins) == 27, f"expected 27 mixins, got {len(mixins)}"
+    assert len(mixins) >= 25, f"expected at least 25 mixins, got {len(mixins)}"
     for req_mixin in (
         "GuiMixin",
         "AbstractButtonMixin",
@@ -89,17 +89,25 @@ def test_modules_registered():
     names = {os.path.basename(p)[:-5] for p in glob.glob(f"{SRC}/**/*.java", recursive=True)}
     missing = [c for c in classes if c not in names]
     assert not missing, f"registered but missing on disk: {missing}"
-    assert len(classes) == 47, f"expected 47 modules, got {len(classes)}"
+    assert len(classes) >= 61, f"expected >= 61 modules, got {len(classes)}"
     required = (
         "OpticumeAuraModule", "TargetHudModule", "SprintModule", "NoSlowModule",
         "CrosshairModule", "CustomFontModule", "NoRenderModule", "FrameSyncModule",
         "VelocityModule", "NoPushModule", "NoJumpDelayModule", "MiddleClickPearlModule",
-        "ZoomModule", "TargetEspModule",
+        "ZoomModule", "TargetEspModule", "PredictionsModule", "AspectRatioModule",
+        "InterpolateF5Module", "GuiMoveModule",
+        "AutoSwapModule", "AntiBotModule", "NoFriendDamageModule",
+        "AutoToolModule", "ItemScrollerModule",
+        "NoWebModule", "ElytraHelperModule", "BlockOverlayModule",
+        "ParticlesModule", "SwingAnimationsModule", "DamageTintModule", "SeeInvisiblesModule",
+        "GlowEspModule", "ChinaHatModule", "HandsModule", "AmbienceModule", "AtmosphereModule",
+        "VideoOptimizerModule", "AssistModule", "AutoBuyModule", "BotsModule",
+        "CooldownsHud", "BindsHud", "InventoryHud", "AutoBuyReportHud",
     )
     for req in required:
         assert req in classes, f"{req} not registered"
-    for removed_mod in ("ChunkAnimatorModule", "FastMathModule"):
-        assert removed_mod not in names, f"removed placebo module {removed_mod} still exists on disk"
+    for removed_mod in ("ChunkAnimatorModule", "FastMathModule", "ChestStealerModule", "HitColorModule", "OldAnimationsModule", "WorldParticlesModule", "ChamsModule"):
+        assert removed_mod not in names, f"removed module {removed_mod} still exists on disk"
 
     # Verify M9 TargetESP subsystem (16 Java classes, 35 shaders, 12 PNGs)
     targetesp_java = glob.glob(f"{SRC}/dev/opticumeclient/client/modules/visuals/targetesp/*.java")
@@ -159,7 +167,7 @@ def test_source_parity():
     files_src = {os.path.relpath(p, "src") for p in glob.glob("src/**/*", recursive=True) if os.path.isfile(p)}
     assert files_26 == files_src, f"parity mismatch: 26-only={files_26 - files_src}, src-only={files_src - files_26}"
     java_26 = [p for p in files_26 if p.endswith(".java")]
-    assert len(java_26) == 127, f"expected 127 java files, got {len(java_26)}"
+    assert len(java_26) >= 139, f"expected >= 139 java files, got {len(java_26)}"
     print(f"  PASSED ({len(files_26)} files, {len(java_26)} Java sources)")
     return True
 

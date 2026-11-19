@@ -9,25 +9,20 @@ import dev.opticumeclient.client.render.Render3DHelper;
 import dev.opticumeclient.client.render.ThemeManager;
 import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
-import net.minecraft.client.gui.GuiGraphicsExtractor; 
-import net.minecraft.client.multiplayer.PlayerInfo; 
-import com.mojang.blaze3d.vertex.PoseStack; 
-import net.minecraft.world.entity.player.Player; 
-import net.minecraft.world.item.ItemStack; 
-import net.minecraft.world.phys.AABB; 
-import net.minecraft.util.Mth; 
-import org.joml.Matrix3x2fStack;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.util.Mth;
 
 public class PlayerEspModule extends Module {
     private final ModeSetting mode = new ModeSetting("Mode", "Стиль боксов ESP", "Corner 2D", "Corner 2D", "2D Box", "3D Box");
     private final BooleanSetting healthBar = new BooleanSetting("HealthBar", "Вертикальная градиентная полоска HP слева", true);
-    private final BooleanSetting nameTags = new BooleanSetting("NameTags", "Стеклянный Liquid Glass тег с пингом, HP и предметами", true);
 
     public PlayerEspModule() {
-        super("PlayerESP", "2D угловые боксы, полоска HP и стеклянные NameTags с предметами", Category.VISUALS);
+        super("PlayerESP", "2D/3D боксы ESP и вертикальная полоска HP", Category.VISUALS);
         addSetting(mode);
         addSetting(healthBar);
-        addSetting(nameTags);
         setEnabled(false);
     }
 
@@ -120,11 +115,6 @@ public class PlayerEspModule extends Module {
                     );
                 }
             }
-
-            // 3. Liquid Glass NameTag above player with Nick, Ping, HP, and held items
-            if (nameTags.isEnabled() && (NameTagsModule.getInstance() == null || !NameTagsModule.getInstance().isEnabled())) {
-                renderNameTag(context, player, (minX + maxX) * 0.5f, minY, isFriend);
-            }
         }
     }
 
@@ -175,67 +165,5 @@ public class PlayerEspModule extends Module {
         Render2DHelper.drawRect(context, ix, iy + ih - 1, iw, 1, botColor);
         Render2DHelper.drawGradientRect(context, ix, iy, 1, ih, topColor, botColor);
         Render2DHelper.drawGradientRect(context, ix + iw - 1, iy, 1, ih, topColor, botColor);
-    }
-
-    private void renderNameTag(GuiGraphicsExtractor context, Player player, float centerX, float boxTopY, boolean isFriend) {
-        String name = player.getName().getString();
-        int ping = getPlayerPing(player);
-        int hp = (int) Math.ceil(TargetHudModule.getRealHealth(player) + player.getAbsorptionAmount());
-
-        String prefix = isFriend ? "[F] " : "";
-        String infoText = prefix + name + "  " + ping + "ms  " + hp + "HP";
-        float textScale = 0.78f;
-        float textW = Render2DHelper.getTextWidth(infoText, textScale);
-
-        float tagW = textW + 10.0f;
-        float tagH = 13.0f;
-        float tagX = centerX - tagW * 0.5f;
-        float tagY = boxTopY - tagH - 4.0f;
-
-        Render2DHelper.drawLiquidGlass(context, tagX, tagY, tagW, tagH, 4.0f, 215, 36);
-
-        int textColor = isFriend ? 0xFF4ADE80 : 0xFFF8FAFC;
-        Render2DHelper.drawScaledText(context, infoText, tagX + 5.0f, tagY + 3.2f, textColor, textScale, true);
-
-        // Render held items above the NameTag (MainHand + OffHand)
-        ItemStack mainHand = player.getMainHandItem();
-        ItemStack offHand = player.getOffhandItem();
-        boolean hasMain = mainHand != null && !mainHand.isEmpty();
-        boolean hasOff = offHand != null && !offHand.isEmpty();
-
-        if (hasMain || hasOff) {
-            int count = (hasMain ? 1 : 0) + (hasOff ? 1 : 0);
-            float iconSize = 12.0f;
-            float totalW = count * iconSize + (count - 1) * 3.0f;
-            float startX = centerX - totalW * 0.5f;
-            float itemY = tagY - iconSize - 2.0f;
-
-            Matrix3x2fStack matrices = context.pose();
-            float curX = startX;
-            if (hasMain) {
-                drawScaledItem(context, matrices, mainHand, curX, itemY, 0.75f);
-                curX += iconSize + 3.0f;
-            }
-            if (hasOff) {
-                drawScaledItem(context, matrices, offHand, curX, itemY, 0.75f);
-            }
-        }
-    }
-
-    private void drawScaledItem(GuiGraphicsExtractor context, Matrix3x2fStack matrices, ItemStack stack, float x, float y, float scale) {
-        matrices.pushMatrix();
-        matrices.translate(x, y);
-        matrices.scale(scale, scale);
-        try {
-            context.item(stack, 0, 0);
-        } catch (Throwable ignored) {
-        }
-        matrices.popMatrix();
-    }
-
-    private int getPlayerPing(Player player) {
-        if (mc.getConnection() == null) return 0;
-        PlayerInfo entry = mc.getConnection().getPlayerInfo(player.getUUID());
-        return entry != null ? entry.getLatency() : 0;
     }
 }
