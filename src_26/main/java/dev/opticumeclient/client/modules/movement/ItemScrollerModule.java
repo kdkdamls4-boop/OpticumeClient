@@ -76,9 +76,15 @@ public class ItemScrollerModule extends Module {
     }
 
     private boolean isMouseOverSlot(AbstractContainerScreen<?> screen, Slot slot, double mx, double my) {
-        int left = (screen.width - 176) / 2;
-        int top = (screen.height - 166) / 2;
-        // Standard container slot hit check
+        int left;
+        int top;
+        if (screen instanceof dev.opticumeclient.client.util.IContainerScreenBounds bounds) {
+            left = bounds.opticume$getLeftPos();
+            top = bounds.opticume$getTopPos();
+        } else {
+            left = (screen.width - 176) / 2;
+            top = (screen.height - 166) / 2;
+        }
         double sx = left + slot.x;
         double sy = top + slot.y;
         return mx >= sx - 1 && mx <= sx + 17 && my >= sy - 1 && my <= sy + 17;

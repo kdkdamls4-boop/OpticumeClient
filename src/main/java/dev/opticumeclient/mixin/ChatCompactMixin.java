@@ -2,6 +2,7 @@ package dev.opticumeclient.mixin;
 
 import dev.opticumeclient.client.autobuy.AutoBuyConfig;
 import dev.opticumeclient.client.autobuy.PriceParser;
+import dev.opticumeclient.client.modules.other.NameProtectModule;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.gui.components.ChatComponent;
@@ -16,6 +17,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.List;
@@ -30,6 +32,14 @@ public abstract class ChatCompactMixin {
     @Unique private Component opticume$lastOriginalText = null;
     @Unique private String opticume$lastCleanString = null;
     @Unique private int opticume$lastMessageCount = 1;
+
+    @ModifyVariable(method = "addMessage", at = @At("HEAD"), argsOnly = true, ordinal = 0)
+    private Component opticume$protectChatName(Component message) {
+        if (message != null && NameProtectModule.shouldMaskChat()) {
+            return NameProtectModule.protectComponent(message);
+        }
+        return message;
+    }
 
     @Inject(method = "addMessage", at = @At("HEAD"), cancellable = true)
     private void opticume$compactAutoBuyChat(Component message, MessageSignature signature, GuiMessageSource source, GuiMessageTag tag, CallbackInfo ci) {

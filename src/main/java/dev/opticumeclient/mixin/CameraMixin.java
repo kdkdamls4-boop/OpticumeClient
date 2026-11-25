@@ -1,12 +1,15 @@
 package dev.opticumeclient.mixin;
 
 import dev.opticumeclient.client.modules.visuals.AspectRatioModule;
+import dev.opticumeclient.client.modules.visuals.FreeCamModule;
+import dev.opticumeclient.client.modules.visuals.FreeLookModule;
 import dev.opticumeclient.client.modules.visuals.InterpolateF5Module;
 import dev.opticumeclient.client.modules.visuals.ZoomModule;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -27,6 +30,7 @@ public abstract class CameraMixin {
 
     @Shadow protected abstract void move(float zoomOffset, float verticalOffset, float horizontalOffset);
     @Shadow protected abstract void setRotation(float yRot, float xRot);
+    @Shadow protected abstract void setPosition(Vec3 pos);
 
     @Inject(method = "calculateFov", at = @At("RETURN"), cancellable = true)
     private void opticume$applyZoomFov(float partialTick, CallbackInfoReturnable<Float> cir) {
@@ -56,6 +60,12 @@ public abstract class CameraMixin {
             )
     )
     private void opticume$applyInterpolateF5Transform(float partialTick, CallbackInfo ci) {
+        FreeLookModule freeLook = FreeLookModule.getInstance();
+        if (freeLook != null && freeLook.isActive()) {
+            this.setRotation(freeLook.getCameraYaw(), freeLook.getCameraPitch());
+            return;
+        }
+
         InterpolateF5Module f5 = InterpolateF5Module.getInstance();
         if (f5 != null && f5.isEnabled() && this.detached) {
             boolean mirrored = this.minecraft != null && this.minecraft.options.getCameraType().isMirrored();
@@ -80,6 +90,21 @@ public abstract class CameraMixin {
             if (Math.abs(yOffset) > 0.001f) {
                 this.move(0.0f, yOffset, 0.0f);
             }
+        }
+    }
+
+    @Inject(method = "alignWithEntity", at = @At("TAIL"))
+    private void opticume$applyFreeCamAndFirstPersonFreeLook(float partialTick, CallbackInfo ci) {
+        FreeCamModule fc = FreeCamModule.getInstance();
+        if (fc != null && fc.isActive()) {
+            this.detached = true;
+            this.setRotation(fc.getCamYaw(), fc.getCamPitch());
+            this.setPosition(fc.getInterpolatedPos(partialTick));
+            return;
+        }
+        FreeLookModule fl = FreeLookModule.getInstance();
+        if (fl != null && fl.isActive() && !this.detached) {
+            this.setRotation(fl.getCameraYaw(), fl.getCameraPitch());
         }
     }
 

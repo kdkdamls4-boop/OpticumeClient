@@ -58,7 +58,7 @@ float fbm(vec2 p) {
 }
 
 vec3 skyRay() {
-    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 1.0, 1.0);
+    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 0.0, 1.0);
     return normalize(world.xyz / max(abs(world.w), 1.0e-5));
 }
 
@@ -69,7 +69,7 @@ float roundStars(vec3 dir, float t) {
     float rnd = hash13(ip);
     float has = step(0.965, rnd);
     float d = length(fp);
-    float starDot = smoothstep(0.22, 0.0, d);
+    float starDot = 1.0 - smoothstep(0.0, 0.22, d);
     float tw = 0.55 + 0.45 * sin(t * 2.5 + rnd * 6.2831);
     return has * starDot * tw;
 }
@@ -103,11 +103,11 @@ void main() {
     sky += vec3(0.9, 0.93, 1.0) * stars * night * (1.0 - clamp(uRain + uThunder, 0.0, 1.0));
 
     float scale = max(uScale, 1.0);
-    vec2 cc = vec2(ray.x, ray.z) * scale * 1.6 + vec2(t * 0.02, t * 0.008);
+    vec2 cc = ray.xz / (abs(height) + 0.38) * scale * 0.72 + vec2(t * 0.02, t * 0.008);
     float cloudBase = fbm(cc * 0.42 + vec2(0.0, 4.0));
     float cloudDetail = fbm(cc * 0.9 + vec2(8.5, 1.7));
-    float cloudBand = smoothstep(-0.05, 0.55, height) * smoothstep(0.85, 0.12, height);
-    float clouds = smoothstep(0.48, 0.72, cloudBase + cloudDetail * 0.28) * cloudBand;
+    float cloudBand = smoothstep(0.02, 0.42, height) * (1.0 - smoothstep(0.70, 0.98, height) * 0.55);
+    float clouds = smoothstep(0.46, 0.74, cloudBase + cloudDetail * 0.28) * cloudBand;
     clouds *= 1.0 - clamp(uRain + uThunder, 0.0, 1.0) * 0.7;
     vec3 dayCloud = mix(vec3(1.0, 0.92, 0.82), vec3(0.88, 0.94, 1.0), h);
     vec3 nightCloud = mix(vec3(0.10, 0.13, 0.22), vec3(0.16, 0.20, 0.32), h);

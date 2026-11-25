@@ -6,11 +6,11 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.opticumeclient.client.util.AtomicFileWriter;
 import net.minecraft.client.Minecraft;
 
 import java.io.File;
 import java.io.Reader;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.HashSet;
@@ -92,6 +92,16 @@ public final class MenuConfigStore {
         }
     }
 
+    public static JsonObject getObject(String key) {
+        synchronized (LOCK) {
+            JsonObject obj = loadInternal();
+            if (obj.has(key) && obj.get(key).isJsonObject()) {
+                return obj.getAsJsonObject(key).deepCopy();
+            }
+            return null;
+        }
+    }
+
     public static Set<String> getStringSet(String key) {
         Set<String> result = new HashSet<>();
         JsonArray arr = getArray(key);
@@ -110,9 +120,10 @@ public final class MenuConfigStore {
             JsonObject obj = loadInternal();
             mutator.accept(obj);
             File file = resolveFile();
-            try (Writer writer = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8)) {
-                GSON.toJson(obj, writer);
-            } catch (Throwable ignored) {
+            try {
+                AtomicFileWriter.writeUtf8(file, writer -> GSON.toJson(obj, writer));
+            } catch (Throwable t) {
+                System.err.println("[OpticumeClient] Failed to save menu.json: " + t.getMessage());
             }
         }
     }

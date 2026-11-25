@@ -1,14 +1,10 @@
 package dev.opticumeclient.client.modules.visuals;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.setting.BooleanSetting;
-import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
-import net.minecraft.util.Mth;
-import net.minecraft.world.entity.HumanoidArm;
+import dev.opticumeclient.client.setting.RunSetting;
 
 public class ViewModelModule extends Module {
     private static ViewModelModule INSTANCE;
@@ -31,26 +27,14 @@ public class ViewModelModule extends Module {
 
     private final BooleanSetting noEquipReset = new BooleanSetting("No Equip Reset", "Убирает опускание меча при переключении и ударе", true);
 
-    private final ModeSetting swingAnim = new ModeSetting(
-            "SwingAnim",
-            "Стиль анимации взмаха/удара",
-            "Vanilla",
-            "Vanilla",
-            "1.7 BlockHit",
-            "Slide",
-            "Swipe",
-            "Spin 360",
-            "Nursultan Smooth",
-            "Exhibition"
-    );
-    private final NumberSetting swingSpeed = new NumberSetting("SwingSpeed", "Скорость анимации удара", 1.0, 0.4, 2.5, 0.1);
-
     private final BooleanSetting customEat = new BooleanSetting("CustomEat", "Кастомная анимация еды и зелий", true);
     private final NumberSetting eatScale = new NumberSetting("EatScale", "Масштаб предмета при поедании", 1.0, 0.5, 1.8, 0.05);
     private final NumberSetting eatY = new NumberSetting("EatY", "Смещение по Y при поедании", 0.0, -0.4, 0.4, 0.02);
 
     public ViewModelModule() {
-        super("ViewModel", "Кастомизация рук, смещения предметов от первого лица и анимаций меча", Category.VISUALS);
+        super("ViewModel", "Позиция, масштаб и повороты рук от первого лица (анимации взмаха — в SwingAnimations)", Category.VISUALS);
+        eatScale.visibleWhen(customEat::isEnabled);
+        eatY.visibleWhen(customEat::isEnabled);
         addSetting(mainX);
         addSetting(mainY);
         addSetting(mainZ);
@@ -66,21 +50,19 @@ public class ViewModelModule extends Module {
         addSetting(offRotY);
         addSetting(offRotZ);
         addSetting(noEquipReset);
-        addSetting(swingAnim);
-        addSetting(swingSpeed);
         addSetting(customEat);
         addSetting(eatScale);
         addSetting(eatY);
+        addSetting(new RunSetting("Open 3D/Bezier Editor", "Открыть интерактивный визуальный редактор ViewModel и кривой Безье", () -> {
+            if (mc != null && mc.gui != null) {
+                mc.gui.setScreen(new dev.opticumeclient.client.gui.ViewModelEditorScreen(mc.gui.screen()));
+            }
+        }));
         INSTANCE = this;
     }
 
     public static ViewModelModule getInstance() {
         return INSTANCE;
-    }
-
-    @Override
-    public String getDisplaySuffix() {
-        return swingAnim.getMode();
     }
 
     public float getMainX() { return mainX.getFloatValue(); }
@@ -101,62 +83,23 @@ public class ViewModelModule extends Module {
 
     public boolean isNoEquipReset() { return noEquipReset.isEnabled(); }
 
-    public String getSwingAnim() { return swingAnim.getMode(); }
     public boolean isCustomEat() { return customEat.isEnabled(); }
     public float getEatScale() { return eatScale.getFloatValue(); }
     public float getEatY() { return eatY.getFloatValue(); }
 
-    public void applyCustomSwing(PoseStack matrices, HumanoidArm arm, float swingProgress) {
-        int side = (arm == HumanoidArm.RIGHT) ? 1 : -1;
-        float sp = swingProgress * swingSpeed.getFloatValue();
-        if (sp > 1.0f) sp = 1.0f;
+    public NumberSetting getMainXSetting() { return mainX; }
+    public NumberSetting getMainYSetting() { return mainY; }
+    public NumberSetting getMainZSetting() { return mainZ; }
+    public NumberSetting getMainScaleSetting() { return mainScale; }
+    public NumberSetting getMainRotXSetting() { return mainRotX; }
+    public NumberSetting getMainRotYSetting() { return mainRotY; }
+    public NumberSetting getMainRotZSetting() { return mainRotZ; }
 
-        switch (swingAnim.getMode()) {
-            case "1.7 BlockHit" -> {
-                float f = Mth.sin(sp * sp * (float) Math.PI);
-                matrices.rotateDegrees(Axis.YP, (float) side * (45.0F + f * -20.0F));
-                float g = Mth.sin(Mth.sqrt(sp) * (float) Math.PI);
-                matrices.rotateDegrees(Axis.ZP, (float) side * g * -20.0F);
-                matrices.rotateDegrees(Axis.XP, g * -80.0F);
-                matrices.rotateDegrees(Axis.YP, (float) side * -45.0F);
-                matrices.translate(-0.15f * side, 0.15f, -0.1f);
-                matrices.rotateDegrees(Axis.XP, -30.0f * g);
-                matrices.rotateDegrees(Axis.YP, 30.0f * (float) side * g);
-            }
-            case "Slide" -> {
-                float g = Mth.sin(Mth.sqrt(sp) * (float) Math.PI);
-                matrices.translate(side * 0.2f * g, -0.2f * g, -0.25f * g);
-                matrices.rotateDegrees(Axis.XP, -60.0f * g);
-                matrices.rotateDegrees(Axis.YP, (float) side * 30.0f * g);
-                matrices.rotateDegrees(Axis.ZP, (float) side * -30.0f * g);
-            }
-            case "Swipe" -> {
-                float f = Mth.sin(sp * (float) Math.PI);
-                matrices.translate(side * 0.1f * f, -0.1f * f, -0.1f * f);
-                matrices.rotateDegrees(Axis.XP, -85.0f * f);
-                matrices.rotateDegrees(Axis.YP, (float) side * 45.0f * (1.0f - f));
-                matrices.rotateDegrees(Axis.ZP, (float) side * -50.0f * f);
-            }
-            case "Spin 360" -> {
-                matrices.rotateDegrees(Axis.XP, -360.0f * sp);
-                matrices.rotateDegrees(Axis.YP, (float) side * 25.0f * Mth.sin(sp * (float) Math.PI));
-            }
-            case "Nursultan Smooth" -> {
-                matrices.rotateDegrees(Axis.YP, (float) side * 45.0f);
-                float g = Mth.sin(Mth.sqrt(sp) * (float) Math.PI);
-                matrices.translate(side * 0.15f * g, -0.05f * g, -0.1f * g);
-                matrices.rotateDegrees(Axis.XP, -65.0f * g);
-                matrices.rotateDegrees(Axis.YP, (float) side * (35.0f * g - 15.0f * g * g));
-                matrices.rotateDegrees(Axis.ZP, (float) side * -35.0f * g);
-                matrices.rotateDegrees(Axis.YP, (float) side * -45.0f);
-            }
-            case "Exhibition" -> {
-                float g = Mth.sin(Mth.sqrt(sp) * (float) Math.PI);
-                matrices.translate(side * -0.1f * g, 0.1f * g, -0.15f * g);
-                matrices.rotateDegrees(Axis.YP, (float) side * 30.0f);
-                matrices.rotateDegrees(Axis.ZP, (float) side * -20.0f);
-                matrices.rotateDegrees(Axis.XP, -50.0f * g - 20.0f);
-            }
-        }
-    }
+    public NumberSetting getOffXSetting() { return offX; }
+    public NumberSetting getOffYSetting() { return offY; }
+    public NumberSetting getOffZSetting() { return offZ; }
+    public NumberSetting getOffScaleSetting() { return offScale; }
+    public NumberSetting getOffRotXSetting() { return offRotX; }
+    public NumberSetting getOffRotYSetting() { return offRotY; }
+    public NumberSetting getOffRotZSetting() { return offRotZ; }
 }

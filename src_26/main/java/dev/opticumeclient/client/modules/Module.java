@@ -20,7 +20,6 @@ public abstract class Module {
     private boolean enabled;
     private boolean expanded;
     private final Animation toggleAnimation = new Animation(0.0f, 220L, Easing.EASE_OUT_CUBIC);
-    private final Animation expandAnimation = new Animation(0.0f, 220L, Easing.EASE_OUT_CUBIC);
     private final List<Setting<?>> settings = new ArrayList<>();
 
     public Module(String name, String description, Category category) {
@@ -87,10 +86,7 @@ public abstract class Module {
     }
 
     public void setExpanded(boolean expanded) {
-        if (this.expanded != expanded) {
-            this.expanded = expanded;
-            this.expandAnimation.animateTo(expanded ? 1.0f : 0.0f, 220L, Easing.EASE_OUT_CUBIC);
-        }
+        this.expanded = expanded;
     }
 
     public void toggleExpanded() {
@@ -99,10 +95,6 @@ public abstract class Module {
 
     public Animation getToggleAnimation() {
         return toggleAnimation;
-    }
-
-    public Animation getExpandAnimation() {
-        return expandAnimation;
     }
 
     public String getDisplaySuffix() {
@@ -115,6 +107,7 @@ public abstract class Module {
 
     public void onEnable() {}
     public void onDisable() {}
+    public void onPreTick() {}
     public void onTick() {}
     public void onRender3D(PoseStack matrices, float tickDelta) {}
     public void onRender2D(GuiGraphicsExtractor context, float tickDelta) {}

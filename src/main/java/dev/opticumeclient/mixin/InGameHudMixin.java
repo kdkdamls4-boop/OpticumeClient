@@ -55,4 +55,11 @@ public abstract class InGameHudMixin {
             ci.cancel();
         }
     }
+
+    @Inject(method = "extractItemHotbar", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelVanillaHotbar(GuiGraphicsExtractor context, DeltaTracker tickCounter, CallbackInfo ci) {
+        if (dev.opticumeclient.client.hud.CustomHotbarHud.replacesVanillaHotbar()) {
+            ci.cancel();
+        }
+    }
 }

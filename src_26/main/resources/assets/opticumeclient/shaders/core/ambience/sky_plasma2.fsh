@@ -60,7 +60,7 @@ float fbm(vec3 p) {
 }
 
 vec3 skyRay() {
-    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 1.0, 1.0);
+    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 0.0, 1.0);
     return normalize(world.xyz / max(abs(world.w), 1.0e-5));
 }
 

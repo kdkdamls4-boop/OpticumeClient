@@ -1,13 +1,17 @@
 package dev.opticumeclient.client.ui.menu;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.opticumeclient.OpticumeClient;
 import dev.opticumeclient.client.gui.ClickGuiScreen;
+import net.fabricmc.loader.api.FabricLoader;
 import dev.opticumeclient.client.render.ColorUtils;
 import dev.opticumeclient.client.render.KawaseBlurRenderer;
 import dev.opticumeclient.client.render.Render2DHelper;
 import dev.opticumeclient.client.render.TextureAssets;
 import dev.opticumeclient.client.render.ThemeManager;
 import dev.opticumeclient.client.render.font.OpticumeFonts;
+import dev.opticumeclient.client.services.media.SmtcBridge;
+import dev.opticumeclient.client.services.network.ProxyManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -16,14 +20,19 @@ import net.minecraft.client.gui.screens.options.OptionsScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.multiplayer.ServerList;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
+import org.joml.Matrix3x2f;
 import org.joml.Matrix3x2fStack;
 
 import java.util.Arrays;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * OpticumeClient Main Menu faithfully styled 1:1 after Desire's reference menu:
@@ -144,6 +153,56 @@ public class OpticumeMainMenuScreen extends Screen {
     private final Spring applyHover = new Spring();
     private final Spring parallaxX = new Spring();
     private final Spring parallaxY = new Spring();
+    private final Spring orbHover = new Spring();
+    private final Spring stackExpand = new Spring();
+
+    private final float[] targetBtnX = new float[BUTTON_COUNT];
+    private final float[] targetBtnY = new float[BUTTON_COUNT];
+    private final float[] targetBtnW = new float[BUTTON_COUNT];
+    private float targetBtnH = 24.0f;
+    private final float[] animBtnX = new float[BUTTON_COUNT];
+    private final float[] animBtnY = new float[BUTTON_COUNT];
+    private final float[] animBtnW = new float[BUTTON_COUNT];
+    private float animBtnH = 24.0f;
+    private float targetGalX, targetGalY, targetGalW, targetGalH;
+    private float animGalX, animGalY, animGalW, animGalH;
+    private boolean layoutAnimInit = false;
+
+    private boolean stackExpanded = true;
+    private boolean stylePopoverOpen = false;
+    private float stylePopoverAnim = 0.0f;
+    private float orbCx, orbCy, orbRadius;
+    private float stylePillX, stylePillY, stylePillW, stylePillH;
+    private float gearBtnX, gearBtnY, gearBtnSize;
+    private float profilePillX, profilePillY, profilePillW, profilePillH;
+    private float dockX, dockW, dockAltY, dockAltH, dockGalY, dockGalH, dockProxyY, dockProxyH;
+
+    private static final String CLIENT_VER_LABEL = FabricLoader.getInstance()
+            .getModContainer(OpticumeClient.MOD_ID)
+            .map(c -> "Opticume " + c.getMetadata().getVersion().getFriendlyString())
+            .orElse("Opticume · MC 26.3");
+
+    private final MenuMusicWidget musicWidget = new MenuMusicWidget();
+    private final OsuLazerMenuView lazerView = new OsuLazerMenuView(new OsuLazerMenuView.Host() {
+        @Override
+        public void runAction(int id) {
+            executeLazerAction(id);
+        }
+
+        @Override
+        public void playClick() {
+            OpticumeMainMenuScreen.this.playClick();
+        }
+    });
+    private volatile String worldsHint = "";
+    private volatile String serversHint = "";
+
+    private static final int MOTE_COUNT = 26;
+    private final float[] moteX = new float[MOTE_COUNT];
+    private final float[] moteY = new float[MOTE_COUNT];
+    private final float[] moteR = new float[MOTE_COUNT];
+    private final float[] moteVy = new float[MOTE_COUNT];
+    private final float[] moteAlpha = new float[MOTE_COUNT];
 
     private int wallpaperFrom = 0;
     private int wallpaperShown = 0;
@@ -159,6 +218,46 @@ public class OpticumeMainMenuScreen extends Screen {
         this.wallpaperFrom = this.wallpaperShown;
         this.galleryTarget = this.wallpaperShown;
         this.galleryPos.reset(this.wallpaperShown);
+        initMotes();
+    }
+
+    private void initMotes() {
+        long seed = 0x5EEDCAFE1234L;
+        for (int i = 0; i < MOTE_COUNT; i++) {
+            seed = seed * 6364136223846793005L + 1442695040888963407L;
+            moteX[i] = ((seed >>> 32) & 0xFFFF) / 65535.0f;
+            seed = seed * 6364136223846793005L + 1442695040888963407L;
+            moteY[i] = ((seed >>> 32) & 0xFFFF) / 65535.0f;
+            moteR[i] = 1.2f + ((i * 7) % 11) * 0.24f;
+            moteVy[i] = 0.015f + ((i * 5) % 9) * 0.004f;
+            moteAlpha[i] = 0.09f + ((i * 3) % 7) * 0.025f;
+        }
+    }
+
+    private void refreshStatsAsync() {
+        Minecraft mc = this.minecraft != null ? this.minecraft : Minecraft.getInstance();
+        if (mc == null) return;
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                if (mc.getLevelSource() != null) {
+                    int w = mc.getLevelSource().findLevelCandidates().levels().size();
+                    return w == 1 ? "1 world" : (w + " worlds");
+                }
+            } catch (Throwable ignored) {
+            }
+            return "";
+        }).thenAccept(s -> this.worldsHint = s);
+
+        CompletableFuture.supplyAsync(() -> {
+            try {
+                ServerList list = new ServerList(mc);
+                list.load();
+                int c = list.size();
+                return c == 1 ? "1 server" : (c + " servers");
+            } catch (Throwable ignored) {
+            }
+            return "";
+        }).thenAccept(s -> this.serversHint = s);
     }
 
     public static void requestVanillaBypass() {
@@ -196,8 +295,16 @@ public class OpticumeMainMenuScreen extends Screen {
         this.wallpaperFade = 1.0f;
         this.galleryTarget = this.wallpaperShown;
         this.galleryPos.reset(this.galleryTarget);
+        this.orbHover.reset(0.0f);
+        this.stackExpanded = true;
+        this.stackExpand.reset(1.0f);
+        this.stylePopoverOpen = false;
+        this.stylePopoverAnim = 0.0f;
+        this.layoutAnimInit = false;
+        this.lazerView.reset(MenuLayoutPreferences.isOsuStartExpanded());
         this.lastNanos = System.nanoTime();
-        recomputeLayout();
+        recomputeLayout(1.0f);
+        refreshStatsAsync();
     }
 
     @Override
@@ -224,7 +331,12 @@ public class OpticumeMainMenuScreen extends Screen {
         return (float) (guiCoord * getWindowGuiScale() / FIXED_GUI_SCALE);
     }
 
-    private void recomputeLayout() {
+    private MenuLayoutPreferences.MenuLayoutMode getCurrentMode() {
+        MenuWallpapers.Wallpaper wp = MenuWallpapers.get(wallpaperShown);
+        return MenuLayoutPreferences.getActiveMode(wp != null ? wp.id() : MenuWallpapers.selectedId());
+    }
+
+    private void recomputeLayout(float dt) {
         Minecraft mc = Minecraft.getInstance();
         float winW = (mc != null && mc.getWindow() != null) ? Math.max(640.0f, mc.getWindow().getWidth()) : 1920.0f;
         float winH = (mc != null && mc.getWindow() != null) ? Math.max(360.0f, mc.getWindow().getHeight()) : 1080.0f;
@@ -237,8 +349,10 @@ public class OpticumeMainMenuScreen extends Screen {
         this.uiScale = scale;                   // 1.0f at 1920x1080
 
         float k = this.layoutK;
-        this.buttonH = BUTTON_HEIGHT * k;
+        float u = this.uiScale;
+        MenuLayoutPreferences.MenuLayoutMode mode = getCurrentMode();
 
+        this.buttonH = BUTTON_HEIGHT * k;
         float maxColW = 0.0f;
         for (int i = 0; i < BUTTON_COUNT; i++) {
             float labelW = OptWidthMenu(BUTTON_TITLES[i], LABEL_SIZE * k);
@@ -247,18 +361,118 @@ public class OpticumeMainMenuScreen extends Screen {
         this.columnW = maxColW * BUTTON_WIDTH_SCALE;
         this.buttonX = (this.fixedW - this.columnW) * 0.5f;
 
-        float headH = WELCOME_OFFSET * this.uiScale;
-        float buttonsH = (BUTTON_COUNT - 1) * BUTTON_STEP * k + this.buttonH
-                + (GALLERY_BTN_GAP + GALLERY_BTN_H) * k;
+        float headH = WELCOME_OFFSET * u;
+        float buttonsH = (BUTTON_COUNT - 1) * BUTTON_STEP * k + this.buttonH + (GALLERY_BTN_GAP + GALLERY_BTN_H) * k;
         float firstY = (this.fixedH - (headH + buttonsH)) * 0.5f + headH;
 
         for (int i = 0; i < BUTTON_COUNT; i++) {
             this.buttonY[i] = firstY + i * BUTTON_STEP * k;
             this.buttonW[i] = this.columnW;
         }
-
         this.galleryBtnX = this.buttonX + (this.columnW - GALLERY_BTN_W * k) * 0.5f;
         this.galleryBtnY = this.buttonY[BUTTON_COUNT - 1] + this.buttonH + GALLERY_BTN_GAP * k;
+
+        if (mode == MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER) {
+            for (int i = 0; i < BUTTON_COUNT; i++) {
+                targetBtnX[i] = this.buttonX;
+                targetBtnY[i] = this.buttonY[i];
+                targetBtnW[i] = this.columnW;
+            }
+            targetBtnH = this.buttonH;
+            targetGalW = GALLERY_BTN_W * k;
+            targetGalH = GALLERY_BTN_H * k;
+            targetGalX = this.galleryBtnX;
+            targetGalY = this.galleryBtnY;
+        } else {
+            float stackW = Math.max(144.0f * u, this.columnW * 1.12f);
+            float stackH = 24.5f * u;
+            float stackStep = 29.8f * u;
+            float edgePad = 24.0f * u;
+            targetGalW = 112.0f * u;
+            targetGalH = 18.0f * u;
+            float totalStackH = (BUTTON_COUNT - 1) * stackStep + stackH + 10.0f * u + targetGalH;
+            float stackTopY = (this.fixedH - totalStackH) * 0.5f;
+            float stackX = (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT)
+                    ? edgePad
+                    : (this.fixedW - edgePad - stackW);
+            for (int i = 0; i < BUTTON_COUNT; i++) {
+                targetBtnX[i] = stackX;
+                targetBtnY[i] = stackTopY + i * stackStep;
+                targetBtnW[i] = stackW;
+            }
+            targetBtnH = stackH;
+            targetGalX = (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT)
+                    ? stackX
+                    : (stackX + stackW - targetGalW);
+            targetGalY = stackTopY + BUTTON_COUNT * stackStep + 2.0f * u;
+        }
+
+        // Pulse Orb coordinates per layout mode
+        this.orbRadius = 47.0f * u;
+        if (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_RIGHT) {
+            this.orbCx = this.fixedW * 0.27f;
+            this.orbCy = this.fixedH * 0.50f;
+        } else if (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT) {
+            this.orbCx = this.fixedW * 0.73f;
+            this.orbCy = this.fixedH * 0.50f;
+        } else {
+            this.orbCx = this.fixedW * 0.50f;
+            this.orbCy = this.fixedH * 0.48f;
+        }
+
+        // Split Dock left panel coordinates
+        this.dockW = 152.0f * u;
+        this.dockX = 22.0f * u;
+        this.dockAltH = 38.0f * u;
+        this.dockGalH = 38.0f * u;
+        this.dockProxyH = 30.0f * u;
+        float dockTotalH = dockAltH + dockGalH + dockProxyH + 14.0f * u;
+        this.dockAltY = (this.fixedH - dockTotalH) * 0.5f;
+        this.dockGalY = this.dockAltY + dockAltH + 7.0f * u;
+        this.dockProxyY = this.dockGalY + dockGalH + 7.0f * u;
+
+        // Corner pills coordinates
+        this.gearBtnSize = 18.0f * u;
+        this.stylePillH = 18.0f * u;
+        this.stylePillW = 92.0f * u;
+        float margin = 12.0f * u;
+        this.gearBtnX = this.fixedW - margin - this.gearBtnSize;
+        this.gearBtnY = this.fixedH - margin - this.gearBtnSize;
+        this.stylePillX = this.gearBtnX - 5.0f * u - this.stylePillW;
+        this.stylePillY = this.gearBtnY;
+
+        String playerName = (mc != null && mc.getUser() != null) ? mc.getUser().getName() : "Player";
+        this.profilePillH = 20.0f * u;
+        this.profilePillW = Math.min(160.0f * u, Math.max(76.0f * u, OptWidthMenu(playerName, 6.8f * u) + 34.0f * u));
+        this.profilePillX = margin;
+        this.profilePillY = this.fixedH - margin - this.profilePillH;
+
+        // Smooth morph across layouts
+        if (!layoutAnimInit) {
+            layoutAnimInit = true;
+            for (int i = 0; i < BUTTON_COUNT; i++) {
+                animBtnX[i] = targetBtnX[i];
+                animBtnY[i] = targetBtnY[i];
+                animBtnW[i] = targetBtnW[i];
+            }
+            animBtnH = targetBtnH;
+            animGalX = targetGalX;
+            animGalY = targetGalY;
+            animGalW = targetGalW;
+            animGalH = targetGalH;
+        } else {
+            float lerpF = 1.0f - (float) Math.exp(-13.0f * dt);
+            for (int i = 0; i < BUTTON_COUNT; i++) {
+                animBtnX[i] += (targetBtnX[i] - animBtnX[i]) * lerpF;
+                animBtnY[i] += (targetBtnY[i] - animBtnY[i]) * lerpF;
+                animBtnW[i] += (targetBtnW[i] - animBtnW[i]) * lerpF;
+            }
+            animBtnH += (targetBtnH - animBtnH) * lerpF;
+            animGalX += (targetGalX - animGalX) * lerpF;
+            animGalY += (targetGalY - animGalY) * lerpF;
+            animGalW += (targetGalW - animGalW) * lerpF;
+            animGalH += (targetGalH - animGalH) * lerpF;
+        }
 
         this.cardCenterX = this.fixedW * 0.5f;
         this.cardCenterY = this.fixedH * 0.5f;
@@ -283,12 +497,12 @@ public class OpticumeMainMenuScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         TextureAssets.ensureInitialized();
-        recomputeLayout();
 
         long now = System.nanoTime();
         float dt = Math.min(0.05f, Math.max(0.0001f, (now - lastNanos) / 1.0e9f));
         lastNanos = now;
         time += dt;
+        recomputeLayout(dt);
 
         float mxFixed = toFixed(mouseX);
         float myFixed = toFixed(mouseY);
@@ -305,6 +519,16 @@ public class OpticumeMainMenuScreen extends Screen {
             galleryPos.update(galleryTarget, dt, 170.0f, 0.78f);
         }
         menuFade = 1.0f - clamp01(galleryAnim.value);
+        MenuLayoutPreferences.MenuLayoutMode activeMode = getCurrentMode();
+        boolean isOsuLazer = activeMode == MenuLayoutPreferences.MenuLayoutMode.OSU_LAZER;
+        boolean orbAvailable = !isOsuLazer
+                && activeMode != MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER
+                && MenuLayoutPreferences.isPulseLogoEnabled();
+        if (!orbAvailable) {
+            stackExpanded = true;
+        }
+        stackExpand.update((!orbAvailable || stackExpanded) ? 1.0f : 0.0f, dt, 220.0f, 0.78f);
+        stylePopoverAnim += ((stylePopoverOpen ? 1.0f : 0.0f) - stylePopoverAnim) * (1.0f - (float) Math.exp(-16.0f * dt));
 
         if (wallpaperFade < 1.0f) {
             wallpaperFade = Math.min(1.0f, wallpaperFade + dt / 0.85f);
@@ -335,10 +559,10 @@ public class OpticumeMainMenuScreen extends Screen {
                     shownWp, width, height, parallaxX.value, parallaxY.value, 1.0f, 1.045f);
         }
 
-        // Stratum 1: Capture and Kawase-blur rendered backdrop right before foreground buttons
+        // Stratum 1: Capture and light Kawase-blur rendered backdrop right before foreground buttons
         context.nextStratum();
         context.blurBeforeThisStratum();
-        KawaseBlurRenderer.requestMenuBlur(3, 2.0f);
+        KawaseBlurRenderer.requestMenuBlur(1, 0.85f);
 
         // Foreground rendered in Desire's exact FIXED_GUI_SCALE = 2.0 coordinate space
         float fixToGui = FIXED_GUI_SCALE / getWindowGuiScale();
@@ -346,10 +570,47 @@ public class OpticumeMainMenuScreen extends Screen {
         pose.pushMatrix();
         pose.scale(fixToGui, fixToGui);
 
+        MenuLayoutPreferences.MenuLayoutMode mode = getCurrentMode();
+        boolean musicPlaying = SmtcBridge.getInstance().getSnapshot().playing();
+        float beat = musicPlaying
+                ? (float) Math.pow(Math.max(0.0, Math.sin(time * 6.7)), 6.0)
+                : (0.5f + 0.5f * (float) Math.sin(time * 1.6)) * 0.35f;
+
         if (menuFade > 0.004f) {
-            drawWelcome(context);
-            drawButtons(context, mxFixed, myFixed, dt);
-            drawGalleryButton(context, mxFixed, myFixed, dt);
+            if (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LAZER) {
+                drawFloatingMotes(context, dt, beat, menuFade);
+                lazerView.render(context, fixedW, fixedH, uiScale, mxFixed, myFixed, dt, time, beat, menuFade);
+            } else {
+                if (mode != MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER) {
+                    drawFloatingMotes(context, dt, beat, menuFade);
+                }
+                if (mode == MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER) {
+                    drawWelcome(context);
+                } else if (MenuLayoutPreferences.isPulseLogoEnabled()) {
+                    drawPulseOrb(context, mxFixed, myFixed, dt, beat, menuFade);
+                } else {
+                    drawSideScriptWordmark(context, mode, menuFade);
+                }
+                if (mode == MenuLayoutPreferences.MenuLayoutMode.SPLIT) {
+                    drawSplitLeftDock(context, mxFixed, myFixed, menuFade);
+                }
+                drawButtons(context, mxFixed, myFixed, dt, mode);
+                if (mode != MenuLayoutPreferences.MenuLayoutMode.SPLIT) {
+                    drawGalleryButton(context, mxFixed, myFixed, dt, mode);
+                }
+                if (mode != MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER) {
+                    if (MenuLayoutPreferences.isMusicWidgetEnabled()) {
+                        float mX = (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT)
+                                ? (fixedW - 12.0f * uiScale - 190.0f * uiScale)
+                                : (12.0f * uiScale);
+                        musicWidget.updateAndRender(context, mX, 12.0f * uiScale, uiScale, mxFixed, myFixed, dt, menuFade);
+                    }
+                    if (mode != MenuLayoutPreferences.MenuLayoutMode.SPLIT) {
+                        drawProfileCornerPill(context, mxFixed, myFixed, menuFade);
+                    }
+                }
+            }
+            drawStyleCornerControl(context, mxFixed, myFixed, mode, menuFade);
         }
         if (galleryAnim.value > 0.004f) {
             drawGalleryOverlay(context, mxFixed, myFixed, dt);
@@ -434,7 +695,7 @@ public class OpticumeMainMenuScreen extends Screen {
     }
 
     private boolean isMainButtonInteractive(int idx) {
-        return !galleryOpen && pendingAction < 0 && getMainButtonEnter(idx) > 0.4f;
+        return !galleryOpen && pendingAction < 0 && stackExpand.value > 0.45f && getMainButtonEnter(idx) > 0.4f;
     }
 
     private float getGalleryButtonEnter() {
@@ -442,27 +703,145 @@ public class OpticumeMainMenuScreen extends Screen {
     }
 
     private boolean isGalleryButtonInteractive() {
-        return !galleryOpen && pendingAction < 0 && MenuWallpapers.size() > 0 && getGalleryButtonEnter() > 0.4f;
+        return !galleryOpen && pendingAction < 0 && stackExpand.value > 0.45f
+                && MenuWallpapers.size() > 0 && getGalleryButtonEnter() > 0.4f;
     }
 
-    private void drawButtons(GuiGraphicsExtractor context, float mx, float my, float dt) {
+    private float getActiveSlant(MenuLayoutPreferences.MenuLayoutMode mode) {
+        if (mode == MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER || !MenuLayoutPreferences.isSlantEnabled()) {
+            return 0.0f;
+        }
+        return mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT ? 0.16f : -0.16f;
+    }
+
+    private boolean isInsideSlanted(float mx, float my, float x, float y, float w, float h, float slant) {
+        float cy = y + h * 0.5f;
+        float adjX = mx - slant * (my - cy);
+        return adjX >= x && adjX <= x + w && my >= y && my <= y + h;
+    }
+
+    private void drawFloatingMotes(GuiGraphicsExtractor context, float dt, float beat, float alpha) {
+        float speedBoost = 1.0f + beat * 1.4f;
+        for (int i = 0; i < MOTE_COUNT; i++) {
+            moteY[i] -= moteVy[i] * dt * speedBoost;
+            if (moteY[i] < -0.04f) {
+                moteY[i] = 1.04f;
+                moteX[i] = (moteX[i] + 0.37f) % 1.0f;
+            }
+            float px = moteX[i] * fixedW;
+            float py = moteY[i] * fixedH;
+            float r = moteR[i] * uiScale * (1.0f + beat * 0.2f);
+            int a = Math.round(255.0f * (moteAlpha[i] + beat * 0.06f) * alpha);
+            if (a > 2) {
+                Render2DHelper.drawRoundedRectFloat(context, px - r, py - r, r * 2.0f, r * 2.0f, r, ColorUtils.rgba(255, 255, 255, a));
+            }
+        }
+    }
+
+    private void drawPulseOrb(GuiGraphicsExtractor context, float mx, float my, float dt, float beat, float alpha) {
+        boolean hov = !galleryOpen && pendingAction < 0
+                && Math.hypot(mx - orbCx, my - orbCy) <= orbRadius * 1.08f;
+        orbHover.update(hov ? 1.0f : 0.0f, dt, 240.0f, 0.65f);
+        float hv = clamp01(orbHover.value);
+
+        int accent1 = ThemeManager.getInstance().getCurrentTheme().getPrimaryColor();
+        int accent2 = ThemeManager.getInstance().getCurrentTheme().getSecondaryColor();
+
+        float pulseScale = 1.0f + beat * 0.055f + hv * 0.045f;
+        float r = orbRadius * pulseScale;
+        float x = orbCx - r;
+        float y = orbCy - r;
+        float d = r * 2.0f;
+
+        Render2DHelper.drawGlow(context, x, y, d, d, 18.0f * uiScale,
+                ColorUtils.withAlpha(accent1, Math.round((55.0f + beat * 45.0f + hv * 55.0f) * alpha)));
+
+        // Expanding beat ring
+        float ringExtra = (beat * 7.5f + hv * 3.0f) * uiScale;
+        Render2DHelper.drawRoundedOutlineFloat(context, x - ringExtra, y - ringExtra, d + ringExtra * 2.0f, d + ringExtra * 2.0f,
+                r + ringExtra, 0.7f, ColorUtils.withAlpha(accent2, Math.round((38.0f + beat * 85.0f + hv * 60.0f) * alpha)));
+
+        Render2DHelper.drawBlurredRoundedRect(context, x, y, d, d, r, 0x140A0E18, alpha);
+        Render2DHelper.drawRoundedRectFloat(context, x, y, d, d, r,
+                ColorUtils.withAlpha(0xFFFFFFFF, Math.round((16.0f + hv * 12.0f) * alpha)));
+        Render2DHelper.drawGradientRoundedRectFloat(context, x, y, d, d, r,
+                ColorUtils.withAlpha(accent1, Math.round((26.0f + hv * 24.0f) * alpha)),
+                ColorUtils.withAlpha(accent2, Math.round((18.0f + hv * 18.0f) * alpha)),
+                ColorUtils.withAlpha(accent2, Math.round((12.0f + hv * 14.0f) * alpha)),
+                ColorUtils.withAlpha(accent1, Math.round((20.0f + hv * 20.0f) * alpha)));
+
+        int rimCol = ColorUtils.interpolateColor(
+                ColorUtils.withAlpha(0xFFFFFFFF, Math.round(78.0f * alpha)),
+                ColorUtils.withAlpha(accent1, Math.round(215.0f * alpha)),
+                Math.max(hv, beat * 0.5f));
+        Render2DHelper.drawRoundedOutlineFloat(context, x, y, d, d, r, 0.85f + 0.4f * hv, rimCol);
+
+        // Script "Opticume" centered inside orb
+        float scriptSz = 24.5f * uiScale * pulseScale;
+        float tw = OpticumeButtonStyle.getScriptTextWidth("Opticume", scriptSz);
+        OpticumeButtonStyle.drawScriptTitle(context, "Opticume", orbCx - tw * 0.5f, orbCy - scriptSz * 0.62f,
+                scriptSz, alpha, time, true);
+
+        String sub = stackExpanded ? "26.3 · Vulkan" : "Click to Open";
+        OpticumeButtonStyle.drawUiCenteredText(context, sub, orbCx, orbCy + 11.0f * uiScale * pulseScale, 5.6f * uiScale,
+                ColorUtils.rgba(235, 240, 250, Math.round((185.0f + hv * 60.0f) * alpha)), true);
+    }
+
+    private void drawSideScriptWordmark(GuiGraphicsExtractor context, MenuLayoutPreferences.MenuLayoutMode mode, float alpha) {
+        float wx = (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT)
+                ? (fixedW * 0.72f)
+                : (fixedW * 0.27f);
+        float wy = fixedH * 0.44f;
+        float sz = 36.0f * uiScale;
+        float tw = OpticumeButtonStyle.getScriptTextWidth("Opticume", sz);
+        OpticumeButtonStyle.drawScriptTitle(context, "Opticume", wx - tw * 0.5f, wy, sz, alpha, time, true);
+    }
+
+    private float[] computeButtonRect(int i, MenuLayoutPreferences.MenuLayoutMode mode, float exp, float enter) {
+        float u = this.uiScale;
+        boolean isSide = mode != MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER;
+        float slideDir = (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT) ? 1.0f : -1.0f;
+        float baseX = animBtnX[i];
+        float y = animBtnY[i];
+        float baseW = animBtnW[i];
+        float h = animBtnH;
+
+        float collapseShift = isSide ? (-slideDir * (1.0f - exp) * 55.0f * u) : ((1.0f - exp) * 20.0f * u);
+        float enterShift = isSide ? (-slideDir * (1.0f - enter) * 28.0f * u) : 0.0f;
+        float hvPrev = clamp01(hover[i].value);
+        float curSlide = isSide ? (slideDir * 13.0f * u * hvPrev) : 0.0f;
+        float curW = baseW + (isSide ? (7.0f * u * hvPrev) : 0.0f);
+        float curX = baseX + collapseShift + enterShift
+                + (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT ? 0.0f : (baseW - curW))
+                + curSlide;
+        return new float[]{curX, y, curW, h};
+    }
+
+    private void drawButtons(GuiGraphicsExtractor context, float mx, float my, float dt, MenuLayoutPreferences.MenuLayoutMode mode) {
+        float exp = clamp01(stackExpand.value);
+        if (exp <= 0.02f) return;
+
         float k = this.layoutK;
+        float u = this.uiScale;
         int accent = ThemeManager.getInstance().getCurrentTheme().getPrimaryColor();
         Matrix3x2fStack pose = context.pose();
+        boolean isSide = mode != MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER;
+        float slant = getActiveSlant(mode);
 
         for (int i = 0; i < BUTTON_COUNT; i++) {
             float p = getMainButtonEnter(i);
             if (p <= 0.0f) continue;
-            float alpha = easeOutCubic(clamp01(p * 1.7f)) * menuFade;
+            float alpha = easeOutCubic(clamp01(p * 1.7f)) * menuFade * exp;
             if (alpha <= 0.004f) continue;
 
             float enter = easeOutBack(p, 1.5f);
-            float x = buttonX;
-            float y = buttonY[i];
-            float w = buttonW[i];
-            float h = buttonH;
+            float[] rect = computeButtonRect(i, mode, exp, enter);
+            float curX = rect[0];
+            float y = rect[1];
+            float curW = rect[2];
+            float h = rect[3];
 
-            boolean hovered = isMainButtonInteractive(i) && isInside(mx, my, x, y, w, h);
+            boolean hovered = isMainButtonInteractive(i) && isInsideSlanted(mx, my, curX, y, curW, h, slant);
             if (hovered && !wasHovered[i]) sheen[i] = 0.0f;
             wasHovered[i] = hovered;
             sheen[i] = Math.min(1.0f, sheen[i] + dt / SHEEN_DUR);
@@ -471,75 +850,112 @@ public class OpticumeMainMenuScreen extends Screen {
             press[i].update(0.0f, dt, 420.0f, 0.5f);
             float hv = clamp01(hover[i].value);
 
-            float scale = (0.9f + 0.1f * enter) * (1.0f + 0.035f * hover[i].value) * (1.0f - 0.06f * press[i].value);
-            float cx = x + w * 0.5f;
-            float cy = y + h * 0.5f + (1.0f - enter) * 26.0f * k;
-            float sw = w * scale;
-            float sh = h * scale;
-            float sx = cx - sw * 0.5f;
-            float sy = cy - sh * 0.5f;
-            float radius = BUTTON_RADIUS * k * scale;
+            float scale = (0.9f + 0.1f * enter) * (isSide ? 1.0f : (1.0f + 0.035f * hover[i].value)) * (1.0f - 0.05f * press[i].value);
+            float cx = curX + curW * 0.5f;
+            float cy = y + h * 0.5f + (isSide ? 0.0f : (1.0f - enter) * 26.0f * k);
+            float radius = isSide ? (8.5f * u) : (BUTTON_RADIUS * k);
 
             if (hv > 0.01f) {
-                Render2DHelper.drawGlow(context, sx, sy + 2.0f * k * hv, sw, sh, 12.0f * k,
-                        ColorUtils.withAlpha(accent, Math.round(62.0f * hv * alpha)));
+                Render2DHelper.drawGlow(context, curX, y + 1.5f * u * hv, curW, h, 10.0f * u,
+                        ColorUtils.withAlpha(accent, Math.round(58.0f * hv * alpha)));
             }
 
-            // Frosted real backdrop blur inside button
-            Render2DHelper.drawBlurredRoundedRect(context, sx, sy, sw, sh, radius, 0x380A0D16, alpha);
-
+            // Pass 1: sheared backdrop, fill, border, accent bar, sheen
             pose.pushMatrix();
             pose.translate(cx, cy);
             pose.scale(scale, scale);
-            pose.translate(-(x + w * 0.5f), -(y + h * 0.5f));
+            if (Math.abs(slant) > 0.001f) {
+                pose.mul(new Matrix3x2f(1.0f, 0.0f, slant, 1.0f, 0.0f, 0.0f));
+            }
+            pose.translate(-(curX + curW * 0.5f), -(y + h * 0.5f));
 
-            float r = BUTTON_RADIUS * k;
+            Render2DHelper.drawBlurredRoundedRect(context, curX, y, curW, h, radius, isSide ? 0x120A0E18 : 0x200A0D16, alpha);
             int fill = fadeColor(mixColor(FILL_IDLE, FILL_HOVER, hv), alpha);
-            Render2DHelper.drawRoundedRectFloat(context, x, y, w, h, r, fill);
+            Render2DHelper.drawRoundedRectFloat(context, curX, y, curW, h, radius, fill);
 
-            int borderCol = fadeColor(mixColor(OUTLINE_IDLE, ColorUtils.withAlpha(accent, 90), hv), alpha);
-            Render2DHelper.drawRoundedOutlineFloat(context, x, y, w, h, r, 0.45f + 0.35f * hv, borderCol);
+            int borderCol = fadeColor(mixColor(OUTLINE_IDLE, ColorUtils.withAlpha(accent, 130), hv), alpha);
+            Render2DHelper.drawRoundedOutlineFloat(context, curX, y, curW, h, radius, 0.5f + 0.35f * hv, borderCol);
 
-            if (sheen[i] < 1.0f) {
-                OpticumeButtonStyle.drawSheen(context, x, y, w, h, sheen[i], alpha);
+            if (isSide && hv > 0.02f) {
+                float barH = Math.max(4.0f, (h - 8.0f * u) * hv);
+                float barX = (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT) ? (curX + curW - 3.5f * u) : (curX + 2.0f * u);
+                Render2DHelper.drawRoundedRectFloat(context, barX, y + (h - barH) * 0.5f, 1.8f * u, barH, 1.0f * u,
+                        ColorUtils.withAlpha(accent, Math.round(235.0f * hv * alpha)));
             }
 
-            // Icon + label
+            if (sheen[i] < 1.0f) {
+                OpticumeButtonStyle.drawSheen(context, curX, y, curW, h, sheen[i], alpha);
+            }
+            pose.popMatrix();
+
+            // Pass 2: un-sheared centered transform around (cx, cy) so icons & labels have zero -slant*cy drift
+            pose.pushMatrix();
+            pose.translate(cx, cy);
+            pose.scale(scale, scale);
+            pose.translate(-(curX + curW * 0.5f), -(y + h * 0.5f));
+
             float iconSize = ICON_SIZE * k;
-            float iconX = x + ICON_X * k + 5.0f * k * hv;
+            float iconX = curX + (isSide ? 11.0f * u : ICON_X * k) + 3.0f * u * hv;
             float iconY = y + (h - iconSize) * 0.5f;
             int iconCol = fadeColor(mixColor(ICON_IDLE, ColorUtils.withAlpha(accent, 255), hv), alpha);
             Render2DHelper.drawTextureFloat(context, BUTTON_ICONS[i], iconX, iconY, iconSize, iconSize, iconCol);
 
             float lblSize = LABEL_SIZE * k;
-            float lblW = OptWidthMenu(BUTTON_TITLES[i], lblSize);
             int lblCol = fadeColor(mixColor(LABEL_IDLE, 0xFFFFFFFF, hv), alpha);
-            float lblX = x + (w - lblW) * 0.5f;
-            float lblY = y + (h - lblSize) * 0.5f;
-            drawMenuText(context, BUTTON_TITLES[i], lblX, lblY, lblSize, lblCol, false);
+            if (isSide) {
+                float lblX = iconX + iconSize + 8.0f * u;
+                float lblY = y + (h - lblSize) * 0.5f;
+                drawMenuText(context, BUTTON_TITLES[i], lblX, lblY, lblSize, lblCol, false);
+
+                String hint = i == 0 ? worldsHint : (i == 1 ? serversHint : "");
+                float rightPad = 10.0f * u;
+                if (hv > 0.08f) {
+                    OpticumeButtonStyle.drawUiText(context, ">", curX + curW - rightPad - 3.0f * u * (1.0f - hv),
+                            y + (h - 7.0f * u) * 0.5f, 7.2f * u, ColorUtils.withAlpha(accent, Math.round(235.0f * hv * alpha)), false);
+                    rightPad += 9.0f * u;
+                }
+                if (hint != null && !hint.isEmpty()) {
+                    float hw = OpticumeButtonStyle.getUiTextWidth(hint, 5.6f * u);
+                    OpticumeButtonStyle.drawUiText(context, hint, curX + curW - rightPad - hw,
+                            y + (h - 5.6f * u) * 0.5f, 5.6f * u, ColorUtils.rgba(215, 224, 240, Math.round((130.0f + 90.0f * hv) * alpha)), false);
+                }
+            } else {
+                float lblW = OptWidthMenu(BUTTON_TITLES[i], lblSize);
+                float lblX = curX + (curW - lblW) * 0.5f;
+                float lblY = y + (h - lblSize) * 0.5f;
+                drawMenuText(context, BUTTON_TITLES[i], lblX, lblY, lblSize, lblCol, false);
+            }
 
             pose.popMatrix();
         }
     }
 
-    private void drawGalleryButton(GuiGraphicsExtractor context, float mx, float my, float dt) {
+    private void drawGalleryButton(GuiGraphicsExtractor context, float mx, float my, float dt, MenuLayoutPreferences.MenuLayoutMode mode) {
         if (MenuWallpapers.size() <= 0) return;
+        float exp = clamp01(stackExpand.value);
+        if (exp <= 0.02f) return;
+
         float k = this.layoutK;
+        float u = this.uiScale;
         float p = getGalleryButtonEnter();
         if (p <= 0.0f) return;
-        float alpha = easeOutCubic(clamp01(p * 1.7f)) * menuFade;
+        float alpha = easeOutCubic(clamp01(p * 1.7f)) * menuFade * exp;
         if (alpha <= 0.004f) return;
 
         float enter = easeOutBack(p, 1.4f);
-        float w = GALLERY_BTN_W * k;
-        float h = GALLERY_BTN_H * k;
-        boolean hovered = isGalleryButtonInteractive() && isInside(mx, my, galleryBtnX, galleryBtnY, w, h);
+        float w = animGalW;
+        float h = animGalH;
+        float slideDir = (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LEFT) ? 1.0f : -1.0f;
+        float gx = animGalX + (mode == MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER ? 0.0f : (-slideDir * (1.0f - exp) * 55.0f * u));
+        float gy = animGalY;
+
+        boolean hovered = isGalleryButtonInteractive() && isInside(mx, my, gx, gy, w, h);
         galleryBtnHover.update(hovered ? 1.0f : 0.0f, dt, 260.0f, 0.62f);
         float hv = clamp01(galleryBtnHover.value);
 
         float sc = (0.9f + 0.1f * enter) * (1.0f + 0.04f * galleryBtnHover.value);
-        float cx = galleryBtnX + w * 0.5f;
-        float cy = galleryBtnY + h * 0.5f + (1.0f - enter) * 20.0f * k;
+        float cx = gx + w * 0.5f;
+        float cy = gy + h * 0.5f + (1.0f - enter) * 20.0f * k;
         float sw = w * sc;
         float sh = h * sc;
         float x = cx - sw * 0.5f;
@@ -552,7 +968,7 @@ public class OpticumeMainMenuScreen extends Screen {
                     ColorUtils.withAlpha(accent, Math.round(65.0f * hv * alpha)));
         }
 
-        Render2DHelper.drawBlurredRoundedRect(context, x, y, sw, sh, rad, 0x380A0D16, alpha);
+        Render2DHelper.drawBlurredRoundedRect(context, x, y, sw, sh, rad, 0x160A0E18, alpha);
         Render2DHelper.drawRoundedRectFloat(context, x, y, sw, sh, rad, fadeColor(mixColor(FILL_IDLE, FILL_HOVER, hv), alpha));
         Render2DHelper.drawRoundedOutlineFloat(context, x, y, sw, sh, rad, 0.45f + 0.35f * hv,
                 fadeColor(mixColor(OUTLINE_IDLE, ColorUtils.withAlpha(accent, 90), hv), alpha));
@@ -566,16 +982,161 @@ public class OpticumeMainMenuScreen extends Screen {
                 int tint = ColorUtils.withAlpha(accent, Math.round(230.0f * alpha));
                 Render2DHelper.drawTextureFloat(context, TextureAssets.MENU_PANORAMA, tx, ty, thumb, thumb, tint);
             } else {
-                Render2DHelper.drawCroppedTextureFloat(context, wp.preview(), tx, ty, thumb, thumb,
-                        0.0f, 0.21875f, 1.0f, 0.5625f, ColorUtils.rgba(255, 255, 255, Math.round(255.0f * alpha)));
+                Render2DHelper.drawRoundedTextureFloat(context, wp.preview(), tx, ty, thumb, thumb,
+                        Math.min(4.0f * k, thumb * 0.25f),
+                        ColorUtils.rgba(255, 255, 255, Math.round(255.0f * alpha)));
             }
         }
 
         float lblSize = 12.0f * k;
-        float lw = OptWidthMenu("Gallery", lblSize);
+        String label = mode == MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER ? "Gallery" : ("Gallery · " + MenuWallpapers.size());
+        float lw = OptWidthMenu(label, lblSize);
         float lx = tx + thumb + (x + sw - tx - thumb - lw) * 0.5f - 1.0f * k;
         int lblCol = fadeColor(mixColor(LABEL_IDLE, 0xFFFFFFFF, hv), alpha);
-        drawMenuText(context, "Gallery", lx, y + (sh - lblSize) * 0.5f, lblSize, lblCol, false);
+        drawMenuText(context, label, lx, y + (sh - lblSize) * 0.5f, lblSize, lblCol, false);
+    }
+
+    private void drawSplitLeftDock(GuiGraphicsExtractor context, float mx, float my, float alpha) {
+        float u = this.uiScale;
+        int accent = ThemeManager.getInstance().getCurrentTheme().getPrimaryColor();
+        String playerName = (minecraft != null && minecraft.getUser() != null) ? minecraft.getUser().getName() : "Player";
+        UUID uuid = UUIDUtil.createOfflinePlayerUUID(playerName);
+
+        // 1. Account Card
+        boolean altHov = !galleryOpen && isInside(mx, my, dockX, dockAltY, dockW, dockAltH);
+        drawDockCardShell(context, dockX, dockAltY, dockW, dockAltH, 9.0f * u, altHov, accent, alpha);
+        int headSz = Math.max(12, Math.round(22.0f * u));
+        Render2DHelper.drawPlayerHeadByUuid(context, uuid, Math.round(dockX + 8.0f * u), Math.round(dockAltY + (dockAltH - headSz) * 0.5f), headSz, alpha);
+        OpticumeButtonStyle.drawUiText(context, "ACTIVE ACCOUNT", dockX + 12.0f * u + headSz, dockAltY + 8.0f * u, 5.0f * u,
+                ColorUtils.withAlpha(accent, Math.round(230.0f * alpha)), false);
+        OpticumeButtonStyle.drawUiText(context, playerName, dockX + 12.0f * u + headSz, dockAltY + 18.0f * u, 7.2f * u,
+                ColorUtils.rgba(255, 255, 255, Math.round(248.0f * alpha)), true);
+
+        // 2. Gallery Card
+        boolean galHov = !galleryOpen && isInside(mx, my, dockX, dockGalY, dockW, dockGalH);
+        drawDockCardShell(context, dockX, dockGalY, dockW, dockGalH, 9.0f * u, galHov, accent, alpha);
+        MenuWallpapers.Wallpaper wp = MenuWallpapers.selected();
+        float thumbSz = 22.0f * u;
+        float tx = dockX + 8.0f * u;
+        float ty = dockGalY + (dockGalH - thumbSz) * 0.5f;
+        if (wp != null && !wp.panorama()) {
+            Render2DHelper.drawRoundedTextureFloat(context, wp.preview(), tx, ty, thumbSz, thumbSz, 5.0f * u,
+                    ColorUtils.rgba(255, 255, 255, Math.round(255.0f * alpha)));
+        } else {
+            Render2DHelper.drawTextureFloat(context, TextureAssets.MENU_PANORAMA, tx, ty, thumbSz, thumbSz,
+                    ColorUtils.withAlpha(accent, Math.round(235.0f * alpha)));
+        }
+        String wpName = wp != null ? wp.name() : "Panorama";
+        OpticumeButtonStyle.drawUiText(context, "GALLERY · " + MenuWallpapers.size(), tx + thumbSz + 7.0f * u, dockGalY + 8.0f * u, 5.0f * u,
+                ColorUtils.rgba(215, 224, 240, Math.round(195.0f * alpha)), false);
+        OpticumeButtonStyle.drawUiText(context, wpName, tx + thumbSz + 7.0f * u, dockGalY + 18.0f * u, 7.2f * u,
+                ColorUtils.rgba(255, 255, 255, Math.round(248.0f * alpha)), true);
+
+        // 3. Proxy & Version Card
+        boolean pxHov = !galleryOpen && isInside(mx, my, dockX, dockProxyY, dockW, dockProxyH);
+        drawDockCardShell(context, dockX, dockProxyY, dockW, dockProxyH, 8.5f * u, pxHov, accent, alpha);
+        boolean proxyOn = ProxyManager.getInstance().isEnabled();
+        OpticumeButtonStyle.drawUiText(context, proxyOn ? "Proxy: ON" : "Proxy: OFF", dockX + 10.0f * u, dockProxyY + 7.5f * u, 6.6f * u,
+                ColorUtils.rgba(proxyOn ? 134 : 235, proxyOn ? 239 : 240, proxyOn ? 172 : 250, Math.round(240.0f * alpha)), true);
+        OpticumeButtonStyle.drawUiText(context, CLIENT_VER_LABEL, dockX + 10.0f * u, dockProxyY + 17.5f * u, 5.3f * u,
+                ColorUtils.rgba(205, 215, 232, Math.round(180.0f * alpha)), false);
+    }
+
+    private static void drawDockCardShell(GuiGraphicsExtractor context, float x, float y, float w, float h, float rad, boolean hov, int accent, float alpha) {
+        Render2DHelper.drawBlurredRoundedRect(context, x, y, w, h, rad, 0x120A0E18, alpha);
+        Render2DHelper.drawRoundedRectFloat(context, x, y, w, h, rad,
+                ColorUtils.withAlpha(0xFFFFFFFF, Math.round((hov ? 28.0f : 15.0f) * alpha)));
+        Render2DHelper.drawRoundedOutlineFloat(context, x, y, w, h, rad, hov ? 0.8f : 0.5f,
+                hov ? ColorUtils.withAlpha(accent, Math.round(150.0f * alpha)) : ColorUtils.withAlpha(0xFFFFFFFF, Math.round(28.0f * alpha)));
+    }
+
+    private void drawProfileCornerPill(GuiGraphicsExtractor context, float mx, float my, float alpha) {
+        float u = this.uiScale;
+        int accent = ThemeManager.getInstance().getCurrentTheme().getPrimaryColor();
+        boolean hov = !galleryOpen && isInside(mx, my, profilePillX, profilePillY, profilePillW, profilePillH);
+        float rad = profilePillH * 0.5f;
+        Render2DHelper.drawBlurredRoundedRect(context, profilePillX, profilePillY, profilePillW, profilePillH, rad, 0x120A0E18, alpha);
+        Render2DHelper.drawRoundedRectFloat(context, profilePillX, profilePillY, profilePillW, profilePillH, rad,
+                ColorUtils.withAlpha(0xFFFFFFFF, Math.round((hov ? 30.0f : 16.0f) * alpha)));
+        Render2DHelper.drawRoundedOutlineFloat(context, profilePillX, profilePillY, profilePillW, profilePillH, rad, 0.55f,
+                hov ? ColorUtils.withAlpha(accent, Math.round(160.0f * alpha)) : ColorUtils.withAlpha(0xFFFFFFFF, Math.round(32.0f * alpha)));
+
+        String playerName = (minecraft != null && minecraft.getUser() != null) ? minecraft.getUser().getName() : "Player";
+        UUID uuid = UUIDUtil.createOfflinePlayerUUID(playerName);
+        int headSz = Math.max(10, Math.round(13.0f * u));
+        Render2DHelper.drawPlayerHeadByUuid(context, uuid,
+                Math.round(profilePillX + 4.5f * u), Math.round(profilePillY + (profilePillH - headSz) * 0.5f), headSz, alpha);
+        OpticumeButtonStyle.drawUiText(context, playerName, profilePillX + 8.5f * u + headSz,
+                profilePillY + (profilePillH - 6.8f * u) * 0.5f, 6.8f * u, ColorUtils.rgba(255, 255, 255, Math.round(240.0f * alpha)), true);
+    }
+
+    private void drawStyleCornerControl(GuiGraphicsExtractor context, float mx, float my, MenuLayoutPreferences.MenuLayoutMode mode, float alpha) {
+        float u = this.uiScale;
+        int accent = ThemeManager.getInstance().getCurrentTheme().getPrimaryColor();
+        boolean pillHov = !galleryOpen && isInside(mx, my, stylePillX, stylePillY, stylePillW, stylePillH);
+        boolean gearHov = !galleryOpen && isInside(mx, my, gearBtnX, gearBtnY, gearBtnSize, gearBtnSize);
+
+        float rad = stylePillH * 0.5f;
+        Render2DHelper.drawBlurredRoundedRect(context, stylePillX, stylePillY, stylePillW, stylePillH, rad, 0x120A0E18, alpha);
+        Render2DHelper.drawRoundedRectFloat(context, stylePillX, stylePillY, stylePillW, stylePillH, rad,
+                ColorUtils.withAlpha(0xFFFFFFFF, Math.round((pillHov ? 30.0f : 16.0f) * alpha)));
+        Render2DHelper.drawRoundedOutlineFloat(context, stylePillX, stylePillY, stylePillW, stylePillH, rad, 0.55f,
+                pillHov ? ColorUtils.withAlpha(accent, Math.round(160.0f * alpha)) : ColorUtils.withAlpha(0xFFFFFFFF, Math.round(32.0f * alpha)));
+        OpticumeButtonStyle.drawUiCenteredText(context, "Style: " + mode.shortLabel, stylePillX + stylePillW * 0.5f,
+                stylePillY + (stylePillH - 6.4f * u) * 0.5f, 6.4f * u, ColorUtils.rgba(245, 248, 255, Math.round(235.0f * alpha)), true);
+
+        float gRad = gearBtnSize * 0.5f;
+        Render2DHelper.drawBlurredRoundedRect(context, gearBtnX, gearBtnY, gearBtnSize, gearBtnSize, gRad, 0x120A0E18, alpha);
+        Render2DHelper.drawRoundedRectFloat(context, gearBtnX, gearBtnY, gearBtnSize, gearBtnSize, gRad,
+                stylePopoverOpen ? ColorUtils.withAlpha(accent, Math.round(85.0f * alpha))
+                        : ColorUtils.withAlpha(0xFFFFFFFF, Math.round((gearHov ? 30.0f : 16.0f) * alpha)));
+        Render2DHelper.drawRoundedOutlineFloat(context, gearBtnX, gearBtnY, gearBtnSize, gearBtnSize, gRad, 0.55f,
+                (stylePopoverOpen || gearHov) ? ColorUtils.withAlpha(accent, Math.round(170.0f * alpha)) : ColorUtils.withAlpha(0xFFFFFFFF, Math.round(32.0f * alpha)));
+        // Clean 3-bar hamburger / tune lines inside the circular settings pill
+        int iconCol = ColorUtils.rgba(255, 255, 255, Math.round(240.0f * alpha));
+        float barW = 7.4f * u;
+        float barH = Math.max(0.8f, 1.0f * u);
+        float bx = gearBtnX + (gearBtnSize - barW) * 0.5f;
+        float midY = gearBtnY + (gearBtnSize - barH) * 0.5f;
+        Render2DHelper.drawRoundedRectFloat(context, bx, midY - 2.6f * u, barW, barH, barH * 0.5f, iconCol);
+        Render2DHelper.drawRoundedRectFloat(context, bx, midY, barW, barH, barH * 0.5f, iconCol);
+        Render2DHelper.drawRoundedRectFloat(context, bx, midY + 2.6f * u, barW, barH, barH * 0.5f, iconCol);
+
+        float popA = clamp01(stylePopoverAnim) * alpha;
+        if (popA <= 0.02f) return;
+
+        float popW = 142.0f * u;
+        float rowH = 16.5f * u;
+        float popH = rowH * 5.0f + 12.0f * u;
+        float popX = (gearBtnX + gearBtnSize) - popW;
+        float popY = gearBtnY - 6.0f * u - popH + (1.0f - stylePopoverAnim) * 6.0f * u;
+
+        Render2DHelper.drawBlurredRoundedRect(context, popX, popY, popW, popH, 9.0f * u, 0x160A0E18, popA);
+        Render2DHelper.drawRoundedRectFloat(context, popX, popY, popW, popH, 9.0f * u, ColorUtils.withAlpha(0xFFFFFFFF, Math.round(18.0f * popA)));
+        Render2DHelper.drawRoundedOutlineFloat(context, popX, popY, popW, popH, 9.0f * u, 0.55f, ColorUtils.withAlpha(0xFFFFFFFF, Math.round(42.0f * popA)));
+
+        String[] names = {"Slant Buttons", "Pulse Logo", "Music SMTC", "Per-Wallpaper", "osu! Start Open"};
+        boolean[] vals = {
+                MenuLayoutPreferences.isSlantEnabled(),
+                MenuLayoutPreferences.isPulseLogoEnabled(),
+                MenuLayoutPreferences.isMusicWidgetEnabled(),
+                MenuLayoutPreferences.isPerWallpaperMode(),
+                MenuLayoutPreferences.isOsuStartExpanded()
+        };
+        for (int r = 0; r < 5; r++) {
+            float ry = popY + 6.0f * u + r * rowH;
+            boolean rHov = isInside(mx, my, popX + 4.0f * u, ry, popW - 8.0f * u, rowH);
+            if (rHov) {
+                Render2DHelper.drawRoundedRectFloat(context, popX + 4.0f * u, ry, popW - 8.0f * u, rowH - 1.5f * u, 5.0f * u,
+                        ColorUtils.withAlpha(0xFFFFFFFF, Math.round(20.0f * popA)));
+            }
+            OpticumeButtonStyle.drawUiText(context, names[r], popX + 9.0f * u, ry + 4.2f * u, 6.2f * u,
+                    ColorUtils.rgba(255, 255, 255, Math.round(235.0f * popA)), true);
+            String state = vals[r] ? "ON" : "OFF";
+            float sw = OpticumeButtonStyle.getUiTextWidth(state, 5.8f * u);
+            OpticumeButtonStyle.drawUiText(context, state, popX + popW - 9.0f * u - sw, ry + 4.4f * u, 5.8f * u,
+                    ColorUtils.withAlpha(vals[r] ? accent : 0xFFCBD5E1, Math.round(240.0f * popA)), false);
+        }
     }
 
     private void drawGalleryOverlay(GuiGraphicsExtractor context, float mx, float my, float dt) {
@@ -660,7 +1221,7 @@ public class OpticumeMainMenuScreen extends Screen {
                     uw = cardAspect / wp.aspect();
                     u = (1.0f - uw) * 0.5f;
                 }
-                Render2DHelper.drawCroppedTextureFloat(context, wp.preview(), x, y, cw, ch, u, v, uw, uh,
+                Render2DHelper.drawRoundedCroppedTextureFloat(context, wp.image(), x, y, cw, ch, radius, u, v, uw, uh,
                         ColorUtils.rgba(255, 255, 255, Math.round(255.0f * cAlpha)));
             }
 
@@ -770,16 +1331,118 @@ public class OpticumeMainMenuScreen extends Screen {
 
         if (pendingAction >= 0) return true;
 
-        if (isGalleryButtonInteractive() && isInside(mx, my, galleryBtnX, galleryBtnY, GALLERY_BTN_W * k, GALLERY_BTN_H * k)) {
+        MenuLayoutPreferences.MenuLayoutMode mode = getCurrentMode();
+        float u = this.uiScale;
+
+        // Style popover click handling
+        if (stylePopoverOpen) {
+            float popW = 142.0f * u;
+            float rowH = 16.5f * u;
+            float popH = rowH * 5.0f + 12.0f * u;
+            float popX = (gearBtnX + gearBtnSize) - popW;
+            float popY = gearBtnY - 6.0f * u - popH;
+            if (isInside(mx, my, popX, popY, popW, popH)) {
+                int r = (int) ((my - (popY + 6.0f * u)) / rowH);
+                if (r >= 0 && r < 5) {
+                    playClick();
+                    switch (r) {
+                        case 0 -> MenuLayoutPreferences.setSlantEnabled(!MenuLayoutPreferences.isSlantEnabled());
+                        case 1 -> MenuLayoutPreferences.setPulseLogoEnabled(!MenuLayoutPreferences.isPulseLogoEnabled());
+                        case 2 -> MenuLayoutPreferences.setMusicWidgetEnabled(!MenuLayoutPreferences.isMusicWidgetEnabled());
+                        case 3 -> MenuLayoutPreferences.setPerWallpaperMode(!MenuLayoutPreferences.isPerWallpaperMode());
+                        case 4 -> MenuLayoutPreferences.setOsuStartExpanded(!MenuLayoutPreferences.isOsuStartExpanded());
+                        default -> {
+                        }
+                    }
+                }
+                return true;
+            }
+            if (!isInside(mx, my, gearBtnX, gearBtnY, gearBtnSize, gearBtnSize)) {
+                stylePopoverOpen = false;
+            }
+        }
+
+        if (isInside(mx, my, stylePillX, stylePillY, stylePillW, stylePillH)) {
             playClick();
-            galleryOpen = true;
-            galleryTarget = MenuWallpapers.selectedIndex();
-            galleryPos.reset(galleryTarget);
+            MenuWallpapers.Wallpaper wp = MenuWallpapers.get(wallpaperShown);
+            MenuLayoutPreferences.MenuLayoutMode nextMode = MenuLayoutPreferences.cycleActiveMode(
+                    wp != null ? wp.id() : MenuWallpapers.selectedId());
+            if (nextMode == MenuLayoutPreferences.MenuLayoutMode.OSU_LAZER) {
+                lazerView.reset(MenuLayoutPreferences.isOsuStartExpanded());
+            }
+            return true;
+        }
+        if (isInside(mx, my, gearBtnX, gearBtnY, gearBtnSize, gearBtnSize)) {
+            playClick();
+            stylePopoverOpen = !stylePopoverOpen;
             return true;
         }
 
+        if (mode == MenuLayoutPreferences.MenuLayoutMode.OSU_LAZER) {
+            if (lazerView.mouseClicked(mx, my)) {
+                return true;
+            }
+            return super.mouseClicked(event, doubled);
+        }
+
+        if (mode != MenuLayoutPreferences.MenuLayoutMode.DESIRE_CENTER) {
+            if (MenuLayoutPreferences.isMusicWidgetEnabled() && musicWidget.mouseClicked(mx, my)) {
+                return true;
+            }
+            if (MenuLayoutPreferences.isPulseLogoEnabled() && Math.hypot(mx - orbCx, my - orbCy) <= orbRadius * 1.08f) {
+                playClick();
+                stackExpanded = !stackExpanded;
+                return true;
+            }
+            if (mode == MenuLayoutPreferences.MenuLayoutMode.SPLIT) {
+                if (isInside(mx, my, dockX, dockAltY, dockW, dockAltH)) {
+                    playClick();
+                    if (minecraft != null && minecraft.gui != null) {
+                        minecraft.gui.setScreen(new OpticumeAltScreen(this));
+                    }
+                    return true;
+                }
+                if (isInside(mx, my, dockX, dockGalY, dockW, dockGalH)) {
+                    playClick();
+                    if (minecraft != null && minecraft.gui != null) {
+                        minecraft.gui.setScreen(new OpticumeGalleryScreen(this));
+                    }
+                    return true;
+                }
+                if (isInside(mx, my, dockX, dockProxyY, dockW, dockProxyH)) {
+                    playClick();
+                    if (minecraft != null && minecraft.gui != null) {
+                        minecraft.gui.setScreen(new ProxyScreen(this));
+                    }
+                    return true;
+                }
+            } else if (isInside(mx, my, profilePillX, profilePillY, profilePillW, profilePillH)) {
+                playClick();
+                if (minecraft != null && minecraft.gui != null) {
+                    minecraft.gui.setScreen(new OpticumeAltScreen(this));
+                }
+                return true;
+            }
+        }
+
+        if (mode != MenuLayoutPreferences.MenuLayoutMode.SPLIT
+                && isGalleryButtonInteractive()
+                && isInside(mx, my, animGalX, animGalY, animGalW, animGalH)) {
+            playClick();
+            if (minecraft != null && minecraft.gui != null) {
+                minecraft.gui.setScreen(new OpticumeGalleryScreen(this));
+            }
+            return true;
+        }
+
+        float slant = getActiveSlant(mode);
+        float exp = clamp01(stackExpand.value);
         for (int i = 0; i < BUTTON_COUNT; i++) {
-            if (isMainButtonInteractive(i) && isInside(mx, my, buttonX, buttonY[i], buttonW[i], buttonH)) {
+            float p = getMainButtonEnter(i);
+            if (p <= 0.0f) continue;
+            float enter = easeOutBack(p, 1.5f);
+            float[] rect = computeButtonRect(i, mode, exp, enter);
+            if (isMainButtonInteractive(i) && isInsideSlanted(mx, my, rect[0], rect[1], rect[2], rect[3], slant)) {
                 playClick();
                 press[i].reset(1.0f);
                 pendingAction = i;
@@ -793,7 +1456,14 @@ public class OpticumeMainMenuScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        if (!galleryOpen || !draggingGallery) return super.mouseDragged(event, dragX, dragY);
+        if (!galleryOpen) {
+            if (getCurrentMode() == MenuLayoutPreferences.MenuLayoutMode.OSU_LAZER
+                    && lazerView.mouseDragged(toFixed(event.x()), toFixed(event.y()))) {
+                return true;
+            }
+            return super.mouseDragged(event, dragX, dragY);
+        }
+        if (!draggingGallery) return super.mouseDragged(event, dragX, dragY);
         float mx = toFixed(event.x());
         float spacing = Math.max(40.0f, CARD_SPACING * layoutK);
         if (!didDrag && Math.abs(mx - dragStartX) > DRAG_THRESHOLD) didDrag = true;
@@ -808,7 +1478,13 @@ public class OpticumeMainMenuScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
-        if (!draggingGallery) return super.mouseReleased(event);
+        if (!draggingGallery) {
+            if (!galleryOpen && getCurrentMode() == MenuLayoutPreferences.MenuLayoutMode.OSU_LAZER
+                    && lazerView.mouseReleased(toFixed(event.x()), toFixed(event.y()))) {
+                return true;
+            }
+            return super.mouseReleased(event);
+        }
         draggingGallery = false;
         if (didDrag) {
             galleryTarget = Math.round(galleryTarget + clamp(dragVelocity * 6.0f, -1.5f, 1.5f));
@@ -861,6 +1537,9 @@ public class OpticumeMainMenuScreen extends Screen {
                 default -> {
                 }
             }
+            return true;
+        }
+        if (getCurrentMode() == MenuLayoutPreferences.MenuLayoutMode.OSU_LAZER && lazerView.keyPressed(key)) {
             return true;
         }
         if (key == InputConstants.KEY_ESCAPE) return true;
@@ -921,6 +1600,15 @@ public class OpticumeMainMenuScreen extends Screen {
             case 4 -> minecraft.stop();
             default -> {
             }
+        }
+    }
+
+    private void executeLazerAction(int id) {
+        if (minecraft == null || minecraft.gui == null) return;
+        switch (id) {
+            case 5 -> minecraft.gui.setScreen(new OpticumeGalleryScreen(this));
+            case 6 -> minecraft.gui.setScreen(new ProxyScreen(this));
+            default -> executeButton(id);
         }
     }
 

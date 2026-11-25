@@ -32,7 +32,6 @@ public class ModuleManager {
     private void initModules() {
         // Combat
         register(new LegitAuraModule());
-        register(new KillAuraModule());
         register(new OpticumeAuraModule());
         register(new TriggerBotModule());
         register(new AimAssistModule());
@@ -43,6 +42,14 @@ public class ModuleManager {
         register(new NoFriendDamageModule());
         register(new MiddleClickFriendModule());
         register(new MiddleClickPearlModule());
+        register(new AutoCrystalModule());
+        register(new AutoAnchorModule());
+        register(new MaceHelperModule());
+        register(new BackTrackModule());
+        register(new HitBoxesModule());
+        register(new AutoPotionModule());
+        register(new TargetPearlModule());
+        register(new BowAimBotModule());
 
         // Movement
         register(new SprintModule());
@@ -55,6 +62,12 @@ public class ModuleManager {
         register(new ItemScrollerModule());
         register(new NoWebModule());
         register(new ElytraHelperModule());
+        register(new JesusModule());
+        register(new SpiderModule());
+        register(new NoFallModule());
+        register(new AirStuckModule());
+        register(new SpeedModule());
+        register(new SuperFireworkModule());
 
         // Visuals & Animations
         register(new PlayerEspModule());
@@ -75,7 +88,6 @@ public class ModuleManager {
         register(new TrailsModule());
         register(new CrosshairModule());
         register(new SwingAnimationsModule());
-        register(new TargetHudModule());
         register(new CustomFontModule());
         register(new ToggleSoundsModule());
         register(new NoRenderModule());
@@ -88,11 +100,20 @@ public class ModuleManager {
         register(new SeeInvisiblesModule());
         register(new HandsModule());
         register(new AmbienceModule());
-        register(new AtmosphereModule());
+        register(new FreeCamModule());
+        register(new FreeLookModule());
+        register(new ObjectInfoModule());
+        register(new BlockESPModule());
+        register(new TntTimerModule());
+        register(new PotsTimerModule());
+        register(new FireworkESPModule());
+        register(new ShulkerPreviewModule());
+        register(new ItemPhysicsModule());
+        register(new MotionBlurModule());
+        register(new BetterTabModule());
 
         // Optimization
         register(new LowFireModule());
-        register(new NoHurtCamModule());
         register(new MemoryCleanerModule());
         register(new EntityCullingModule());
         register(new FrameSyncModule());
@@ -102,9 +123,19 @@ public class ModuleManager {
         register(new AssistModule());
         register(new AutoBuyModule());
         register(new BotsModule());
+        register(new AutoAcceptModule());
+        register(new LockSlotModule());
+        register(new NoInteractModule());
+        register(new ServerRPSpoofModule());
+        register(new AuctionHelperModule());
+        register(new NameProtectModule());
+        register(new PanicModule());
+        register(new CaptureBypassModule());
+        register(new DiscordRpcModule());
 
         // HUD
         InterfaceModule iface = new InterfaceModule();
+        TargetHudModule targetHud = new TargetHudModule();
         KeystrokesHud keystrokes = new KeystrokesHud();
         ArmorHud armor = new ArmorHud();
         PotionHud potion = new PotionHud();
@@ -121,8 +152,14 @@ public class ModuleManager {
         TotemCounterHud totemCounterHud = new TotemCounterHud();
         CoordinatesHud coordinatesHud = new CoordinatesHud();
         NotificationsHud notificationsHud = new NotificationsHud();
+        ServerKeybindsHud serverKeybindsHud = new ServerKeybindsHud();
+        SchedulesHud schedulesHud = new SchedulesHud();
+        CustomHotbarHud customHotbarHud = new CustomHotbarHud();
+        MediaPlayerHud mediaPlayerHud = new MediaPlayerHud();
+        ProfilerHud profilerHud = new ProfilerHud();
 
         register(iface);
+        register(targetHud);
         register(keystrokes);
         register(armor);
         register(potion);
@@ -139,7 +176,13 @@ public class ModuleManager {
         register(totemCounterHud);
         register(coordinatesHud);
         register(notificationsHud);
+        register(serverKeybindsHud);
+        register(schedulesHud);
+        register(customHotbarHud);
+        register(mediaPlayerHud);
+        register(profilerHud);
 
+        HudManager.getInstance().register(targetHud);
         HudManager.getInstance().register(keystrokes);
         HudManager.getInstance().register(armor);
         HudManager.getInstance().register(potion);
@@ -156,6 +199,11 @@ public class ModuleManager {
         HudManager.getInstance().register(totemCounterHud);
         HudManager.getInstance().register(coordinatesHud);
         HudManager.getInstance().register(notificationsHud);
+        HudManager.getInstance().register(serverKeybindsHud);
+        HudManager.getInstance().register(schedulesHud);
+        HudManager.getInstance().register(customHotbarHud);
+        HudManager.getInstance().register(mediaPlayerHud);
+        HudManager.getInstance().register(profilerHud);
     }
 
     public void register(Module module) {
@@ -186,28 +234,56 @@ public class ModuleManager {
         return null;
     }
 
-    public void onTick() {
+    public void onPreTick() {
+        boolean prof = dev.opticumeclient.client.command.ModuleProfiler.getInstance().isRecording();
         for (Module m : modules) {
             if (m.isEnabled()) {
+                long t0 = prof ? System.nanoTime() : 0L;
+                m.onPreTick();
+                if (prof) {
+                    dev.opticumeclient.client.command.ModuleProfiler.getInstance().recordTick(m, System.nanoTime() - t0);
+                }
+            }
+        }
+    }
+
+    public void onTick() {
+        boolean prof = dev.opticumeclient.client.command.ModuleProfiler.getInstance().isRecording();
+        for (Module m : modules) {
+            if (m.isEnabled()) {
+                long t0 = prof ? System.nanoTime() : 0L;
                 m.onTick();
+                if (prof) {
+                    dev.opticumeclient.client.command.ModuleProfiler.getInstance().recordTick(m, System.nanoTime() - t0);
+                }
             }
         }
         HudAlertBus.getInstance().onTick();
     }
 
     public void onRender3D(PoseStack matrices, float tickDelta) {
+        boolean prof = dev.opticumeclient.client.command.ModuleProfiler.getInstance().isRecording();
         for (Module m : modules) {
             if (m.isEnabled()) {
+                long t0 = prof ? System.nanoTime() : 0L;
                 m.onRender3D(matrices, tickDelta);
+                if (prof) {
+                    dev.opticumeclient.client.command.ModuleProfiler.getInstance().recordRender3D(m, System.nanoTime() - t0);
+                }
             }
         }
     }
 
     public void onRender2D(GuiGraphicsExtractor context, float tickDelta) {
         Render3DHelper.flush2D(context);
+        boolean prof = dev.opticumeclient.client.command.ModuleProfiler.getInstance().isRecording();
         for (Module m : modules) {
             if (m.isEnabled() && m.getCategory() != Category.HUD) {
+                long t0 = prof ? System.nanoTime() : 0L;
                 m.onRender2D(context, tickDelta);
+                if (prof) {
+                    dev.opticumeclient.client.command.ModuleProfiler.getInstance().recordRender2D(m, System.nanoTime() - t0);
+                }
             }
         }
         HudManager.getInstance().render(context, tickDelta);

@@ -21,17 +21,15 @@ public class NoSlowModule extends Module {
     private final BooleanSetting bow = new BooleanSetting("Bow", "Убирать замедление при натяжении лука/арбалета", true);
     private final BooleanSetting shield = new BooleanSetting("Shield", "Убирать замедление при блокировании щитом", true);
     private final BooleanSetting sneak = new BooleanSetting("Sneak", "Убирать штраф скорости при скрытности", false);
-    private final BooleanSetting cobweb = new BooleanSetting("Cobweb", "Убирать замедление в паутине", true);
     private final NumberSetting speedMultiplier = new NumberSetting("Speed", "Множитель скорости при использовании предмета", 1.0, 0.2, 1.0, 0.1);
 
     public NoSlowModule() {
-        super("NoSlow", "Устранение замедления при использовании предметов, скрытности и паутине", Category.MOVEMENT);
+        super("NoSlow", "Устранение замедления при использовании предметов и скрытности", Category.MOVEMENT);
         addSetting(mode);
         addSetting(food);
         addSetting(bow);
         addSetting(shield);
         addSetting(sneak);
-        addSetting(cobweb);
         addSetting(speedMultiplier);
         INSTANCE = this;
         setEnabled(false);
@@ -142,10 +140,6 @@ public class NoSlowModule extends Module {
 
     public boolean isSneakSlowdownDisabled() {
         return isEnabled() && sneak.isEnabled();
-    }
-
-    public boolean isCobwebEnabled() {
-        return isEnabled() && cobweb.isEnabled();
     }
 
     public float getSpeedMultiplier() {

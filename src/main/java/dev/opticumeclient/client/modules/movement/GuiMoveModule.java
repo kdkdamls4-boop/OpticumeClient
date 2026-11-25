@@ -101,11 +101,15 @@ public class GuiMoveModule extends Module {
         updateKey(mc.options.keyRight);
         updateKey(mc.options.keyJump);
 
-        if (sprintSetting.isEnabled() && !modeSetting.isMode("HolyWorld")) {
+        boolean inContainer = screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>;
+        boolean blockSprint = modeSetting.isMode("HolyWorld")
+                || (modeSetting.isMode("Grim / FunTime") && inContainer);
+
+        if (sprintSetting.isEnabled() && !blockSprint) {
             updateKey(mc.options.keySprint);
         } else {
             mc.options.keySprint.setDown(false);
-            if (modeSetting.isMode("HolyWorld")) {
+            if (blockSprint) {
                 mc.player.setSprinting(false);
             }
         }

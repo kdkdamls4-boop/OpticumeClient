@@ -4,7 +4,6 @@ import dev.opticumeclient.client.friend.FriendManager;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.modules.ModuleManager;
-import dev.opticumeclient.client.modules.combat.KillAuraModule;
 import dev.opticumeclient.client.modules.combat.LegitAuraModule;
 import dev.opticumeclient.client.modules.combat.OpticumeAuraModule;
 import dev.opticumeclient.client.modules.visuals.targetesp.TargetEspFrame;
@@ -309,10 +308,10 @@ public class TargetEspModule extends Module {
             }
         }
 
-        // 2. Check KillAura
-        KillAuraModule killAura = ModuleManager.getInstance().getModule(KillAuraModule.class);
-        if (killAura != null && killAura.isEnabled()) {
-            LivingEntity t = killAura.getCurrentTarget();
+        // 2. Check LegitAura
+        LegitAuraModule legitAura = ModuleManager.getInstance().getModule(LegitAuraModule.class);
+        if (legitAura != null && legitAura.isEnabled()) {
+            LivingEntity t = legitAura.getTarget();
             if (t != null && t.isAlive() && !t.isRemoved() && !friends.isFriend(t)) {
                 cachedTarget = t;
                 lastTargetTime = now;
@@ -346,7 +345,6 @@ public class TargetEspModule extends Module {
         }
 
         // 5. Check nearby hurt living entity if LegitAura is enabled
-        LegitAuraModule legitAura = ModuleManager.getInstance().getModule(LegitAuraModule.class);
         if (legitAura != null && legitAura.isEnabled()) {
             for (Entity e : mc.level.entitiesForRendering()) {
                 if (e instanceof LivingEntity living && e != mc.player && living.isAlive() && !living.isRemoved() && !friends.isFriend(living)) {

@@ -33,6 +33,23 @@ public class Render2DHelper {
         drawRect(context, x + width - thickness, y, thickness, height, color);
     }
 
+    public static void drawLine(GuiGraphicsExtractor context, float x1, float y1, float x2, float y2, float thickness, int color) {
+        if (context == null) return;
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float len = (float) Math.hypot(dx, dy);
+        if (len < 0.25f) return;
+        float t = Math.max(0.4f, thickness);
+        Matrix3x2fStack matrices = context.pose();
+        matrices.pushMatrix();
+        matrices.translate(x1, y1);
+        matrices.rotate((float) Math.atan2(dy, dx));
+        matrices.translate(0.0f, -t * 0.5f);
+        matrices.scale(1.0f, t);
+        context.fill(0, 0, Math.max(1, Math.round(len)), 1, color);
+        matrices.popMatrix();
+    }
+
     public static void drawGradientRect(GuiGraphicsExtractor context, float x, float y, float w, float h, int colorTop, int colorBottom) {
         if (w <= 0 || h <= 0) return;
         context.fillGradient(Math.round(x), Math.round(y), Math.round(x + w), Math.round(y + h), colorTop, colorBottom);
@@ -340,7 +357,36 @@ public class Render2DHelper {
         }
     }
 
+    public static void drawRoundedTextureFloat(
+            GuiGraphicsExtractor context, Identifier texture,
+            float x, float y, float width, float height, float radius, int color
+    ) {
+        drawRoundedCroppedTextureFloat(context, texture, x, y, width, height, radius, 0.0f, 0.0f, 1.0f, 1.0f, color);
+    }
+
+    public static void drawRoundedCroppedTextureFloat(
+            GuiGraphicsExtractor context, Identifier texture,
+            float x, float y, float width, float height, float radius,
+            float u, float v, float uw, float uh, int color
+    ) {
+        if (RoundedTextureRenderState.submit(context, texture, x, y, width, height, radius, u, v, uw, uh, color)) {
+            return;
+        }
+        drawCroppedTextureFloatFallback(context, texture, x, y, width, height, u, v, uw, uh, color);
+    }
+
     public static void drawCroppedTextureFloat(
+            GuiGraphicsExtractor context, Identifier texture,
+            float x, float y, float width, float height,
+            float u, float v, float uw, float uh, int color
+    ) {
+        if (RoundedTextureRenderState.submit(context, texture, x, y, width, height, 0.0f, u, v, uw, uh, color)) {
+            return;
+        }
+        drawCroppedTextureFloatFallback(context, texture, x, y, width, height, u, v, uw, uh, color);
+    }
+
+    private static void drawCroppedTextureFloatFallback(
             GuiGraphicsExtractor context, Identifier texture,
             float x, float y, float width, float height,
             float u, float v, float uw, float uh, int color
@@ -375,6 +421,9 @@ public class Render2DHelper {
     }
 
     public static void drawCroppedTexture(GuiGraphicsExtractor context, Identifier texture, float x, float y, float width, float height, float u, float v, float uw, float uh, int color) {
+        if (RoundedTextureRenderState.submit(context, texture, x, y, width, height, 0.0f, u, v, uw, uh, color)) {
+            return;
+        }
         int ix = Math.round(x);
         int iy = Math.round(y);
         int iw = Math.max(1, Math.round(width));
@@ -500,17 +549,20 @@ public class Render2DHelper {
     public static String trimToWidth(String text, float scale, float maxWidth) {
         if (text == null || text.isEmpty()) return "";
         if (getTextWidth(text, scale) <= maxWidth) return text;
-        String dots = "..";
-        float dotsW = getTextWidth(dots, scale);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            sb.append(text.charAt(i));
-            if (getTextWidth(sb.toString(), scale) + dotsW > maxWidth) {
-                if (sb.length() > 1) sb.setLength(sb.length() - 1);
-                return sb + dots;
+        final String dots = "..";
+        float budget = maxWidth - getTextWidth(dots, scale);
+        if (budget <= 0.0f) return dots;
+        int lo = 0;
+        int hi = text.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            if (getTextWidth(text.substring(0, mid), scale) <= budget) {
+                lo = mid;
+            } else {
+                hi = mid - 1;
             }
         }
-        return text;
+        return lo <= 0 ? dots : text.substring(0, lo) + dots;
     }
 
     public static void drawString(GuiGraphicsExtractor context, Font textRenderer, String text, int x, int y, int color, boolean shadow) {

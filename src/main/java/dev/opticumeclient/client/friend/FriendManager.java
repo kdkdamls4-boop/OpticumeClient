@@ -95,6 +95,15 @@ public class FriendManager {
         return friends;
     }
 
+    public int clearFriends() {
+        int count = friends.size();
+        if (count > 0) {
+            friends.clear();
+            save();
+        }
+        return count;
+    }
+
     public void load() {
         if (configFile != null && configFile.exists()) {
             try (Reader reader = Files.newBufferedReader(configFile.toPath(), StandardCharsets.UTF_8)) {

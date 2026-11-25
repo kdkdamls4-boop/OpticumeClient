@@ -70,7 +70,18 @@ public abstract class ClientCommonPacketListenerMixin implements IBotListener {
     @Inject(method = "handleResourcePackPush", at = @At("HEAD"), cancellable = true)
     private void opticume$botResourcePack(ClientboundResourcePackPushPacket packet, CallbackInfo ci) {
         BotSession session = opticume$getBotSession();
-        if (session == null || session == BotSessionManager.getInstance().getMainSession()) {
+        boolean isMain = (session == null || session == BotSessionManager.getInstance().getMainSession());
+        if (isMain) {
+            dev.opticumeclient.client.modules.other.ServerRPSpoofModule spoof =
+                    dev.opticumeclient.client.modules.other.ServerRPSpoofModule.getInstance();
+            if (spoof == null || !spoof.isEnabled()) {
+                return;
+            }
+            this.connection.send(new ServerboundResourcePackPacket(packet.id(), ServerboundResourcePackPacket.Action.ACCEPTED));
+            this.connection.send(new ServerboundResourcePackPacket(packet.id(), ServerboundResourcePackPacket.Action.DOWNLOADED));
+            this.connection.send(new ServerboundResourcePackPacket(packet.id(), ServerboundResourcePackPacket.Action.SUCCESSFULLY_LOADED));
+            spoof.onSpoofedPack(packet.url());
+            ci.cancel();
             return;
         }
         this.connection.send(new ServerboundResourcePackPacket(packet.id(), ServerboundResourcePackPacket.Action.ACCEPTED));

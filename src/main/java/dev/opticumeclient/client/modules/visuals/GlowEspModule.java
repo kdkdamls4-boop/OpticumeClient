@@ -97,7 +97,7 @@ public class GlowEspModule extends Module {
                 radius.getFloatValue(),
                 intensity.getFloatValue(),
                 1.0f,
-                true,
+                1.0f,
                 inner.getFloatValue(),
                 outlineColor,
                 outline.isEnabled() ? outlineWidth.getFloatValue() : 0.0f

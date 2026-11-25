@@ -26,8 +26,10 @@ public abstract class KeyboardHandlerMixin {
         if (keyEvent != null && this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null) {
             if (action == 1) {
                 ModuleManager.getInstance().onKeyPressed(keyEvent.key());
+                dev.opticumeclient.client.command.CommandDataStore.getInstance().onKeyPress(keyEvent.key());
             }
             dev.opticumeclient.client.modules.other.AssistModule.onInputKey(keyEvent.key(), action, false);
+            dev.opticumeclient.client.modules.other.AuctionHelperModule.onInputKey(keyEvent.key(), action, false);
         }
     }
 }

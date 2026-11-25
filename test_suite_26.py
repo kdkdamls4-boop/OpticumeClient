@@ -66,6 +66,8 @@ def test_mixins_configuration():
         "GuiGraphicsExtractorMixin",
         "LightmapRenderStateExtractorMixin",
         "GameRendererMixin",
+        "LiquidBlockMixin",
+        "PlayerTabOverlayMixin",
     ):
         assert req_mixin in mixins, f"missing required mixin: {req_mixin}"
     missing = [m for m in mixins if not os.path.exists(f"{SRC}/{pkg}/{m}.java")]
@@ -89,7 +91,7 @@ def test_modules_registered():
     names = {os.path.basename(p)[:-5] for p in glob.glob(f"{SRC}/**/*.java", recursive=True)}
     missing = [c for c in classes if c not in names]
     assert not missing, f"registered but missing on disk: {missing}"
-    assert len(classes) >= 61, f"expected >= 61 modules, got {len(classes)}"
+    assert len(classes) >= 116, f"expected >= 116 modules, got {len(classes)}"
     required = (
         "OpticumeAuraModule", "TargetHudModule", "SprintModule", "NoSlowModule",
         "CrosshairModule", "CustomFontModule", "NoRenderModule", "FrameSyncModule",
@@ -100,13 +102,40 @@ def test_modules_registered():
         "AutoToolModule", "ItemScrollerModule",
         "NoWebModule", "ElytraHelperModule", "BlockOverlayModule",
         "ParticlesModule", "SwingAnimationsModule", "DamageTintModule", "SeeInvisiblesModule",
-        "GlowEspModule", "ChinaHatModule", "HandsModule", "AmbienceModule", "AtmosphereModule",
+        "GlowEspModule", "ChinaHatModule", "HandsModule", "AmbienceModule",
         "VideoOptimizerModule", "AssistModule", "AutoBuyModule", "BotsModule",
         "CooldownsHud", "BindsHud", "InventoryHud", "AutoBuyReportHud",
+        # M12 Combat
+        "AutoCrystalModule", "AutoAnchorModule", "MaceHelperModule", "BackTrackModule",
+        "HitBoxesModule", "AutoPotionModule", "TargetPearlModule", "BowAimBotModule",
+        # M13 Movement & QoL
+        "JesusModule", "SpiderModule", "NoFallModule", "AirStuckModule",
+        "SpeedModule", "SuperFireworkModule", "FreeCamModule", "FreeLookModule",
+        "AutoAcceptModule", "LockSlotModule", "NoInteractModule",
+        "ServerRPSpoofModule", "AuctionHelperModule",
+        # M14 Privacy & Safety
+        "NameProtectModule", "PanicModule", "CaptureBypassModule",
+        # M15 World Visuals & Timers
+        "ObjectInfoModule", "BlockESPModule", "TntTimerModule", "PotsTimerModule",
+        "FireworkESPModule", "ShulkerPreviewModule", "ItemPhysicsModule",
+        "MotionBlurModule", "BetterTabModule",
     )
     for req in required:
         assert req in classes, f"{req} not registered"
-    for removed_mod in ("ChunkAnimatorModule", "FastMathModule", "ChestStealerModule", "HitColorModule", "OldAnimationsModule", "WorldParticlesModule", "ChamsModule"):
+    for req_w3 in (
+        "DiscordRpcModule",
+        "ServerKeybindsHud",
+        "SchedulesHud",
+        "CustomHotbarHud",
+        "MediaPlayerHud",
+        "ProfilerHud",
+    ):
+        assert req_w3 in classes, f"Wave 3 module {req_w3} not registered"
+    for removed_mod in (
+        "ChunkAnimatorModule", "FastMathModule", "ChestStealerModule", "HitColorModule",
+        "OldAnimationsModule", "WorldParticlesModule", "ChamsModule",
+        "NoHurtCamModule", "KillAuraModule", "AtmosphereModule",
+    ):
         assert removed_mod not in names, f"removed module {removed_mod} still exists on disk"
 
     # Verify M9 TargetESP subsystem (16 Java classes, 35 shaders, 12 PNGs)
@@ -122,6 +151,30 @@ def test_modules_registered():
     assert len(targetesp_java) == 16, f"expected 16 targetesp Java classes, got {len(targetesp_java)}"
     assert len(targetesp_shaders) == 35, f"expected 35 targetesp shaders, got {len(targetesp_shaders)}"
     assert len(targetesp_pngs) == 12, f"expected 12 targetesp PNGs, got {len(targetesp_pngs)}"
+
+    # Verify M12 & Rotation 2.0 Combat Engine
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/combat/RotationManager.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/combat/CombatRotationEngine.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/modules/combat/CrystalDamageUtil.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/modules/combat/AutoSwapWheelScreen.java")
+
+    # Verify M14 & M15 Wave 2 subsystems
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/util/Win32WindowBridge.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/command/CommandDataStore.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/command/CommandFix.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/command/FakePlayerManager.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/command/ModuleProfiler.java")
+    for cmd_file in (
+        "PrefixCommand", "MacroCommand", "StaffCommand", "WayCommand",
+        "VClipCommand", "HClipCommand", "FakePlayerCommand", "BlockEspCommand", "ProfilerCommand",
+    ):
+        assert os.path.exists(f"{SRC}/dev/opticumeclient/client/command/impl/{cmd_file}.java"), f"missing command {cmd_file}"
+    atmo_renderer = open(f"{SRC}/dev/opticumeclient/client/modules/visuals/atmosphere/AtmosphereRenderer.java", encoding="utf-8").read()
+    assert "UBO_SIZE = 368" in atmo_renderer, "AtmosphereRenderer must use 368-byte UBO"
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/modules/visuals/killeffect/DeathPiece.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/modules/visuals/killeffect/DeathPoseFactory.java")
+    assert os.path.exists(f"{SRC}/dev/opticumeclient/client/modules/visuals/ambience/MotionBlurRenderer.java")
+    assert os.path.exists(f"{RES}/assets/opticumeclient/shaders/core/ambience/motion_blur.fsh")
 
     # Verify MSDF font renderer & shaders
     assert os.path.exists(f"{SRC}/dev/opticumeclient/client/render/font/OpticumeFonts.java")
@@ -167,7 +220,7 @@ def test_source_parity():
     files_src = {os.path.relpath(p, "src") for p in glob.glob("src/**/*", recursive=True) if os.path.isfile(p)}
     assert files_26 == files_src, f"parity mismatch: 26-only={files_26 - files_src}, src-only={files_src - files_26}"
     java_26 = [p for p in files_26 if p.endswith(".java")]
-    assert len(java_26) >= 139, f"expected >= 139 java files, got {len(java_26)}"
+    assert len(java_26) >= 332, f"expected >= 332 java files, got {len(java_26)}"
     print(f"  PASSED ({len(files_26)} files, {len(java_26)} Java sources)")
     return True
 
@@ -193,6 +246,8 @@ def test_jar_packaging():
         assert "Fabric-Minecraft-Version: 26.3" in mf
         assert "dev/opticumeclient/OpticumeClient.class" in names
         assert "dev/opticumeclient/client/ui/menu/OpticumeMainMenuScreen.class" in names
+        assert "dev/opticumeclient/client/ui/menu/OpticumeGalleryScreen.class" in names
+        assert "dev/opticumeclient/client/ui/menu/CustomWallpaperStore.class" in names
         assert "dev/opticumeclient/client/ui/menu/OpticumeAltScreen.class" in names
         assert "dev/opticumeclient/client/ui/menu/OpticumeButtonStyle.class" in names
         assert "dev/opticumeclient/client/gui/SystemTheme.class" in names
@@ -200,12 +255,37 @@ def test_jar_packaging():
         assert "dev/opticumeclient/client/gui/SystemSearchModal.class" in names
         assert "dev/opticumeclient/client/render/font/OpticumeFonts.class" in names
         assert "dev/opticumeclient/client/render/font/MsdfFontFace.class" in names
+        assert "dev/opticumeclient/client/combat/RotationManager.class" in names
+        assert "dev/opticumeclient/client/combat/CombatRotationEngine.class" in names
+        assert "dev/opticumeclient/client/modules/combat/AutoCrystalModule.class" in names
+        assert "dev/opticumeclient/client/modules/other/AuctionHelperModule.class" in names
+        assert "dev/opticumeclient/client/modules/other/CaptureBypassModule.class" in names
+        assert "dev/opticumeclient/client/modules/visuals/killeffect/DeathPiece.class" in names
+        assert "dev/opticumeclient/client/modules/visuals/BetterTabModule.class" in names
+        assert "dev/opticumeclient/client/hud/MediaPlayerHud.class" in names
+        assert "dev/opticumeclient/client/hud/CustomHotbarHud.class" in names
+        assert "dev/opticumeclient/client/hud/ProfilerHud.class" in names
+        assert "dev/opticumeclient/client/modules/other/DiscordRpcModule.class" in names
+        assert "dev/opticumeclient/client/services/media/SmtcBridge.class" in names
+        assert "dev/opticumeclient/client/services/network/ProxyManager.class" in names
+        assert "dev/opticumeclient/client/services/auth/MicrosoftOAuthService.class" in names
+        assert "dev/opticumeclient/client/combat/neuro/GruRotationModel.class" in names
+        assert "dev/opticumeclient/client/gui/ViewModelEditorScreen.class" in names
+        assert "dev/opticumeclient/client/script/ScriptManager.class" in names
+        assert "assets/opticumeclient/shaders/core/ambience/motion_blur.fsh" in names
         assert "dev/opticumeclient/client/modules/visuals/targetesp/TargetEspRenderer.class" in names
         assert "assets/opticumeclient/shaders/core/targetesp/target_fullscreen.vsh" in names
         assert "assets/opticumeclient/targetesp/textures/targetesp/zenith_ghost.png" in names
+        assert "dev/opticumeclient/client/render/RoundedTextureRenderState.class" in names
+        assert "dev/opticumeclient/client/ui/menu/MenuLayoutPreferences.class" in names
+        assert "dev/opticumeclient/client/ui/menu/MenuMusicWidget.class" in names
+        assert "assets/opticumeclient/shaders/core/ui_rounded_texture.vsh" in names
+        assert "assets/opticumeclient/shaders/core/ui_rounded_texture.fsh" in names
         assert "assets/opticumeclient/icon.png" in names
         assert "assets/opticumeclient/textures/menu/icons/singleplayer.png" in names
-        assert "assets/opticumeclient/textures/menu/wallpapers/wallpaper_1.png" in names
+        for wp_idx in range(1, 21):
+            assert f"assets/opticumeclient/textures/menu/wallpapers/wallpaper_{wp_idx}.png" in names, f"missing wallpaper_{wp_idx}.png"
+            assert f"assets/opticumeclient/textures/menu/wallpapers/wallpaper_{wp_idx}_preview.png" in names, f"missing wallpaper_{wp_idx}_preview.png"
         assert "assets/opticumeclient/lang/en_us.json" in names
         assert "assets/opticumeclient/lang/ru_ru.json" in names
         # class file major version 69 = Java 25

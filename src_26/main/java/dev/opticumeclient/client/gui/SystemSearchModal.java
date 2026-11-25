@@ -236,19 +236,21 @@ public final class SystemSearchModal {
         results.clear();
         String q = query.trim().toLowerCase(Locale.ROOT);
         for (Category c : Category.values()) {
-            if (q.isEmpty() || c.getDisplayName().toLowerCase(Locale.ROOT).contains(q)) {
+            if (q.isEmpty() || dev.opticumeclient.client.command.CommandFix.matchesSearch(q, c.getDisplayName().toLowerCase(Locale.ROOT))) {
                 results.add(new SearchResult(c.getDisplayName(), "Open category", c, null, false));
             }
         }
         for (Module m : ModuleManager.getInstance().getModules()) {
             String nameLow = m.getName().toLowerCase(Locale.ROOT);
             String descLow = m.getDescription() != null ? m.getDescription().toLowerCase(Locale.ROOT) : "";
-            if (q.isEmpty() || nameLow.contains(q) || descLow.contains(q)) {
+            if (q.isEmpty()
+                    || dev.opticumeclient.client.command.CommandFix.matchesSearch(q, nameLow)
+                    || dev.opticumeclient.client.command.CommandFix.matchesSearch(q, descLow)) {
                 String sub = m.getDescription() != null && !m.getDescription().isBlank() ? m.getDescription() : m.getCategory().getDisplayName();
                 results.add(new SearchResult(m.getName(), sub, m.getCategory(), m, false));
             } else {
                 for (Setting<?> s : m.getSettings()) {
-                    if (s.getName().toLowerCase(Locale.ROOT).contains(q)) {
+                    if (dev.opticumeclient.client.command.CommandFix.matchesSearch(q, s.getName().toLowerCase(Locale.ROOT))) {
                         results.add(new SearchResult(s.getName(), "Setting in " + m.getName(), m.getCategory(), m, true));
                     }
                 }

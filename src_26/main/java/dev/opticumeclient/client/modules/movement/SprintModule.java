@@ -67,6 +67,14 @@ public class SprintModule extends Module {
             return;
         }
 
+        // Block sprint cleanly during W-Tap or backwards FREE MoveFix
+        if (dev.opticumeclient.client.combat.RotationManager.getInstance().shouldBlockSprint() && !isOmni()) {
+            if (mc.player.isSprinting()) {
+                mc.player.setSprinting(false);
+            }
+            return;
+        }
+
         boolean moving;
         if (mode.is("Omni")) {
             moving = mc.player.input.getMoveVector().y != 0.0f || mc.player.input.getMoveVector().x != 0.0f;

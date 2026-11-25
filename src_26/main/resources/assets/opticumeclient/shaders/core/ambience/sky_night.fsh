@@ -66,8 +66,44 @@ vec2 seamlessNoisePoint(vec2 uv, float radius, float verticalScale, float seed) 
 }
 
 vec3 skyRay() {
-    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 1.0, 1.0);
+    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 0.0, 1.0);
     return normalize(world.xyz / max(abs(world.w), 1.0e-5));
+}
+
+float hash31(vec3 p) {
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+}
+
+float valueNoise3(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n000 = hash31(i);
+    float n100 = hash31(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash31(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash31(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash31(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash31(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash31(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash31(i + vec3(1.0));
+    float x00 = mix(n000, n100, f.x);
+    float x10 = mix(n010, n110, f.x);
+    float x01 = mix(n001, n101, f.x);
+    float x11 = mix(n011, n111, f.x);
+    return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+
+float fbm3(vec3 p) {
+    float r = 0.0;
+    float w = 0.5;
+    for (int i = 0; i < 4; i++) {
+        r += valueNoise3(p) * w;
+        p = p * 2.03 + vec3(5.3, 3.1, 7.7);
+        w *= 0.5;
+    }
+    return r;
 }
 
 vec2 sphericalUv(vec3 direction) {
@@ -128,26 +164,37 @@ void main() {
     vec3 themeCloud = mix(themePrimary, themeSecondary, 0.46);
     vec3 brightTheme = mix(themeCloud, vec3(0.88, 0.94, 1.0), 0.42);
     float cloudScale = mix(0.58, 1.05, clamp((uScale - 1.0) / 19.0, 0.0, 1.0));
+    float upperSky = 1.0 - smoothstep(0.28, 0.44, abs(sphere.y));
     float lowestCloud = nebulaBand(sphere, -0.34, 0.060, 11.7, time, cloudScale);
     float lowerCloud = nebulaBand(sphere, -0.18, 0.074, 1.4, time, cloudScale);
     float middleCloud = nebulaBand(sphere, 0.015, 0.088, 4.8, time, cloudScale);
     float upperCloud = nebulaBand(sphere, 0.20, 0.072, 8.2, time, cloudScale);
     float highestCloud = nebulaBand(sphere, 0.35, 0.055, 15.3, time, cloudScale);
-    float cloud = clamp(lowestCloud * 0.58 + lowerCloud * 0.84 + middleCloud
-            + upperCloud * 0.78 + highestCloud * 0.52, 0.0, 1.0);
+    float bandCloud = clamp(lowestCloud * 0.58 + lowerCloud * 0.84 + middleCloud
+            + upperCloud * 0.78 + highestCloud * 0.52, 0.0, 1.0) * upperSky;
 
-    float colorVariation = fbm(seamlessNoisePoint(sphere, 2.05, 11.0, 17.0)
-            + vec2(time * 0.002, 0.0));
+    // Seamless 3D nebula across zenith & nadir poles so no polar pinch or empty hole forms
+    float polarNeb = fbm3(ray * (2.6 * cloudScale) + vec3(time * 0.008, -time * 0.006, time * 0.005));
+    float polarDetail = fbm3(ray * (5.2 * cloudScale) + vec3(11.3, 4.7, -8.1));
+    float polarMask = smoothstep(0.32, 0.78, polarNeb * 0.7 + polarDetail * 0.3);
+    float cloud = max(bandCloud, polarMask * mix(0.45, 0.92, smoothstep(0.20, 0.46, abs(sphere.y))));
+
+    float colorVariation = fbm3(ray * 2.8 + vec3(time * 0.01, 2.0, -time * 0.008));
     vec3 cloudColor = mix(themePrimary, themeSecondary, colorVariation);
-    float cloudStrength = 0.24 + uIntensity * 0.64;
+    float cloudStrength = 0.26 + uIntensity * 0.64;
     sky += cloudColor * cloud * cloudStrength;
 
-    float coreNoise = fbm(seamlessNoisePoint(sphere, 4.1, 20.0, 43.0)
-            + vec2(-time * 0.003, 0.0));
-    float cloudCore = pow(smoothstep(0.70, 0.91, coreNoise) * cloud, 2.2);
-    float softCore = pow(smoothstep(0.54, 0.82, coreNoise) * cloud, 2.0);
-    sky += themeCloud * softCore * (0.12 + uIntensity * 0.20);
+    float coreNoise = fbm3(ray * 5.4 + vec3(-time * 0.012, 7.0, 3.0));
+    float cloudCore = pow(smoothstep(0.62, 0.86, coreNoise) * cloud, 2.0);
+    float softCore = pow(smoothstep(0.48, 0.78, coreNoise) * cloud, 1.8);
+    sky += themeCloud * softCore * (0.14 + uIntensity * 0.22);
     sky += brightTheme * cloudCore * (0.58 + uIntensity * 0.55);
+
+    // 3D polar stars so zenith/nadir never clip
+    vec3 starCell = floor(ray * 260.0);
+    float starRnd = hash31(starCell);
+    float star3D = (1.0 - smoothstep(0.0, 0.40, length(fract(ray * 260.0) - 0.5))) * step(0.992, starRnd);
+    sky += vec3(0.84, 0.90, 1.0) * star3D * 0.65 * starVisibility;
 
     sky *= 1.0 - weather * 0.36;
     sky = vec3(1.0) - exp(-max(sky, vec3(0.0)) * 1.12);

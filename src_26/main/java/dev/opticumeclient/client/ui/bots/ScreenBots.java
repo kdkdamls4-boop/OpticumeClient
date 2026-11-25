@@ -128,7 +128,20 @@ public class ScreenBots extends Screen {
     }
 
     @Override
+    public void removed() {
+        focused = null;
+        if (minecraft != null) {
+            minecraft.textInputManager().stopTextInput(this);
+        }
+        super.removed();
+    }
+
+    @Override
     public void extractRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+        if (minecraft != null) {
+            if (focused != null) minecraft.textInputManager().startTextInput(this);
+            else minecraft.textInputManager().stopTextInput(this);
+        }
         hits.clear();
         items.clear();
 
@@ -150,13 +163,13 @@ public class ScreenBots extends Screen {
         float winX = (width - winW) / 2f;
         float winY = (height - winH) / 2f;
 
-        Render2DHelper.drawRect(context, 0f, 0f, width, height, 0x60000000);
+        Render2DHelper.drawRect(context, 0f, 0f, width, height, 0x32000000);
         KawaseBlurRenderer.requestWorldBlur(3, 2.0f);
-        int glassTint = ColorUtils.withAlpha(SystemTheme.bg(), SystemTheme.isDark() ? 165 : 195);
-        if (!BlurredRectRenderState.trySubmit(context, winX, winY, winW, winH, 8f, glassTint, 1.0f)) {
-            Render2DHelper.drawRoundedRectFloat(context, winX, winY, winW, winH, 8f, SystemTheme.fade(SystemTheme.bg(), 0.90f));
+        int glassTint = ColorUtils.withAlpha(SystemTheme.bg(), SystemTheme.isDark() ? 115 : 165);
+        if (!BlurredRectRenderState.trySubmit(context, winX, winY, winW, winH, 12f, glassTint, 1.0f)) {
+            Render2DHelper.drawRoundedRectFloat(context, winX, winY, winW, winH, 12f, SystemTheme.fade(SystemTheme.bg(), 0.85f));
         }
-        Render2DHelper.drawRoundedOutlineFloat(context, winX, winY, winW, winH, 8f, 1f, SystemTheme.fade(SystemTheme.border(), 0.9f));
+        Render2DHelper.drawRoundedOutlineFloat(context, winX, winY, winW, winH, 12f, 0.6f, SystemTheme.fade(SystemTheme.border(), 0.85f));
 
         Render2DHelper.drawScaledText(context, "Боты", winX + PAD + 2f, winY + 10f, SystemTheme.foreground(), 1.0f, false);
         String counter = manager.getActiveBotsCount() + " / " + manager.getMaxBots();

@@ -55,6 +55,7 @@ public class HudManager {
         private boolean dragging = false;
         private float dragOffsetX = 0.0f;
         private float dragOffsetY = 0.0f;
+        private float scale = 1.0f;
         private final Animation hoverAnim = new Animation(0.0f, 160L, Easing.EASE_OUT_QUAD);
 
         public DraggableWidget(String name, float defaultX, float defaultY, float width, float height,
@@ -80,7 +81,7 @@ public class HudManager {
         }
 
         public boolean isHovered(float mouseX, float mouseY) {
-            return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
+            return mouseX >= x && mouseX <= x + getScaledWidth() && mouseY >= y && mouseY <= y + getScaledHeight();
         }
 
         public void setPosition(float newX, float newY) {
@@ -105,6 +106,7 @@ public class HudManager {
 
         public void resetPosition() {
             setPosition(defaultX, defaultY);
+            this.scale = 1.0f;
             this.dragging = false;
         }
 
@@ -117,6 +119,9 @@ public class HudManager {
             int accent = theme.getPrimaryColor();
             int accent2 = theme.getSecondaryColor();
 
+            float sw = getScaledWidth();
+            float sh = getScaledHeight();
+
             // Subtle outline for all active widgets in ChatScreen, brighter when hovered/dragging
             int baseOutlineAlpha = (int) (45 + 190 * anim);
             int outlineColor = dragging
@@ -127,8 +132,8 @@ public class HudManager {
                     context,
                     x - 2.0f,
                     y - 2.0f,
-                    width + 4.0f,
-                    height + 4.0f,
+                    sw + 4.0f,
+                    sh + 4.0f,
                     5.0f,
                     dragging ? 1.5f : 1.0f,
                     outlineColor
@@ -139,24 +144,25 @@ public class HudManager {
                 int handleColor = ColorUtils.withAlpha(accent2, (int) (235 * Math.max(0.4f, anim)));
                 float hs = 3.0f;
                 Render2DHelper.drawRect(context, x - 2.5f, y - 2.5f, hs, hs, handleColor);
-                Render2DHelper.drawRect(context, x + width - 0.5f, y - 2.5f, hs, hs, handleColor);
-                Render2DHelper.drawRect(context, x - 2.5f, y + height - 0.5f, hs, hs, handleColor);
-                Render2DHelper.drawRect(context, x + width - 0.5f, y + height - 0.5f, hs, hs, handleColor);
+                Render2DHelper.drawRect(context, x + sw - 0.5f, y - 2.5f, hs, hs, handleColor);
+                Render2DHelper.drawRect(context, x - 2.5f, y + sh - 0.5f, hs, hs, handleColor);
+                Render2DHelper.drawRect(context, x + sw - 0.5f, y + sh - 0.5f, hs, hs, handleColor);
 
                 // Floating label pill above or below the widget
-                String badge = name + (dragging ? String.format(" [%d, %d]", Math.round(x), Math.round(y)) : "");
-                float scale = 0.70f;
-                float textW = Render2DHelper.getTextWidth(badge, scale);
+                String scaleTag = Math.abs(scale - 1.0f) > 0.02f ? String.format(" %.2fx", scale) : "";
+                String badge = name + scaleTag + (dragging ? String.format(" [%d, %d]", Math.round(x), Math.round(y)) : "");
+                float badgeScale = 0.70f;
+                float textW = Render2DHelper.getTextWidth(badge, badgeScale);
                 float pillW = textW + 8.0f;
                 float pillH = 11.0f;
                 float pillX = x - 2.0f;
-                float pillY = (y > 16.0f) ? (y - pillH - 3.5f) : (y + height + 3.5f);
+                float pillY = (y > 16.0f) ? (y - pillH - 3.5f) : (y + sh + 3.5f);
 
                 int badgeBg = ColorUtils.withAlpha(theme.getBackgroundColor(), (int) (225 * Math.max(0.6f, anim)));
                 Render2DHelper.drawRoundedRect(context, pillX, pillY, pillW, pillH, 3.0f, badgeBg);
                 Render2DHelper.drawRoundedOutline(context, pillX, pillY, pillW, pillH, 3.0f, 1.0f, outlineColor);
                 Render2DHelper.drawScaledText(context, badge, pillX + 4.0f, pillY + 2.5f,
-                        ColorUtils.withAlpha(0xFFFFFFFF, (int) (255 * Math.max(0.65f, anim))), scale, false);
+                        ColorUtils.withAlpha(0xFFFFFFFF, (int) (255 * Math.max(0.65f, anim))), badgeScale, false);
             }
         }
 
@@ -165,6 +171,10 @@ public class HudManager {
         public float getY() { return y; }
         public float getWidth() { return width; }
         public float getHeight() { return height; }
+        public float getScale() { return scale; }
+        public void setScale(float scale) { this.scale = net.minecraft.util.Mth.clamp(scale, 0.55f, 1.65f); }
+        public float getScaledWidth() { return width * scale; }
+        public float getScaledHeight() { return height * scale; }
         public boolean isDragging() { return dragging; }
         public void setDragging(boolean dragging) { this.dragging = dragging; }
         public float getDragOffsetX() { return dragOffsetX; }
@@ -240,9 +250,9 @@ public class HudManager {
 
         // Viewport bounds clamping: ensure widgets stay inside visible screen on scale/resolution changes
         for (DraggableWidget w : widgets) {
-            if (!w.isDragging()) {
-                float maxX = Math.max(2.0f, screenW - w.getWidth() - 2.0f);
-                float maxY = Math.max(2.0f, screenH - w.getHeight() - 2.0f);
+            if (!w.isDragging() && !"TabList".equals(w.getName())) {
+                float maxX = Math.max(2.0f, screenW - w.getScaledWidth() - 2.0f);
+                float maxY = Math.max(2.0f, screenH - w.getScaledHeight() - 2.0f);
                 float curX = net.minecraft.util.Mth.clamp(w.getX(), 2.0f, maxX);
                 float curY = net.minecraft.util.Mth.clamp(w.getY(), 2.0f, maxY);
                 if (Math.abs(curX - w.getX()) > 0.1f || Math.abs(curY - w.getY()) > 0.1f) {
@@ -286,8 +296,8 @@ public class HudManager {
                 } else {
                     float rawX = mouseX - draggedWidget.getDragOffsetX();
                     float rawY = mouseY - draggedWidget.getDragOffsetY();
-                    float clampedX = Math.max(2.0f, Math.min(screenW - draggedWidget.getWidth() - 2.0f, rawX));
-                    float clampedY = Math.max(2.0f, Math.min(screenH - draggedWidget.getHeight() - 2.0f, rawY));
+                    float clampedX = Math.max(2.0f, Math.min(screenW - draggedWidget.getScaledWidth() - 2.0f, rawX));
+                    float clampedY = Math.max(2.0f, Math.min(screenH - draggedWidget.getScaledHeight() - 2.0f, rawY));
 
                     draggedWidget.setPosition(clampedX, clampedY);
                     calculateSmartSnapping(draggedWidget, screenW, screenH);
@@ -318,9 +328,23 @@ public class HudManager {
             wasMouseDown = false;
         }
 
-        // Render all enabled HUD modules
+        // Render all enabled HUD modules (applying individual widget scale around top-left origin)
         for (Module m : hudModules) {
-            if (m.isEnabled()) {
+            if (!m.isEnabled()) continue;
+            DraggableWidget w = getWidget(m.getName());
+            float sc = (w != null) ? w.getScale() : 1.0f;
+            if (w != null && Math.abs(sc - 1.0f) > 0.005f) {
+                var pose = context.pose();
+                pose.pushMatrix();
+                pose.translate(w.getX(), w.getY());
+                pose.scale(sc, sc);
+                pose.translate(-w.getX(), -w.getY());
+                try {
+                    m.onRender2D(context, tickDelta);
+                } finally {
+                    pose.popMatrix();
+                }
+            } else {
                 m.onRender2D(context, tickDelta);
             }
         }
@@ -572,11 +596,19 @@ public class HudManager {
                     iface.setWidgetBgOverride(menuWidget.getName(), "glass");
                 } else if (idx == 2) {
                     iface.setWidgetBgOverride(menuWidget.getName(), "global");
-                } else if (idx == 3 && "Watermark".equals(menuWidget.getName())) {
+                } else if (idx == 3) {
+                    menuWidget.setScale(menuWidget.getScale() + 0.10f);
+                    ConfigManager.getInstance().saveHudChangeQuietly();
+                    return;
+                } else if (idx == 4) {
+                    menuWidget.setScale(menuWidget.getScale() - 0.10f);
+                    ConfigManager.getInstance().saveHudChangeQuietly();
+                    return;
+                } else if (idx == 5 && "Watermark".equals(menuWidget.getName())) {
                     int sw = mc.getWindow().getGuiScaledWidth();
-                    menuWidget.setPosition((sw - menuWidget.getWidth()) * 0.5f, 6.0f);
+                    menuWidget.setPosition((sw - menuWidget.getScaledWidth()) * 0.5f, 6.0f);
                     menuWidget = null;
-                } else if (idx == 4 && "Watermark".equals(menuWidget.getName())) {
+                } else if (idx == 6 && "Watermark".equals(menuWidget.getName())) {
                     menuWidget.setPosition(6.0f, 6.0f);
                     menuWidget = null;
                 }
@@ -599,11 +631,34 @@ public class HudManager {
         }
     }
 
+    public boolean onMouseScroll(double verticalAmount) {
+        if (verticalAmount == 0.0) return false;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.getWindow() == null || mc.gui == null) return false;
+        boolean inChat = mc.gui.screen() instanceof ChatScreen;
+        boolean inGui = mc.gui.screen() instanceof ClickGuiScreen;
+        if (!inChat && !inGui) return false;
+
+        float mx = (float) mc.mouseHandler.getScaledXPos(mc.getWindow());
+        float my = (float) mc.mouseHandler.getScaledYPos(mc.getWindow());
+        if (inGui && ClickGuiScreen.isMouseOverWindow(mx, my)) return false;
+
+        for (int i = widgets.size() - 1; i >= 0; i--) {
+            DraggableWidget w = widgets.get(i);
+            if (w.isEnabled() && w.isHovered(mx, my)) {
+                w.setScale(w.getScale() + (verticalAmount > 0 ? 0.05f : -0.05f));
+                ConfigManager.getInstance().saveHudChangeQuietly();
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String[] getMenuOptions(DraggableWidget widget) {
         if (widget != null && "Watermark".equals(widget.getName())) {
-            return new String[]{"Фон", "Жидкое стекло", "Глобально", "Центр сверху", "В угол"};
+            return new String[]{"Фон", "Жидкое стекло", "Глобально", "Масштаб +", "Масштаб -", "Центр сверху", "В угол"};
         }
-        return new String[]{"Фон", "Жидкое стекло", "Глобально"};
+        return new String[]{"Фон", "Жидкое стекло", "Глобально", "Масштаб +", "Масштаб -"};
     }
 
     private void renderWidgetContextMenu(GuiGraphicsExtractor context, float mx, float my, float screenW, float screenH) {

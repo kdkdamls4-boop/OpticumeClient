@@ -44,9 +44,13 @@ import java.util.Map;
 public class ConfigManager {
     private static final ConfigManager INSTANCE = new ConfigManager();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final List<String> BUILTIN_ORDER = Arrays.asList("Default", "Dexland", "FunTime", "HolyWorld", "MaxFPS");
-    private static final String CONFIG_FORMAT_VERSION = "1.2.0-26.3";
-    private static final List<String> SUPPORTED_LEGACY_VERSIONS = Arrays.asList("1.0.0-26.3", "1.1.0-26.3", "1.0.0", "1.1.0");
+    private static final List<String> BUILTIN_ORDER = Arrays.asList("Default", "ReallyWorld", "Dexland", "FunTime", "HolyWorld", "MaxFPS");
+    private static final String CONFIG_FORMAT_VERSION = "1.5.5-26.3";
+    private static final List<String> SUPPORTED_LEGACY_VERSIONS = Arrays.asList(
+            "1.0.0-26.3", "1.1.0-26.3", "1.2.0-26.3", "1.2.1-26.3",
+            "1.3.0-26.3", "1.4.0-26.3", "1.5.0-26.3", "1.5.1-26.3", "1.5.2-26.3", "1.5.3-26.3", "1.5.4-26.3",
+            "1.0.0", "1.1.0"
+    );
 
     private File rootDir;
     private File configsDir;
@@ -120,6 +124,10 @@ public class ConfigManager {
             }
 
             // Generate server & FPS presets if missing
+            ensureBuiltInPreset("ReallyWorld", baseline, () -> {
+                ThemeManager.getInstance().setThemeByName("Rockstar Crimson");
+                configureServerPreset("ReallyWorld", true);
+            });
             ensureBuiltInPreset("Dexland", baseline, () -> {
                 ThemeManager.getInstance().setThemeByName("Nursultan Alpha");
                 configureServerPreset("Dexland", true);
@@ -136,6 +144,12 @@ public class ConfigManager {
                 ThemeManager.getInstance().setThemeByName("Vape Ghost");
                 configureMaxFpsPreset();
             });
+
+            // Upgrade outdated built-in preset files on disk cleanly (without overwriting user custom configs)
+            for (String preset : BUILTIN_ORDER) {
+                if ("Default".equalsIgnoreCase(preset)) continue;
+                upgradeOutdatedBuiltInPreset(preset, baseline);
+            }
 
             // Restore baseline before applying startup auto-load config
             deserializeState(baseline);
@@ -174,6 +188,23 @@ public class ConfigManager {
         writeJsonFile(f, serializeCurrentState());
     }
 
+    private void upgradeOutdatedBuiltInPreset(String presetName, JsonObject baseline) {
+        File f = getConfigFile(presetName);
+        if (!f.exists()) return;
+        try (Reader reader = Files.newBufferedReader(f.toPath(), StandardCharsets.UTF_8)) {
+            JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            String ver = (root != null && root.has("version") && root.get("version").isJsonPrimitive())
+                    ? root.get("version").getAsString().trim() : "";
+            if (!CONFIG_FORMAT_VERSION.equals(ver) && SUPPORTED_LEGACY_VERSIONS.contains(ver)) {
+                deserializeState(baseline);
+                if (deserializeState(root)) {
+                    writeJsonFile(f, serializeCurrentState());
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void configureServerPreset(String auraPresetName, boolean enableCombat) {
         ModuleManager mm = ModuleManager.getInstance();
         for (Module m : mm.getModules()) {
@@ -184,7 +215,7 @@ public class ConfigManager {
         Module sprint = findModule(mm, "Sprint");
         if (sprint != null) {
             sprint.setEnabled(true);
-            setBoolSetting(sprint, "Stop On Eat", true);
+            setBoolSetting(sprint, "StopOnEat", true);
         }
         Module noSlow = findModule(mm, "NoSlow");
         if (noSlow != null) {
@@ -196,28 +227,6 @@ public class ConfigManager {
             opticumeAura.setEnabled(false); // Keep combat keybound/ready rather than swinging immediately on spawn
             setModeSetting(opticumeAura, "Preset", auraPresetName);
             opticumeAura.applyPreset(auraPresetName);
-            if ("Dexland".equalsIgnoreCase(auraPresetName)) {
-                setModeSetting(opticumeAura, "AimMode", "Smooth");
-                setModeSetting(opticumeAura, "CritMode", "Smart");
-                setNumberSetting(opticumeAura, "AttackRange", 3.35);
-                setNumberSetting(opticumeAura, "Cooldown", 0.91);
-                setModeSetting(opticumeAura, "SprintReset", "Legit + Packet");
-                setBoolSetting(opticumeAura, "RayCastCheck", true);
-            } else if ("FunTime".equalsIgnoreCase(auraPresetName)) {
-                setModeSetting(opticumeAura, "AimMode", "Multipoint");
-                setModeSetting(opticumeAura, "CritMode", "Smart");
-                setNumberSetting(opticumeAura, "AttackRange", 3.15);
-                setNumberSetting(opticumeAura, "Cooldown", 0.93);
-                setModeSetting(opticumeAura, "SprintReset", "Legit W-Tap");
-                setBoolSetting(opticumeAura, "RayCastCheck", true);
-            } else if ("HolyWorld".equalsIgnoreCase(auraPresetName)) {
-                setModeSetting(opticumeAura, "AimMode", "Smooth");
-                setModeSetting(opticumeAura, "CritMode", "Smart");
-                setNumberSetting(opticumeAura, "AttackRange", 3.20);
-                setNumberSetting(opticumeAura, "Cooldown", 0.92);
-                setModeSetting(opticumeAura, "SprintReset", "Legit + Packet");
-                setBoolSetting(opticumeAura, "RayCastCheck", true);
-            }
         }
     }
 
@@ -317,8 +326,21 @@ public class ConfigManager {
         return result;
     }
 
+    public String sanitizeConfigName(String name) {
+        return sanitizeName(name);
+    }
+
     public boolean saveConfig(String name) {
         String clean = sanitizeName(name);
+        if (isBuiltInPreset(clean) && !"Default".equalsIgnoreCase(clean)) {
+            String base = clean + " Custom";
+            String candidate = base;
+            int idx = 2;
+            while (getConfigFile(candidate).exists()) {
+                candidate = base + " " + idx++;
+            }
+            clean = candidate;
+        }
         File file = getConfigFile(clean);
         boolean ok = writeJsonFile(file, serializeCurrentState());
         if (ok) {
@@ -334,12 +356,17 @@ public class ConfigManager {
         if (!file.exists()) return false;
         try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
             JsonObject root = JsonParser.parseReader(reader).getAsJsonObject();
+            boolean wasLegacy = root.has("version") && root.get("version").isJsonPrimitive()
+                    && !CONFIG_FORMAT_VERSION.equals(root.get("version").getAsString().trim());
             if (!deserializeState(root)) {
                 System.err.println("[OpticumeClient] Rejected config '" + clean + "': missing or unsupported format version");
                 return false;
             }
             activeConfigName = clean;
             activeConfigWritable = !isBuiltInPreset(clean) || "Default".equalsIgnoreCase(clean);
+            if (wasLegacy && (activeConfigWritable || isBuiltInPreset(clean))) {
+                writeJsonFile(file, serializeCurrentState());
+            }
             return true;
         } catch (Throwable t) {
             System.err.println("[OpticumeClient] Failed to load config '" + clean + "': " + t.getMessage());
@@ -426,8 +453,8 @@ public class ConfigManager {
     }
 
     private boolean writeJsonFile(File file, JsonObject obj) {
-        try (Writer writer = Files.newBufferedWriter(file.toPath(), StandardCharsets.UTF_8)) {
-            GSON.toJson(obj, writer);
+        try {
+            dev.opticumeclient.client.util.AtomicFileWriter.writeUtf8(file, writer -> GSON.toJson(obj, writer));
             return true;
         } catch (Throwable t) {
             System.err.println("[OpticumeClient] Failed to write config file: " + t.getMessage());
@@ -485,6 +512,7 @@ public class ConfigManager {
             JsonObject wObj = new JsonObject();
             wObj.addProperty("x", w.getX());
             wObj.addProperty("y", w.getY());
+            wObj.addProperty("scale", w.getScale());
             hudObj.add(w.getName(), wObj);
         }
         root.add("hud", hudObj);
@@ -506,7 +534,15 @@ public class ConfigManager {
         ToggleSoundsModule.setSuppressSounds(true);
         HudAlertBus.setSuppressAlerts(true);
         try {
-            deserializeStateInner(root, isSupportedLegacy);
+            boolean isPre120 = isSupportedLegacy && (
+                    "1.0.0".equals(cfgVersion) || "1.1.0".equals(cfgVersion)
+                            || "1.0.0-26.3".equals(cfgVersion) || "1.1.0-26.3".equals(cfgVersion)
+            );
+            boolean isPre121 = isPre120 || "1.2.0-26.3".equals(cfgVersion);
+            boolean isPre153 = isSupportedLegacy && !"1.5.3-26.3".equals(cfgVersion) && !"1.5.4-26.3".equals(cfgVersion);
+            boolean isPre154 = isSupportedLegacy && !"1.5.4-26.3".equals(cfgVersion);
+            boolean isPre155 = isSupportedLegacy;
+            deserializeStateInner(root, isPre120, isPre121, isPre153, isPre154, isPre155);
             return true;
         } finally {
             HudAlertBus.setSuppressAlerts(false);
@@ -514,7 +550,8 @@ public class ConfigManager {
         }
     }
 
-    private void deserializeStateInner(JsonObject root, boolean isPre120) {
+    private void deserializeStateInner(JsonObject root, boolean isPre120, boolean isPre121,
+                                       boolean isPre153, boolean isPre154, boolean isPre155) {
         if (root.has("theme") && root.get("theme").isJsonPrimitive()) {
             ThemeManager.getInstance().setThemeByName(root.get("theme").getAsString());
         }
@@ -576,6 +613,9 @@ public class ConfigManager {
             if (isPre120) {
                 migratePre120Modules(modulesObj);
             }
+            if (isPre121) {
+                migratePre121Modules(modulesObj);
+            }
         }
 
         if (root.has("hud") && root.get("hud").isJsonObject()) {
@@ -587,8 +627,21 @@ public class ConfigManager {
                     if (wObj.has("x") && wObj.has("y")) {
                         w.setPosition(wObj.get("x").getAsFloat(), wObj.get("y").getAsFloat());
                     }
+                    if (wObj.has("scale")) {
+                        w.setScale(wObj.get("scale").getAsFloat());
+                    }
                 }
             }
+        }
+
+        if (isPre153) {
+            migratePre153Configs(root);
+        }
+        if (isPre154) {
+            migratePre154Configs(root);
+        }
+        if (isPre155) {
+            migratePre155Configs(root);
         }
     }
 
@@ -646,6 +699,276 @@ public class ConfigManager {
                 if (s instanceof ModeSetting ms && "Style".equals(s.getName()) && ms.is("Double Wave")) {
                     ms.setMode("Desire Effect");
                 }
+            }
+        }
+    }
+
+    private void migratePre121Modules(JsonObject modulesObj) {
+        ModuleManager mm = ModuleManager.getInstance();
+
+        // 1. Migrate legacy NoHurtCam into NoRender -> HurtCam
+        if (modulesObj.has("NoHurtCam") && modulesObj.get("NoHurtCam").isJsonObject()) {
+            JsonObject nhc = modulesObj.getAsJsonObject("NoHurtCam");
+            if (nhc.has("enabled") && nhc.get("enabled").isJsonPrimitive() && nhc.get("enabled").getAsBoolean()) {
+                Module noRender = findModule(mm, "NoRender");
+                if (noRender != null) {
+                    setBoolSetting(noRender, "HurtCam", true);
+                }
+            }
+        }
+
+        // 2. Migrate legacy standalone Atmosphere into unified Ambience -> Atmosphere
+        if (modulesObj.has("Atmosphere") && modulesObj.get("Atmosphere").isJsonObject()) {
+            JsonObject atmoObj = modulesObj.getAsJsonObject("Atmosphere");
+            Module ambience = findModule(mm, "Ambience");
+            if (ambience != null) {
+                boolean atmoOn = atmoObj.has("enabled") && atmoObj.get("enabled").isJsonPrimitive()
+                        && atmoObj.get("enabled").getAsBoolean();
+                if (atmoOn) {
+                    ambience.setEnabled(true);
+                    setBoolSetting(ambience, "Atmosphere", true);
+                }
+                if (atmoObj.has("settings") && atmoObj.get("settings").isJsonObject()) {
+                    JsonObject sObj = atmoObj.getAsJsonObject("settings");
+                    String[][] renamed = {
+                            {"Preset", "Atmo Preset"},
+                            {"Color Mode", "Atmo Color Mode"},
+                            {"Fog Color", "Atmo Fog Color"},
+                            {"Ripple Strength", "Atmo Ripple Str"}
+                    };
+                    for (String[] pair : renamed) {
+                        if (!sObj.has(pair[0])) continue;
+                        JsonElement el = sObj.get(pair[0]);
+                        for (Setting<?> s : ambience.getSettings()) {
+                            if (!pair[1].equals(s.getName())) continue;
+                            try {
+                                if (s instanceof ModeSetting ms && el.isJsonPrimitive()) ms.setMode(el.getAsString());
+                                else if (s instanceof NumberSetting ns && el.isJsonPrimitive()) ns.setValueClamped(el.getAsDouble());
+                                else if (s instanceof ColorSetting cs && el.isJsonObject()) {
+                                    JsonObject cObj = el.getAsJsonObject();
+                                    if (cObj.has("color")) cs.setValue(cObj.get("color").getAsInt());
+                                    if (cObj.has("rainbow")) cs.setRainbow(cObj.get("rainbow").getAsBoolean());
+                                    if (cObj.has("themeSync")) cs.setThemeSync(cObj.get("themeSync").getAsBoolean());
+                                }
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    }
+                    String[] sameName = {
+                            "Volumetric Fog", "Fog Density", "Fog Height", "Turbulence", "Sun Scatter",
+                            "Ground Haze", "Haze Density", "Precipitation", "Precip Type", "Precip Density",
+                            "Surface Ripples", "Lightning", "Wind"
+                    };
+                    for (String key : sameName) {
+                        if (!sObj.has(key)) continue;
+                        JsonElement el = sObj.get(key);
+                        for (Setting<?> s : ambience.getSettings()) {
+                            if (!key.equals(s.getName())) continue;
+                            try {
+                                if (s instanceof BooleanSetting bs && el.isJsonPrimitive()) bs.setValue(el.getAsBoolean());
+                                else if (s instanceof NumberSetting ns && el.isJsonPrimitive()) ns.setValueClamped(el.getAsDouble());
+                                else if (s instanceof ModeSetting ms && el.isJsonPrimitive()) ms.setMode(el.getAsString());
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void migratePre153Configs(JsonObject root) {
+        ModuleManager mm = ModuleManager.getInstance();
+
+        // 1. Resolve CooldownsHUD <-> Coordinates overlap in older saved configs
+        HudManager.DraggableWidget cd = HudManager.getInstance().getWidget("CooldownsHUD");
+        HudManager.DraggableWidget crd = HudManager.getInstance().getWidget("Coordinates");
+        if (cd != null && crd != null) {
+            float cdH = Math.max(60.0f, cd.getScaledHeight());
+            float crdH = Math.max(20.0f, crd.getScaledHeight());
+            boolean horizOverlap = Math.abs(cd.getX() - crd.getX()) < 150.0f;
+            boolean vertOverlap = cd.getY() + cdH > crd.getY() - 2.0f && cd.getY() < crd.getY() + crdH + 2.0f;
+            if (horizOverlap && vertOverlap) {
+                float safeY = Math.max(8.0f, crd.getY() - cdH - 6.0f);
+                cd.setPosition(cd.getX(), safeY);
+            }
+        }
+
+        // 2. Reset stale BetterTab PosX=411 saved prior to center-animation fix
+        Module betterTab = findModule(mm, "BetterTab");
+        if (betterTab != null) {
+            for (Setting<?> s : betterTab.getSettings()) {
+                if (s instanceof NumberSetting ns && "PosX".equalsIgnoreCase(s.getName())) {
+                    if (Math.abs(ns.getValue() - 411.0) <= 1.5) {
+                        ns.setValueClamped(-1.0);
+                        HudManager.DraggableWidget tabW = HudManager.getInstance().getWidget("TabList");
+                        if (tabW != null) {
+                            tabW.setPosition(-1.0f, tabW.getY());
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 3. Auto-center Watermark under DynamicIsland when positioned near center
+        Module watermark = findModule(mm, "Watermark");
+        if (watermark != null) {
+            double wx = -1.0;
+            for (Setting<?> s : watermark.getSettings()) {
+                if (s instanceof NumberSetting ns && "PosX".equalsIgnoreCase(s.getName())) {
+                    wx = ns.getValue();
+                    break;
+                }
+            }
+            if (wx >= 330.0 && wx <= 450.0) {
+                setBoolSetting(watermark, "Auto Center", true);
+            }
+        }
+
+        // 4. Enable EntityCulling (keeping players visible) and tune default BlurPasses 3 -> 2 for Iris Xe
+        Module culling = findModule(mm, "EntityCulling");
+        if (culling != null && !culling.isEnabled()) {
+            culling.setEnabled(true);
+            setBoolSetting(culling, "Keep Players", true);
+        }
+
+        Module iface = findModule(mm, "Interface");
+        if (iface != null) {
+            for (Setting<?> s : iface.getSettings()) {
+                if (s instanceof NumberSetting ns && "BlurPasses".equalsIgnoreCase(s.getName())
+                        && Math.abs(ns.getValue() - 3.0) < 0.01) {
+                    ns.setValueClamped(2.0);
+                    break;
+                }
+            }
+        }
+    }
+
+    private void migratePre154Configs(JsonObject root) {
+        ModuleManager mm = ModuleManager.getInstance();
+
+        // 1. Resolve ArmorHUD <-> PotionHUD overlap in legacy configs (e.g. HolyWorld 1.1.0-26.3)
+        HudManager.DraggableWidget armor = HudManager.getInstance().getWidget("ArmorHUD");
+        HudManager.DraggableWidget potion = HudManager.getInstance().getWidget("PotionHUD");
+        if (armor != null && potion != null) {
+            float armorH = Math.max(144.0f, armor.getScaledHeight());
+            float potionH = Math.max(36.0f, potion.getScaledHeight());
+            boolean horizOverlap = Math.abs(armor.getX() - potion.getX()) < 60.0f;
+            boolean vertOverlap = armor.getY() + armorH > potion.getY() - 4.0f
+                    && armor.getY() < potion.getY() + potionH + 4.0f;
+            if (horizOverlap && vertOverlap) {
+                float safeY = Math.max(8.0f, potion.getY() - armorH - 8.0f);
+                armor.setPosition(armor.getX(), safeY);
+                Module armorMod = findModule(mm, "ArmorHUD");
+                if (armorMod != null) {
+                    setNumberSetting(armorMod, "PosY", safeY);
+                }
+            }
+        }
+
+        // 2. Move InventoryHUD out of top-center Watermark/DynamicIsland collision zone
+        HudManager.DraggableWidget inv = HudManager.getInstance().getWidget("InventoryHUD");
+        if (inv != null && inv.getY() < 85.0f && inv.getX() >= 280.0f && inv.getX() <= 620.0f) {
+            inv.setPosition(760.0f, 415.0f);
+            Module invMod = findModule(mm, "InventoryHUD");
+            if (invMod != null) {
+                setNumberSetting(invMod, "PosX", 760.0);
+                setNumberSetting(invMod, "PosY", 415.0);
+            }
+        }
+
+        // 3. Default ArrayList.Hide HUD to true on pre-1.5.4 configs to prevent list overflow
+        Module arrayList = findModule(mm, "ArrayList");
+        if (arrayList != null) {
+            setBoolSetting(arrayList, "Hide HUD", true);
+        }
+
+        // 4. Default Ambience.Shader Quality to Balanced for Intel Iris Xe performance
+        Module ambience = findModule(mm, "Ambience");
+        if (ambience != null) {
+            setModeSetting(ambience, "Shader Quality", "Balanced");
+        }
+    }
+
+    private void migratePre155Configs(JsonObject root) {
+        ModuleManager mm = ModuleManager.getInstance();
+        JsonObject modulesObj = (root != null && root.has("modules") && root.get("modules").isJsonObject())
+                ? root.getAsJsonObject("modules") : null;
+
+        // 1. Migrate OpticumeAura legacy AimMode names and unsafe HitboxMargin values
+        Module aura = findModule(mm, "OpticumeAura");
+        if (aura != null) {
+            JsonObject auraSettings = null;
+            if (modulesObj != null) {
+                if (modulesObj.has("OpticumeAura") && modulesObj.get("OpticumeAura").isJsonObject()) {
+                    JsonObject mObj = modulesObj.getAsJsonObject("OpticumeAura");
+                    if (mObj.has("settings") && mObj.get("settings").isJsonObject()) {
+                        auraSettings = mObj.getAsJsonObject("settings");
+                    }
+                } else if (modulesObj.has("OptimusAura") && modulesObj.get("OptimusAura").isJsonObject()) {
+                    JsonObject mObj = modulesObj.getAsJsonObject("OptimusAura");
+                    if (mObj.has("settings") && mObj.get("settings").isJsonObject()) {
+                        auraSettings = mObj.getAsJsonObject("settings");
+                    }
+                }
+            }
+            if (auraSettings != null && auraSettings.has("AimMode") && auraSettings.get("AimMode").isJsonPrimitive()) {
+                String oldAim = auraSettings.get("AimMode").getAsString().trim();
+                if ("Smooth".equalsIgnoreCase(oldAim)) {
+                    setModeSetting(aura, "AimMode", "Organic");
+                } else if ("SnapOnHit".equalsIgnoreCase(oldAim)) {
+                    setModeSetting(aura, "AimMode", "Snap");
+                }
+            }
+            String savedPreset = "";
+            if (auraSettings != null && auraSettings.has("Preset") && auraSettings.get("Preset").isJsonPrimitive()) {
+                savedPreset = auraSettings.get("Preset").getAsString().trim();
+            } else {
+                for (Setting<?> s : aura.getSettings()) {
+                    if (s instanceof ModeSetting ms && "Preset".equalsIgnoreCase(s.getName())) {
+                        savedPreset = ms.getMode();
+                        break;
+                    }
+                }
+            }
+            if (!"Custom".equalsIgnoreCase(savedPreset)) {
+                for (Setting<?> s : aura.getSettings()) {
+                    if (s instanceof NumberSetting ns && "HitboxMargin".equalsIgnoreCase(s.getName())) {
+                        if (ns.getValue() > 0.10) {
+                            boolean strict = "HolyWorld".equalsIgnoreCase(savedPreset)
+                                    || "FunTime".equalsIgnoreCase(savedPreset)
+                                    || "SpookyTime".equalsIgnoreCase(savedPreset)
+                                    || "Grim 1.21".equalsIgnoreCase(savedPreset);
+                            ns.setValueClamped(strict ? 0.0 : 0.04);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Migrate LegitAura legacy AimMode "Standard" -> "Organic"
+        Module legitAura = findModule(mm, "LegitAura");
+        if (legitAura != null && modulesObj != null && modulesObj.has("LegitAura") && modulesObj.get("LegitAura").isJsonObject()) {
+            JsonObject mObj = modulesObj.getAsJsonObject("LegitAura");
+            if (mObj.has("settings") && mObj.get("settings").isJsonObject()) {
+                JsonObject sObj = mObj.getAsJsonObject("settings");
+                if (sObj.has("AimMode") && sObj.get("AimMode").isJsonPrimitive()
+                        && "Standard".equalsIgnoreCase(sObj.get("AimMode").getAsString().trim())) {
+                    setModeSetting(legitAura, "AimMode", "Organic");
+                }
+            }
+        }
+
+        // 3. Reset BetterTab off-center PosX saved before Auto Center / Center-Anchor fix
+        Module betterTab = findModule(mm, "BetterTab");
+        if (betterTab != null) {
+            setBoolSetting(betterTab, "Auto Center", true);
+            setNumberSetting(betterTab, "PosX", -1.0);
+            HudManager.DraggableWidget tabW = HudManager.getInstance().getWidget("TabList");
+            if (tabW != null) {
+                tabW.syncExternalPosition(-1.0f, tabW.getY());
             }
         }
     }

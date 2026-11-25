@@ -65,20 +65,25 @@ public final class EspBloomPass implements AutoCloseable {
             .sampler("MaskSampler")
             .build();
 
+    private static final float[] GAUSSIAN_WEIGHTS = computeGaussianWeights();
+
     private static TextureTarget blurHorizontalTarget;
     private static TextureTarget blurVerticalTarget;
     private static GpuBuffer blurHorizontalUbo;
     private static GpuBuffer blurVerticalUbo;
     private static GpuBuffer glowUbo;
+    private static int cachedBlurW = -1;
+    private static int cachedBlurH = -1;
+    private static float cachedBlurStep = -1.0F;
 
-    private static void updateGlowUniforms(CommandEncoder encoder, RenderTarget maskTarget, int color, float intensity, float colorMode, boolean unusedFlag, float saturation, int outlineColor, float outlineWidth) {
+    private static void updateGlowUniforms(CommandEncoder encoder, RenderTarget maskTarget, int color, float intensity, float colorMode, float saturation, float innerGlow, int outlineColor, float outlineWidth) {
         glowUbo = ensureUbo(glowUbo, GLOW_UBO_SIZE, "entityEspOtherGlowUniforms");
         float r = red(color);
         float g = green(color);
         float b = blue(color);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer buf = Std140Builder.onStack(stack, GLOW_UBO_SIZE)
-                    .putVec4(intensity, colorMode, saturation, outlineWidth)
+                    .putVec4(intensity, colorMode, saturation, innerGlow)
                     .putVec4(r, g, b, 1.0F)
                     .putVec4(r * 0.5F, g * 0.5F, b * 0.5F, outlineWidth)
                     .putVec4(red(outlineColor), green(outlineColor), blue(outlineColor), alpha(outlineColor))
@@ -124,15 +129,17 @@ public final class EspBloomPass implements AutoCloseable {
         }
     }
 
-    public static void render(RenderTarget maskTarget, RenderTarget dstTarget, int color, float radius, float intensity, float colorMode, boolean unusedFlag, float saturation, int outlineColor, float outlineWidth) {
+    public static void render(RenderTarget maskTarget, RenderTarget dstTarget, int color, float radius, float intensity, float colorMode, float saturation, float innerGlow, int outlineColor, float outlineWidth) {
         if (isValidTarget(maskTarget) && isValidTarget(dstTarget)) {
             int halfW = Math.max(1, maskTarget.width / 2);
             int halfH = Math.max(1, maskTarget.height / 2);
             float clampedRadius = Math.clamp(radius, 1.0F, MAX_RADIUS);
+            int blurIters = clampedRadius > 6.5F ? 2 : 1;
+            float blurStep = blurIters == 1 ? (0.65F + clampedRadius * 0.42F) : (0.5F + clampedRadius * 0.35F);
             ensureTargets(halfW, halfH);
             CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
-            updateBlurUniforms(encoder, halfW, halfH, clampedRadius);
-            updateGlowUniforms(encoder, maskTarget, color, intensity, colorMode, unusedFlag, saturation, outlineColor, outlineWidth);
+            updateBlurUniforms(encoder, halfW, halfH, blurStep);
+            updateGlowUniforms(encoder, maskTarget, color, intensity, colorMode, saturation, innerGlow, outlineColor, outlineWidth);
 
             try (RenderPass pass = encoder.createRenderPass(() -> "entityEspOtherMask", blurHorizontalTarget.getColorTextureView(), Optional.of(new Vector4f(0.0F)))) {
                 pass.setPipeline(PipelineBuilder.compile(MASK_PIPELINE));
@@ -140,7 +147,7 @@ public final class EspBloomPass implements AutoCloseable {
                 pass.draw(3, 1, 0, 0);
             }
 
-            for (int i = 0; i < 2; i++) {
+            for (int i = 0; i < blurIters; i++) {
                 runBlurPass(encoder, blurHorizontalTarget, blurVerticalTarget, blurHorizontalUbo);
                 runBlurPass(encoder, blurVerticalTarget, blurHorizontalTarget, blurVerticalUbo);
             }
@@ -165,7 +172,7 @@ public final class EspBloomPass implements AutoCloseable {
     }
 
     public static void renderSimple(RenderTarget maskTarget, RenderTarget dstTarget, int color, float radius, float intensity, float colorMode) {
-        render(maskTarget, dstTarget, color, radius, intensity, colorMode, false, 0.0F, 0, 0.0F);
+        render(maskTarget, dstTarget, color, radius, intensity, colorMode, 1.0F, 0.0F, 0, 0.0F);
     }
 
     public static void releaseGpuResources() {
@@ -189,6 +196,9 @@ public final class EspBloomPass implements AutoCloseable {
             glowUbo.close();
             glowUbo = null;
         }
+        cachedBlurW = -1;
+        cachedBlurH = -1;
+        cachedBlurStep = -1.0F;
     }
 
     @Override
@@ -196,11 +206,18 @@ public final class EspBloomPass implements AutoCloseable {
         releaseGpuResources();
     }
 
-    private static void updateBlurUniforms(CommandEncoder encoder, int width, int height, float radius) {
+    private static void updateBlurUniforms(CommandEncoder encoder, int width, int height, float step) {
+        boolean recreated = blurHorizontalUbo == null || blurHorizontalUbo.isClosed()
+                || blurVerticalUbo == null || blurVerticalUbo.isClosed();
         blurHorizontalUbo = ensureUbo(blurHorizontalUbo, BLUR_UBO_SIZE, "entityEspOtherBlurHorizontalUniforms");
         blurVerticalUbo = ensureUbo(blurVerticalUbo, BLUR_UBO_SIZE, "entityEspOtherBlurVerticalUniforms");
-        float[] w = gaussianWeights();
-        float step = 0.5F + radius * 0.35F;
+        if (!recreated && cachedBlurW == width && cachedBlurH == height && Math.abs(cachedBlurStep - step) < 0.005F) {
+            return;
+        }
+        cachedBlurW = width;
+        cachedBlurH = height;
+        cachedBlurStep = step;
+        float[] w = GAUSSIAN_WEIGHTS;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             ByteBuffer horiz = Std140Builder.onStack(stack, BLUR_UBO_SIZE)
                     .putVec2(1.0F / width, 1.0F / height).putVec2(1.0F, 0.0F)
@@ -213,7 +230,7 @@ public final class EspBloomPass implements AutoCloseable {
         }
     }
 
-    private static float[] gaussianWeights() {
+    private static float[] computeGaussianWeights() {
         float sigma = 2.2F;
         float[] w = new float[6];
         float sum = 0.0F;

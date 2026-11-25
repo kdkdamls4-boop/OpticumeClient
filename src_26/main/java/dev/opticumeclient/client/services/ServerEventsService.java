@@ -78,6 +78,10 @@ public final class ServerEventsService {
         return INSTANCE;
     }
 
+    public static ServerEventsService createDetached() {
+        return new ServerEventsService();
+    }
+
     public Source getSource() {
         return source;
     }

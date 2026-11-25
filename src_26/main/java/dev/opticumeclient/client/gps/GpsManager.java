@@ -102,6 +102,8 @@ public final class GpsManager {
             turnToMarker(mc);
         }
 
+        renderWaypoints(context, mc);
+
         if (noLast || distanceAnim < 0.05f || switchAnim < 0.05f) return;
 
         float alpha = Mth.clamp(distanceAnim * switchAnim, 0.0f, 1.0f);
@@ -289,6 +291,34 @@ public final class GpsManager {
         }
         mc.player.setYRot(mc.player.getYRot() + dYaw * 0.2f);
         mc.player.setXRot(Mth.clamp(mc.player.getXRot() + dPitch * 0.2f, -90.0f, 90.0f));
+    }
+
+    private void renderWaypoints(GuiGraphicsExtractor context, Minecraft mc) {
+        var ways = dev.opticumeclient.client.command.CommandDataStore.getInstance().getWaypoints();
+        if (ways.isEmpty()) return;
+        int sw = mc.getWindow().getGuiScaledWidth();
+        int sh = mc.getWindow().getGuiScaledHeight();
+        for (dev.opticumeclient.client.command.CommandDataStore.WaypointEntry w : ways) {
+            if (gpsPosition != null && gpsPosition.x == w.x() && gpsPosition.y == w.y() && gpsPosition.z == w.z()) {
+                continue;
+            }
+            Vec3 worldPos = new Vec3(w.x() + 0.5, w.y() + 1.0, w.z() + 0.5);
+            float[] screen = Render3DHelper.worldToScreen(worldPos);
+            if (screen == null || screen[0] < 8.0f || screen[0] > sw - 8.0f || screen[1] < 8.0f || screen[1] > sh - 8.0f) {
+                continue;
+            }
+            float dist = Mth.sqrt((float) mc.player.distanceToSqr(worldPos));
+            String label = w.name() + " " + String.format(Locale.US, "%.0fm", dist);
+            float fontSize = 6.8f;
+            float lw = measureHud(label, fontSize);
+            float pw = lw + 10.0f;
+            float ph = 12.0f;
+            float px = screen[0] - pw * 0.5f;
+            float py = screen[1] - ph * 0.5f;
+            Render2DHelper.drawRoundedRectFloat(context, px, py, pw, ph, 3.0f, 0xB80B0C16);
+            Render2DHelper.drawRoundedOutlineFloat(context, px, py, pw, ph, 3.0f, 0.7f, ColorUtils.withAlpha(w.color(), 140));
+            drawHudText(context, label, px + 5.0f, py + (ph - fontSize) * 0.5f, fontSize, 0xFFF2F4FA);
+        }
     }
 
     private Vec3 markerWorldPos() {

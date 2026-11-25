@@ -17,9 +17,10 @@ public final class HelpCommand extends ClientCommand {
     @Override
     public void build(LiteralArgumentBuilder<SharedSuggestionProvider> builder) {
         builder.executes(context -> {
-            ChatUtils.sendClientMessage("Доступные команды:");
+            String pfx = CommandManager.getInstance().getPrefix();
+            ChatUtils.sendClientMessage("Доступные команды (префикс §e" + pfx + "§7):");
             for (ClientCommand cmd : CommandManager.getInstance().getCommands()) {
-                ChatUtils.sendClientMessage("." + cmd.getName() + " — " + cmd.getDescription());
+                ChatUtils.sendClientMessage(pfx + cmd.getName() + " — " + cmd.getDescription());
             }
             return SINGLE_SUCCESS;
         });

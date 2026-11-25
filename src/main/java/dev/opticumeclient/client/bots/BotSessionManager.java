@@ -6,6 +6,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import dev.opticumeclient.client.ui.menu.OpticumeMainMenuScreen;
 import dev.opticumeclient.client.util.ChatUtils;
 import dev.opticumeclient.mixin.MinecraftAccessor;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -99,7 +100,9 @@ public class BotSessionManager {
     }
 
     public boolean isShowBotChat() {
-        return showBotChat;
+        dev.opticumeclient.client.modules.other.BotsModule mod =
+                dev.opticumeclient.client.modules.other.BotsModule.getInstance();
+        return mod != null ? mod.botChat.getValue() : showBotChat;
     }
 
     public void setShowBotChat(boolean showBotChat) {
@@ -107,11 +110,13 @@ public class BotSessionManager {
     }
 
     public int getMaxBots() {
-        return maxBots;
+        dev.opticumeclient.client.modules.other.BotsModule mod =
+                dev.opticumeclient.client.modules.other.BotsModule.getInstance();
+        return mod != null ? Math.max(1, mod.maxBots.getIntValue()) : maxBots;
     }
 
     public void setMaxBots(int maxBots) {
-        this.maxBots = maxBots;
+        this.maxBots = Math.max(1, maxBots);
     }
 
     public void registerBotListener(PacketListener listener, BotSession session) {
@@ -143,7 +148,7 @@ public class BotSessionManager {
         if (!isValidNick(name) || serverIp == null || serverIp.isBlank()) {
             return false;
         }
-        if (getBot(name) != null || sessions.size() >= maxBots) {
+        if (getBot(name) != null || sessions.size() >= getMaxBots()) {
             return false;
         }
 
@@ -313,7 +318,11 @@ public class BotSessionManager {
             mc.setCameraEntity(mc.player);
         }
 
-        mc.gui.setScreen(session.getScreen());
+        if (session == mainSession && mc.level == null && session.getScreen() == null) {
+            mc.gui.setScreen(new OpticumeMainMenuScreen());
+        } else {
+            mc.gui.setScreen(session.getScreen());
+        }
         session.setScreen(null);
     }
 
@@ -394,10 +403,14 @@ public class BotSessionManager {
         session.addChatLine(text);
         detectAuthPrompt(session, text);
 
-        if (showBotChat && isBackground(session) && session != mainSession) {
+        if (isShowBotChat() && isBackground(session) && session != mainSession) {
             Component forwarded = botChatPrefix(session).copy().append(message);
             Minecraft mc = Minecraft.getInstance();
-            mc.execute(() -> mc.gui.hud.getChat().addClientSystemMessage(forwarded));
+            mc.execute(() -> {
+                if (mc.gui != null && mc.gui.hud != null && mc.gui.hud.getChat() != null) {
+                    mc.gui.hud.getChat().addClientSystemMessage(forwarded);
+                }
+            });
         }
     }
 

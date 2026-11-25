@@ -1,7 +1,6 @@
 package dev.opticumeclient.mixin;
 
 import dev.opticumeclient.client.modules.visuals.AmbienceModule;
-import dev.opticumeclient.client.modules.visuals.AtmosphereModule;
 import dev.opticumeclient.client.modules.visuals.ambience.WorldRenderBridge;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -55,23 +54,20 @@ public abstract class FogRendererMixin {
                 data.skyEnd = end;
                 data.cloudEnd = end;
             }
+            if (!preserveVanillaFog && ambience.isAtmoFogEnabled() && !ambience.isCustomFogActive()) {
+                int argb = ambience.getAtmoEffectiveFogColor();
+                float blend = 0.55f;
+                float r = WorldRenderBridge.red(argb);
+                float g = WorldRenderBridge.green(argb);
+                float b = WorldRenderBridge.blue(argb);
+                data.color.set(
+                        data.color.x + (r - data.color.x) * blend,
+                        data.color.y + (g - data.color.y) * blend,
+                        data.color.z + (b - data.color.z) * blend,
+                        data.color.w
+                );
+            }
             ambience.recordFogDistances(data.renderDistanceStart, data.renderDistanceEnd, data.color);
-        }
-
-        AtmosphereModule atmo = AtmosphereModule.getInstance();
-        if (!preserveVanillaFog && atmo != null && atmo.isEnabled() && atmo.isFogEnabled()
-                && (ambience == null || !ambience.isCustomFogActive())) {
-            int argb = atmo.getEffectiveFogColor();
-            float blend = 0.55f;
-            float r = WorldRenderBridge.red(argb);
-            float g = WorldRenderBridge.green(argb);
-            float b = WorldRenderBridge.blue(argb);
-            data.color.set(
-                    data.color.x + (r - data.color.x) * blend,
-                    data.color.y + (g - data.color.y) * blend,
-                    data.color.z + (b - data.color.z) * blend,
-                    data.color.w
-            );
         }
     }
 }

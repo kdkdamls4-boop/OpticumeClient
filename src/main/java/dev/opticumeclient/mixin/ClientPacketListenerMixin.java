@@ -6,6 +6,8 @@ import dev.opticumeclient.client.bots.IBotListener;
 import dev.opticumeclient.client.command.CommandManager;
 import dev.opticumeclient.client.modules.ModuleManager;
 import dev.opticumeclient.client.modules.movement.VelocityModule;
+import dev.opticumeclient.client.modules.other.AuctionHelperModule;
+import dev.opticumeclient.client.modules.other.AutoAcceptModule;
 import dev.opticumeclient.client.modules.visuals.KillEffectModule;
 import dev.opticumeclient.client.modules.visuals.PopChamsModule;
 import net.fabricmc.api.EnvType;
@@ -18,6 +20,7 @@ import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
 import net.minecraft.network.protocol.game.ClientboundExplodePacket;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetEntityMotionPacket;
+import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -84,7 +87,44 @@ public abstract class ClientPacketListenerMixin {
 
     @Inject(method = "sendChat", at = @At("HEAD"), cancellable = true)
     private void opticume$onSendChat(String content, CallbackInfo ci) {
+        if (BotContext.isBackgroundContextActive()) return;
         CommandManager.getInstance().executeCommands(content, ci);
+    }
+
+    @Inject(method = "sendCommand", at = @At("HEAD"), cancellable = true)
+    private void opticume$onSendCommand(String command, CallbackInfo ci) {
+        if (BotContext.isBackgroundContextActive()) return;
+        AuctionHelperModule ah = AuctionHelperModule.getInstance();
+        if (ah != null && ah.isEnabled()) {
+            String rewritten = ah.rewriteOutgoingCommand(command);
+            if (rewritten != null && !rewritten.equals(command)) {
+                ci.cancel();
+                ((ClientPacketListener) (Object) this).sendCommand(rewritten);
+            }
+        }
+    }
+
+    @Inject(
+            method = "handleSystemChat",
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/PacketUtils;ensureRunningOnSameThread(Lnet/minecraft/network/protocol/Packet;Lnet/minecraft/network/PacketListener;Lnet/minecraft/network/PacketProcessor;)V", shift = At.Shift.AFTER)
+    )
+    private void opticume$onSystemChat(ClientboundSystemChatPacket packet, CallbackInfo ci) {
+        if (BotContext.isBackgroundContextActive() || packet == null || packet.overlay()) return;
+        BotSession session = ((Object) this instanceof IBotListener botListener)
+                ? botListener.opticume$getBotSession()
+                : null;
+        if (session != null && dev.opticumeclient.client.bots.BotSessionManager.getInstance().isBackground(session)) {
+            return;
+        }
+        AutoAcceptModule autoAccept = AutoAcceptModule.getInstance();
+        if (autoAccept != null && autoAccept.isEnabled() && packet.content() != null) {
+            autoAccept.onIncomingChat(packet.content().getString());
+        }
+        dev.opticumeclient.client.modules.visuals.ObjectInfoModule objInfo =
+                dev.opticumeclient.client.modules.visuals.ObjectInfoModule.getInstance();
+        if (objInfo != null && objInfo.isEnabled() && packet.content() != null) {
+            objInfo.onChatMessage(packet.content().getString());
+        }
     }
 
     @Inject(
@@ -92,6 +132,7 @@ public abstract class ClientPacketListenerMixin {
             at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/game/ClientboundEntityEventPacket;getEntity(Lnet/minecraft/world/level/Level;)Lnet/minecraft/world/entity/Entity;")
     )
     private void opticume$onEntityEvent(ClientboundEntityEventPacket packet, CallbackInfo ci) {
+        if (BotContext.isBackgroundContextActive()) return;
         Minecraft mc = Minecraft.getInstance();
         if (!mc.isSameThread() || mc.level == null) return;
 
@@ -122,6 +163,7 @@ public abstract class ClientPacketListenerMixin {
             cancellable = true
     )
     private void opticume$onEntityMotion(ClientboundSetEntityMotionPacket packet, CallbackInfo ci) {
+        if (BotContext.isBackgroundContextActive()) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || packet.id() != mc.player.getId()) return;
 
@@ -158,6 +200,7 @@ public abstract class ClientPacketListenerMixin {
             cancellable = true
     )
     private void opticume$onExplosionKnockback(ClientboundExplodePacket packet, CallbackInfo ci) {
+        if (BotContext.isBackgroundContextActive()) return;
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 

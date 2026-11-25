@@ -33,7 +33,7 @@ public class PriceAutoParser {
 
     public synchronized void start() {
         if (this.state != State.IDLE) {
-            this.stop();
+            this.stop(true);
             return;
         }
         if (mc.player == null) return;
@@ -66,12 +66,26 @@ public class PriceAutoParser {
     }
 
     public synchronized void stop() {
+        this.stop(false);
+    }
+
+    public synchronized void stop(boolean restoreAutoBuy) {
+        boolean shouldRestore = restoreAutoBuy && this.wasAutoBuyEnabled;
+        this.wasAutoBuyEnabled = false;
         this.state = State.IDLE;
         this.parseEntries.clear();
         this.currentIndex = 0;
         this.currentItemLabel = "";
         this.targetSortMode = null;
         this.minFoundPrice = -1L;
+        if (shouldRestore) {
+            AutoBuyConfig.cfg().enabled = true;
+            AutoBuyModule mod = AutoBuyModule.getInstance();
+            if (mod != null && !mod.isEnabled()) {
+                mod.setEnabled(true);
+            }
+            AutoBuyConfig.save();
+        }
     }
 
     public boolean isActive() {
@@ -214,7 +228,7 @@ public class PriceAutoParser {
             }
         }
         AutoBuyConfig.save();
-        this.stop();
+        this.stop(false);
     }
 
     private void handleNext() {
@@ -341,9 +355,11 @@ public class PriceAutoParser {
         ItemEntry entry = this.parseEntries.get(this.currentIndex);
         AutoBuyConfig cfg = AutoBuyConfig.cfg();
         int pct = Math.max(1, Math.min(100, cfg.parsePercent));
-        entry.maxUnitPrice = this.minFoundPrice > 0L ? this.minFoundPrice * pct / 100L : 0L;
         if (this.minFoundPrice > 0L) {
             entry.marketPrice = this.minFoundPrice;
+            entry.maxUnitPrice = this.minFoundPrice * pct / 100L;
+        } else if (entry.maxUnitPrice <= 0L && cfg.defaultPriceIfMissing > 0L) {
+            entry.maxUnitPrice = cfg.defaultPriceIfMissing * pct / 100L;
         }
         AutoBuyConfig.save();
         this.state = State.ADVANCE;

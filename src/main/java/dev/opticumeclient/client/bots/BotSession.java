@@ -5,6 +5,8 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.ClientInput;
+import net.minecraft.client.player.KeyboardInput;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.Connection;
@@ -269,16 +271,25 @@ public class BotSession {
     }
 
     private void tickWorld(Minecraft mc) {
-        mc.gameMode.tick();
-        if (mc.level == null || mc.player == null || !this.connection.isConnected()) {
-            return;
+        mc.level.tickRateManager().tick();
+
+        if (BotContext.isBackgroundContextActive() && mc.player.input instanceof KeyboardInput) {
+            mc.player.input = new ClientInput();
         }
 
         Runnable sectionReady = mc.player.connection.getPlayerCompiledSectionCallback();
-        if (sectionReady != null && mc.level.hasChunk(
-                SectionPos.blockToSectionCoord(mc.player.getBlockX()),
-                SectionPos.blockToSectionCoord(mc.player.getBlockZ()))) {
+        if (sectionReady != null && (mc.level.isOutsideBuildHeight(mc.player.getBlockY())
+                || mc.player.isSpectator()
+                || !mc.player.isAlive()
+                || mc.level.hasChunk(
+                        SectionPos.blockToSectionCoord(mc.player.getBlockX()),
+                        SectionPos.blockToSectionCoord(mc.player.getBlockZ())))) {
             sectionReady.run();
+        }
+
+        mc.gameMode.tick();
+        if (mc.level == null || mc.player == null || !this.connection.isConnected()) {
+            return;
         }
 
         if (mc.player.isDeadOrDying() && this != BotSessionManager.getInstance().getMainSession()) {
@@ -290,6 +301,11 @@ public class BotSession {
         }
 
         mc.level.tickEntities();
+        mc.level.tickBlockEntities();
+        if (!mc.player.isRemoved()) {
+            mc.player.sendChanges();
+        }
+        mc.level.tick(() -> true);
         this.connection.send(ServerboundClientTickEndPacket.INSTANCE);
     }
 
@@ -329,6 +345,7 @@ public class BotSession {
     public void cleanup() {
         if (this.packetProcessor != null) {
             this.packetProcessor.close();
+            this.packetProcessor = null;
         }
         this.player = null;
         this.world = null;

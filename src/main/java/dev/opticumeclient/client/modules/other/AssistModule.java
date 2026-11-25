@@ -54,6 +54,7 @@ public class AssistModule extends Module {
     }
 
     private final ModeSetting mode = new ModeSetting("Режим", "Выбор сервера для биндов Assist", "Авто", "Авто", "FunTime", "HolyWorld");
+    private final BooleanSetting useFromBundles = new BooleanSetting("Использовать из Мешков", "Автоматически доставать предметы из Bundle (DataComponents.BUNDLE_CONTENTS)", true);
     private final BooleanSetting autoRct = new BooleanSetting("Авто .rct после чарки (HW)", "Автоматический перезаход на анархию после чаровального яблока вне КТ", false);
     private final List<AssistItem> items = new ArrayList<>();
 
@@ -66,6 +67,7 @@ public class AssistModule extends Module {
 
         autoRct.visibleWhen(() -> activeMode() == Group.HW);
         addSetting(mode);
+        addSetting(useFromBundles);
         addSetting(autoRct);
 
         addItem("Трапка", this::isTrapka, Group.ALL, Use.RELEASE);
@@ -95,6 +97,30 @@ public class AssistModule extends Module {
         addItem("Свиток опыта", named(Items.FLOWER_BANNER_PATTERN, "свит", "опыт"), Group.HW, Use.HOLD);
 
         INSTANCE = this;
+    }
+
+    public record BoundSummary(String name, String keyLabel, int count, float cooldownSec, ItemStack icon) {
+    }
+
+    public List<BoundSummary> getBoundSummaries() {
+        List<BoundSummary> out = new ArrayList<>();
+        if (mc == null || mc.player == null) return out;
+        for (AssistItem item : items) {
+            if (!inMode(item.group()) || !item.bind().isBound()) continue;
+            int count = 0;
+            ItemStack sample = ItemStack.EMPTY;
+            for (int i = 0; i < 36; i++) {
+                ItemStack st = mc.player.getInventory().getItem(i);
+                if (!st.isEmpty() && item.match().test(st)) {
+                    count += st.getCount();
+                    if (sample.isEmpty()) sample = st;
+                }
+            }
+            float cd = sample.isEmpty() ? 0.0f
+                    : mc.player.getCooldowns().getCooldownPercent(sample, 0.0f);
+            out.add(new BoundSummary(item.name(), item.bind().getBindLabel(), count, cd, sample));
+        }
+        return out;
     }
 
     public static AssistModule getInstance() {
@@ -187,16 +213,22 @@ public class AssistModule extends Module {
     private void useItem(AssistItem item) {
         if (mc.player == null) return;
         boolean used;
+        boolean allowBundles = useFromBundles.isEnabled();
         if (item.use() == Use.WIND) {
             float pitch = mc.player.getXRot();
             mc.player.setXRot(90.0f);
-            used = InventoryUtil.swapAndUseHvH(item.match());
+            used = InventoryUtil.swapAndUseHvH(item.match(), allowBundles);
             mc.player.setXRot(pitch);
         } else {
-            used = InventoryUtil.swapAndUseHvH(item.match());
+            used = InventoryUtil.swapAndUseHvH(item.match(), allowBundles);
         }
         if (!used && item.use() != Use.HOLD) {
-            ChatUtils.sendClientMessage("Нет предмета: " + item.name().toLowerCase(Locale.ROOT));
+            int shulkerSlot = InventoryUtil.findShulkerContaining(item.match());
+            if (shulkerSlot != -1) {
+                ChatUtils.sendClientMessage("Предмет '" + item.name() + "' найден в шалкере (слот " + (shulkerSlot + 1) + ") — откройте шалкер!");
+            } else {
+                ChatUtils.sendClientMessage("Нет предмета: " + item.name().toLowerCase(Locale.ROOT));
+            }
         }
     }
 

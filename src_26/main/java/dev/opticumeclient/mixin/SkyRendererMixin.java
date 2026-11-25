@@ -81,6 +81,15 @@ public abstract class SkyRendererMixin {
         }
     }
 
+    @Inject(method = "renderEndFlash", at = @At("HEAD"), cancellable = true)
+    private void opticume$cancelEndFlash(RenderPass pass, com.mojang.blaze3d.vertex.PoseStack poseStack,
+                                         float intensity, float xAngle, float yAngle, CallbackInfo ci) {
+        AmbienceModule ambience = AmbienceModule.getInstance();
+        if (ambience != null && ambience.isHideVanillaSky()) {
+            ci.cancel();
+        }
+    }
+
     @Inject(method = "renderSunriseAndSunset", at = @At("HEAD"), cancellable = true)
     private void opticume$cancelSunrise(RenderPass pass, com.mojang.blaze3d.vertex.PoseStack poseStack, float angle, org.joml.Vector4fc color, CallbackInfo ci) {
         AmbienceModule ambience = AmbienceModule.getInstance();

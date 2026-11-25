@@ -69,6 +69,15 @@ public final class WorldRenderBridge {
                 .invert();
     }
 
+    public static Matrix4f computeInvViewProj(CameraRenderState camera, Matrix4f dest) {
+        if (camera == null || camera.projectionMatrix == null || camera.viewRotationMatrix == null) {
+            return dest.identity();
+        }
+        return dest.set(camera.projectionMatrix)
+                .mul(camera.viewRotationMatrix)
+                .invert();
+    }
+
     public static float extractFovDegrees(CameraRenderState camera) {
         if (camera == null || camera.projectionMatrix == null) {
             return 70.0f;

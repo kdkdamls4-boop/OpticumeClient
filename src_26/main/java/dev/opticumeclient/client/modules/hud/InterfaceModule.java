@@ -27,7 +27,7 @@ public class InterfaceModule extends Module {
     private final NumberSetting glassOpacity = new NumberSetting("Opacity", "Непрозрачность заливки жидкого стекла",
             152.0, 40.0, 240.0, 4.0);
     private final NumberSetting blurPasses = new NumberSetting("BlurPasses", "Проходы размытия Kawase для HUD",
-            3.0, 1.0, 4.0, 1.0);
+            2.0, 1.0, 4.0, 1.0);
     private final NumberSetting blurOffset = new NumberSetting("BlurRadius", "Радиус размытия жидкого стекла",
             2.0, 0.5, 4.0, 0.25);
     private final BooleanSetting rightClickMenu = new BooleanSetting("WidgetMenu", "ПКМ по виджету в чате открывает настройки фона", true);

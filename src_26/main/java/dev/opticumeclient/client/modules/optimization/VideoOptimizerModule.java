@@ -32,14 +32,13 @@ public class VideoOptimizerModule extends Module {
                     "Biome Blend Off",
                     "Vignette Off",
                     "Weather Radius Min",
-                    "Disable VSync",
                     "Menu Blur Off",
                     "Improved Transparency Off",
                     "Chunk Fade Off",
                     "Fast Leaves"
             },
             "Clouds Off", "Minimal Particles", "Entity Shadows Off", "Vignette Off",
-            "Weather Radius Min", "Disable VSync", "Menu Blur Off", "Improved Transparency Off"
+            "Weather Radius Min", "Menu Blur Off", "Improved Transparency Off"
     );
 
     private final BooleanSetting limitRender = new BooleanSetting("Limit Render Dist", "Ограничить дальность прорисовки", false);
@@ -115,7 +114,6 @@ public class VideoOptimizerModule extends Module {
             if (video.isEnabled("Biome Blend Off")) override(options.biomeBlendRadius(), 0);
             if (video.isEnabled("Vignette Off")) override(options.vignette(), false);
             if (video.isEnabled("Weather Radius Min")) override(options.weatherRadius(), 3);
-            if (video.isEnabled("Disable VSync")) override(options.enableVsync(), false);
             if (video.isEnabled("Menu Blur Off")) override(options.menuBackgroundBlurriness(), 0);
             if (video.isEnabled("Improved Transparency Off")) override(options.improvedTransparency(), false);
             if (video.isEnabled("Chunk Fade Off")) override(options.chunkSectionFadeInTime(), 0.0);

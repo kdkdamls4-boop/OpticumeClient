@@ -161,79 +161,90 @@ public class PopChamsModule extends Module {
         float partSize = size.getFloatValue();
 
         if (doHolo) {
+            // Sequential BufferPool passes: finish quads before opening lines
             BufferBuilder quadBuf = WorldPrimitiveRenderer.beginQuads();
-            BufferBuilder lineBuf = WorldPrimitiveRenderer.beginLines();
-            boolean any = false;
-
-            for (TotemPopGhost ghost : activeGhosts) {
-                float progress = Mth.clamp((ghost.age + tickDelta) / ghost.maxAge, 0.0f, 1.0f);
-                float fade = 1.0f - progress;
-                if (fade <= 0.02f) continue;
-
-                int baseColor = resolveColor(0);
-                int fillCol = ColorUtils.withAlphaFactor(baseColor, fade * 0.28f);
-                int lineCol = ColorUtils.withAlphaFactor(baseColor, fade * 0.85f);
-
-                float yOff = (ghost.age + tickDelta) * risePerTick;
-                float expand = 1.0f + progress * 0.16f;
-                float s = ghost.scaleH * expand;
-                double cx = ghost.origin.x - cam.x;
-                double cy = ghost.origin.y + yOff - cam.y;
-                double cz = ghost.origin.z - cam.z;
-                double yawRad = Math.toRadians(-ghost.yawDeg);
-                float cos = (float) Math.cos(yawRad);
-                float sin = (float) Math.sin(yawRad);
-
-                // Humanoid proportions (head, torso, left/right arms, left/right legs)
-                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.0f, 1.44f, 0.0f, 0.22f, 0.44f, 0.22f, fillCol, lineCol); // Head
-                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.0f, 0.72f, 0.0f, 0.24f, 0.70f, 0.13f, fillCol, lineCol); // Torso
-                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, -0.35f, 0.72f, 0.0f, 0.11f, 0.68f, 0.11f, fillCol, lineCol); // Right Arm
-                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.35f, 0.72f, 0.0f, 0.11f, 0.68f, 0.11f, fillCol, lineCol); // Left Arm
-                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, -0.12f, 0.0f, 0.0f, 0.11f, 0.70f, 0.11f, fillCol, lineCol); // Right Leg
-                emitPartBox(quadBuf, lineBuf, pose, cx, cy, cz, cos, sin, s, 0.12f, 0.0f, 0.0f, 0.11f, 0.70f, 0.11f, fillCol, lineCol); // Left Leg
-                any = true;
-            }
-
-            if (any) {
+            if (emitAllGhosts(quadBuf, pose, cam, tickDelta, risePerTick, true)) {
                 WorldPrimitiveRenderer.drawQuads(quadBuf, true, true);
-                WorldPrimitiveRenderer.drawLines(lineBuf, true);
             } else {
                 WorldPrimitiveRenderer.discardQuietly(quadBuf);
+            }
+
+            BufferBuilder lineBuf = WorldPrimitiveRenderer.beginLines();
+            if (emitAllGhosts(lineBuf, pose, cam, tickDelta, risePerTick, false)) {
+                WorldPrimitiveRenderer.drawLines(lineBuf, true);
+            } else {
                 WorldPrimitiveRenderer.discardQuietly(lineBuf);
             }
         }
 
         if (doParticles && mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null) {
             Quaternionf orient = new Quaternionf(mc.gameRenderer.mainCamera().rotation());
+
             BufferBuilder starBuf = WorldPrimitiveRenderer.beginTexturedQuads();
-            BufferBuilder glowBuf = WorldPrimitiveRenderer.beginTexturedQuads();
-            boolean any = false;
-
-            for (TotemPopGhost ghost : activeGhosts) {
-                float progress = Mth.clamp((ghost.age + tickDelta) / ghost.maxAge, 0.0f, 1.0f);
-                float fade = 1.0f - progress;
-                if (fade <= 0.02f) continue;
-
-                for (PopParticle p : ghost.particles) {
-                    double px = Mth.lerp(tickDelta, p.prevPos.x, p.pos.x) - cam.x;
-                    double py = Mth.lerp(tickDelta, p.prevPos.y, p.pos.y) - cam.y;
-                    double pz = Mth.lerp(tickDelta, p.prevPos.z, p.pos.z) - cam.z;
-                    int pCol = ColorUtils.withAlphaFactor(resolveColor(p.colorVariant * 22), fade);
-                    float sz = partSize * p.sizeMul * (0.45f + 0.55f * fade);
-                    WorldPrimitiveRenderer.glowSprite(starBuf, pose, px, py, pz, orient, sz, pCol);
-                    WorldPrimitiveRenderer.glowSprite(glowBuf, pose, px, py, pz, orient, sz * 2.1f, ColorUtils.withAlphaFactor(pCol, 0.45f));
-                    any = true;
-                }
-            }
-
-            if (any) {
+            if (emitPopSprites(starBuf, pose, cam, tickDelta, orient, partSize, 1.0f, 1.0f)) {
                 WorldPrimitiveRenderer.drawTexturedQuads(starBuf, TextureAssets.DESIRE_PARTICLE_HEX_SPARK, true, true);
-                WorldPrimitiveRenderer.drawTexturedQuads(glowBuf, TextureAssets.DESIRE_PARTICLE_GLOW, true, true);
             } else {
                 WorldPrimitiveRenderer.discardQuietly(starBuf);
+            }
+
+            BufferBuilder glowBuf = WorldPrimitiveRenderer.beginTexturedQuads();
+            if (emitPopSprites(glowBuf, pose, cam, tickDelta, orient, partSize, 2.1f, 0.45f)) {
+                WorldPrimitiveRenderer.drawTexturedQuads(glowBuf, TextureAssets.DESIRE_PARTICLE_GLOW, true, true);
+            } else {
                 WorldPrimitiveRenderer.discardQuietly(glowBuf);
             }
         }
+    }
+
+    private boolean emitAllGhosts(BufferBuilder buf, Matrix4f pose, Vec3 cam, float tickDelta, float risePerTick, boolean quads) {
+        boolean any = false;
+        for (TotemPopGhost ghost : activeGhosts) {
+            float progress = Mth.clamp((ghost.age + tickDelta) / ghost.maxAge, 0.0f, 1.0f);
+            float fade = 1.0f - progress;
+            if (fade <= 0.02f) continue;
+
+            int baseColor = resolveColor(0);
+            int col = ColorUtils.withAlphaFactor(baseColor, fade * (quads ? 0.28f : 0.85f));
+            float yOff = (ghost.age + tickDelta) * risePerTick;
+            float expand = 1.0f + progress * 0.16f;
+            float s = ghost.scaleH * expand;
+            double cx = ghost.origin.x - cam.x;
+            double cy = ghost.origin.y + yOff - cam.y;
+            double cz = ghost.origin.z - cam.z;
+            double yawRad = Math.toRadians(-ghost.yawDeg);
+            float cos = (float) Math.cos(yawRad);
+            float sin = (float) Math.sin(yawRad);
+
+            emitPartBox(buf, quads, pose, cx, cy, cz, cos, sin, s, 0.0f, 1.44f, 0.0f, 0.22f, 0.44f, 0.22f, col); // Head
+            emitPartBox(buf, quads, pose, cx, cy, cz, cos, sin, s, 0.0f, 0.72f, 0.0f, 0.24f, 0.70f, 0.13f, col); // Torso
+            emitPartBox(buf, quads, pose, cx, cy, cz, cos, sin, s, -0.35f, 0.72f, 0.0f, 0.11f, 0.68f, 0.11f, col); // Right Arm
+            emitPartBox(buf, quads, pose, cx, cy, cz, cos, sin, s, 0.35f, 0.72f, 0.0f, 0.11f, 0.68f, 0.11f, col); // Left Arm
+            emitPartBox(buf, quads, pose, cx, cy, cz, cos, sin, s, -0.12f, 0.0f, 0.0f, 0.11f, 0.70f, 0.11f, col); // Right Leg
+            emitPartBox(buf, quads, pose, cx, cy, cz, cos, sin, s, 0.12f, 0.0f, 0.0f, 0.11f, 0.70f, 0.11f, col); // Left Leg
+            any = true;
+        }
+        return any;
+    }
+
+    private boolean emitPopSprites(BufferBuilder buf, Matrix4f pose, Vec3 cam, float tickDelta, Quaternionf orient,
+                                   float partSize, float sizeMul, float alphaMul) {
+        boolean any = false;
+        for (TotemPopGhost ghost : activeGhosts) {
+            float progress = Mth.clamp((ghost.age + tickDelta) / ghost.maxAge, 0.0f, 1.0f);
+            float fade = 1.0f - progress;
+            if (fade <= 0.02f) continue;
+
+            for (PopParticle p : ghost.particles) {
+                double px = Mth.lerp(tickDelta, p.prevPos.x, p.pos.x) - cam.x;
+                double py = Mth.lerp(tickDelta, p.prevPos.y, p.pos.y) - cam.y;
+                double pz = Mth.lerp(tickDelta, p.prevPos.z, p.pos.z) - cam.z;
+                int pCol = ColorUtils.withAlphaFactor(resolveColor(p.colorVariant * 22), fade * alphaMul);
+                float sz = partSize * p.sizeMul * (0.45f + 0.55f * fade) * sizeMul;
+                WorldPrimitiveRenderer.glowSprite(buf, pose, px, py, pz, orient, sz, pCol);
+                any = true;
+            }
+        }
+        return any;
     }
 
     private int resolveColor(int indexOffset) {
@@ -246,10 +257,10 @@ public class PopChamsModule extends Module {
     }
 
     private static void emitPartBox(
-            BufferBuilder quads, BufferBuilder lines, Matrix4f pose,
+            BufferBuilder buf, boolean quads, Matrix4f pose,
             double bx, double by, double bz, float cos, float sin, float scale,
             float lx, float ly, float lz, float halfW, float h, float halfD,
-            int fillCol, int lineCol
+            int col
     ) {
         float xMin = (lx - halfW) * scale, xMax = (lx + halfW) * scale;
         float zMin = (lz - halfD) * scale, zMax = (lz + halfD) * scale;
@@ -261,29 +272,29 @@ public class PopChamsModule extends Module {
         float rx2 = (float) (bx + xMax * cos - zMax * sin), rz2 = (float) (bz + xMax * sin + zMax * cos);
         float rx3 = (float) (bx + xMin * cos - zMax * sin), rz3 = (float) (bz + xMin * sin + zMax * cos);
 
-        // 6 faces
-        addQuad(quads, pose, rx0, y0, rz0, rx1, y0, rz1, rx2, y0, rz2, rx3, y0, rz3, fillCol);
-        addQuad(quads, pose, rx0, y1, rz0, rx1, y1, rz1, rx2, y1, rz2, rx3, y1, rz3, fillCol);
-        addQuad(quads, pose, rx0, y0, rz0, rx1, y0, rz1, rx1, y1, rz1, rx0, y1, rz0, fillCol);
-        addQuad(quads, pose, rx1, y0, rz1, rx2, y0, rz2, rx2, y1, rz2, rx1, y1, rz1, fillCol);
-        addQuad(quads, pose, rx2, y0, rz2, rx3, y0, rz3, rx3, y1, rz3, rx2, y1, rz2, fillCol);
-        addQuad(quads, pose, rx3, y0, rz3, rx0, y0, rz0, rx0, y1, rz0, rx3, y1, rz3, fillCol);
+        if (quads) {
+            addQuad(buf, pose, rx0, y0, rz0, rx1, y0, rz1, rx2, y0, rz2, rx3, y0, rz3, col);
+            addQuad(buf, pose, rx0, y1, rz0, rx1, y1, rz1, rx2, y1, rz2, rx3, y1, rz3, col);
+            addQuad(buf, pose, rx0, y0, rz0, rx1, y0, rz1, rx1, y1, rz1, rx0, y1, rz0, col);
+            addQuad(buf, pose, rx1, y0, rz1, rx2, y0, rz2, rx2, y1, rz2, rx1, y1, rz1, col);
+            addQuad(buf, pose, rx2, y0, rz2, rx3, y0, rz3, rx3, y1, rz3, rx2, y1, rz2, col);
+            addQuad(buf, pose, rx3, y0, rz3, rx0, y0, rz0, rx0, y1, rz0, rx3, y1, rz3, col);
+        } else {
+            addLine(buf, pose, rx0, y0, rz0, rx1, y0, rz1, col);
+            addLine(buf, pose, rx1, y0, rz1, rx2, y0, rz2, col);
+            addLine(buf, pose, rx2, y0, rz2, rx3, y0, rz3, col);
+            addLine(buf, pose, rx3, y0, rz3, rx0, y0, rz0, col);
 
-        // 12 edges
-        addLine(lines, pose, rx0, y0, rz0, rx1, y0, rz1, lineCol);
-        addLine(lines, pose, rx1, y0, rz1, rx2, y0, rz2, lineCol);
-        addLine(lines, pose, rx2, y0, rz2, rx3, y0, rz3, lineCol);
-        addLine(lines, pose, rx3, y0, rz3, rx0, y0, rz0, lineCol);
+            addLine(buf, pose, rx0, y1, rz0, rx1, y1, rz1, col);
+            addLine(buf, pose, rx1, y1, rz1, rx2, y1, rz2, col);
+            addLine(buf, pose, rx2, y1, rz2, rx3, y1, rz3, col);
+            addLine(buf, pose, rx3, y1, rz3, rx0, y1, rz0, col);
 
-        addLine(lines, pose, rx0, y1, rz0, rx1, y1, rz1, lineCol);
-        addLine(lines, pose, rx1, y1, rz1, rx2, y1, rz2, lineCol);
-        addLine(lines, pose, rx2, y1, rz2, rx3, y1, rz3, lineCol);
-        addLine(lines, pose, rx3, y1, rz3, rx0, y1, rz0, lineCol);
-
-        addLine(lines, pose, rx0, y0, rz0, rx0, y1, rz0, lineCol);
-        addLine(lines, pose, rx1, y0, rz1, rx1, y1, rz1, lineCol);
-        addLine(lines, pose, rx2, y0, rz2, rx2, y1, rz2, lineCol);
-        addLine(lines, pose, rx3, y0, rz3, rx3, y1, rz3, lineCol);
+            addLine(buf, pose, rx0, y0, rz0, rx0, y1, rz0, col);
+            addLine(buf, pose, rx1, y0, rz1, rx1, y1, rz1, col);
+            addLine(buf, pose, rx2, y0, rz2, rx2, y1, rz2, col);
+            addLine(buf, pose, rx3, y0, rz3, rx3, y1, rz3, col);
+        }
     }
 
     private static void addQuad(BufferBuilder b, Matrix4f p,

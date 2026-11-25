@@ -21,7 +21,7 @@ JAR_NAME = "opticumeclient-26.3.jar"
 APPDATA = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
 LAUNCHER = os.path.join(APPDATA, "ElyPrismLauncher")
 MODS_DIR = os.path.join(LAUNCHER, "instances", "OPTIMUSPRIME", "minecraft", "mods")
-MOD_VERSION = "1.0.0+mc26.3"
+MOD_VERSION = "1.5.5+mc26.3"
 
 MANIFEST = (
     "Manifest-Version: 1.0\r\n"
@@ -30,7 +30,7 @@ MANIFEST = (
     "Fabric-Jar-Type: classes\r\n"
     "Fabric-Mapping-Namespace: official\r\n"
     "Fabric-Minecraft-Version: 26.3\r\n"
-    "Fabric-Loader-Version: 0.19.5\r\n\r\n"
+    "Fabric-Loader-Version: 0.20.1\r\n\r\n"
 )
 
 

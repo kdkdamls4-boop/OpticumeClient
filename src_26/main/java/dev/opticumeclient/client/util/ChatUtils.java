@@ -13,7 +13,7 @@ public final class ChatUtils {
     }
 
     public static void sendClientMessage(String msg) {
-        if (msg == null) return;
+        if (msg == null || dev.opticumeclient.client.modules.other.PanicModule.isSilentModeActive()) return;
         MutableComponent comp = Component.literal("[")
                 .withStyle(ChatFormatting.DARK_GRAY)
                 .append(Component.literal("Opticume").withStyle(ChatFormatting.AQUA))
@@ -23,7 +23,7 @@ public final class ChatUtils {
     }
 
     public static void sendError(String msg) {
-        if (msg == null) return;
+        if (msg == null || dev.opticumeclient.client.modules.other.PanicModule.isSilentModeActive()) return;
         MutableComponent comp = Component.literal("[")
                 .withStyle(ChatFormatting.DARK_GRAY)
                 .append(Component.literal("Opticume").withStyle(ChatFormatting.AQUA))
@@ -40,6 +40,7 @@ public final class ChatUtils {
             mc.gui.hud.getChat().addClientSystemMessage(component);
         } else {
             mc.execute(() -> {
+                if (dev.opticumeclient.client.modules.other.PanicModule.isSilentModeActive()) return;
                 if (mc.gui != null && mc.gui.hud != null && mc.gui.hud.getChat() != null) {
                     mc.gui.hud.getChat().addClientSystemMessage(component);
                 }

@@ -29,11 +29,9 @@ public final class OpticumeFonts {
     public static final String KEY_ETERNAL_HEAVEN = "eternal_heaven";
     public static final String KEY_DREAMLINE_SF = "dreamline_sf";
     public static final String KEY_MENU_INTER = "menu_inter";
-    public static final String KEY_HUD_REGULAR = "hud_regular";
     public static final String KEY_HUD_MEDIUM = "hud_medium";
     public static final String KEY_HUD_SEMIBOLD = "hud_semibold";
     public static final String KEY_HUD_BOLD = "hud_bold";
-    public static final String KEY_DIMASIK_MEDIUM = "dimasik_medium";
 
     private static volatile MsdfFontFace modernFace;
     private static volatile MsdfFontFace smoothFace;
@@ -48,6 +46,36 @@ public final class OpticumeFonts {
 
     public static boolean isCustomStyle(String style) {
         return "Modern".equalsIgnoreCase(style) || "Smooth".equalsIgnoreCase(style);
+    }
+
+    /**
+     * Eagerly loads core MSDF font metadata and warms up RenderPearl font pipelines on the render thread
+     * so opening menus or joining crowded spawns does not cause first-frame shader compilation spikes.
+     */
+    public static void prewarm() {
+        String[] directKeys = {
+                KEY_HUD_MEDIUM, KEY_HUD_SEMIBOLD, KEY_MENU_INTER, KEY_ETERNAL_HEAVEN
+        };
+        for (String key : directKeys) {
+            try {
+                MsdfFontFace face = getDirectFace(key);
+                if (face != null) {
+                    face.getTextureView();
+                    isPipelineReady(face);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        for (String style : new String[]{"Modern", "Smooth"}) {
+            try {
+                MsdfFontFace face = getFace(style);
+                if (face != null) {
+                    face.getTextureView();
+                    isPipelineReady(face);
+                }
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     public static MsdfFontFace getFace(String style) {
@@ -151,11 +179,9 @@ public final class OpticumeFonts {
                 case KEY_ETERNAL_HEAVEN -> "fonts/desire/eternal/eternal_heaven";
                 case KEY_DREAMLINE_SF -> "fonts/desire/dreamline/dreamlinesf";
                 case KEY_MENU_INTER -> "fonts/desire/mainmenu/mainmenu_inter";
-                case KEY_HUD_REGULAR -> "fonts/desire/blade_sf/sf_pro_regular";
                 case KEY_HUD_MEDIUM -> "fonts/desire/blade_sf/sf_pro_medium";
                 case KEY_HUD_SEMIBOLD -> "fonts/desire/blade_sf/sf_pro_semibold";
                 case KEY_HUD_BOLD -> "fonts/desire/blade_sf/sf_pro_bold";
-                case KEY_DIMASIK_MEDIUM -> "fonts/desire/dimasik/medium";
                 default -> null;
             };
             if (base == null) return null;

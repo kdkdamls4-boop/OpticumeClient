@@ -62,6 +62,15 @@ public class NameTagsRender {
             EquipmentSlot.OFFHAND, EquipmentSlot.HEAD, EquipmentSlot.CHEST,
             EquipmentSlot.LEGS, EquipmentSlot.FEET, EquipmentSlot.MAINHAND
     };
+    private static final EquipmentSlot[] HELD_SLOTS = {
+            EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND
+    };
+    private static final String[] ROMAN_THOUSANDS = {"", "M", "MM", "MMM"};
+    private static final String[] ROMAN_HUNDREDS = {"", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"};
+    private static final String[] ROMAN_TENS = {"", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"};
+    private static final String[] ROMAN_ONES = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"};
+    private static final int MAX_LIQUID_GLASS_TAGS = 6;
+    private static final long CACHE_REFRESH_MS = 200L;
 
     private static final long FADE_OUT_MS = 1000L;
     private static final float LIVING_RAISE = 0.28f;
@@ -70,6 +79,14 @@ public class NameTagsRender {
 
     private final NameTagsModule module;
     private final Map<Integer, TagState> states = new HashMap<>();
+    private final List<TagState> drawList = new ArrayList<>(32);
+    private final List<ItemStack> armorScratch = new ArrayList<>(6);
+    private final List<Object2IntMap.Entry<Holder<Enchantment>>> enchantEntriesScratch = new ArrayList<>(8);
+    private final List<String> enchantLabelsScratch = new ArrayList<>(8);
+    private final List<EffectLine> effectLinesScratch = new ArrayList<>(8);
+    private final StringBuilder textScratch = new StringBuilder(64);
+    private final Comparator<TagState> distanceDescComparator = (a, b) -> Double.compare(b.distanceSq, a.distanceSq);
+    private final Comparator<EffectLine> effectWidthComparator = (a, b) -> Float.compare(a.width, b.width);
     private ClientLevel stateLevel;
 
     public NameTagsRender(NameTagsModule module) {
@@ -78,7 +95,13 @@ public class NameTagsRender {
 
     public void clear() {
         states.clear();
+        drawList.clear();
         stateLevel = null;
+    }
+
+    public void trimStaleStates() {
+        if (states.isEmpty()) return;
+        states.values().removeIf(st -> !st.targeted || st.entity == null || st.entity.isRemoved());
     }
 
     public void onRender(GuiGraphicsExtractor context, float tickDelta) {
@@ -94,12 +117,23 @@ public class NameTagsRender {
 
         Render3DHelper.setupRender3D();
         long now = System.currentTimeMillis();
+        Vec3 eye = mc.player.getEyePosition(tickDelta);
+        double maxDist = module.maxDistance.getValue();
+        double maxDistSq = maxDist * maxDist;
+        double friendMaxDistSq = (maxDist * 1.5) * (maxDist * 1.5);
 
         for (TagState state : states.values()) {
             state.targeted = false;
         }
         for (Entity entity : mc.level.entitiesForRendering()) {
             if (!isEntityTarget(mc, entity)) continue;
+            double dx = entity.getX() - eye.x;
+            double dy = entity.getY() - eye.y;
+            double dz = entity.getZ() - eye.z;
+            double dSq = dx * dx + dy * dy + dz * dz;
+            double limitSq = (entity instanceof Player p && FriendManager.getInstance().isFriend(p)) ? friendMaxDistSq : maxDistSq;
+            if (dSq > limitSq) continue;
+
             TagState state = states.get(entity.getId());
             if (state == null || state.entity != entity) {
                 state = new TagState(entity);
@@ -108,8 +142,7 @@ public class NameTagsRender {
             state.targeted = true;
         }
 
-        Vec3 eye = mc.player.getEyePosition(tickDelta);
-        List<TagState> drawList = new ArrayList<>();
+        drawList.clear();
         Iterator<TagState> iterator = states.values().iterator();
         while (iterator.hasNext()) {
             TagState state = iterator.next();
@@ -132,13 +165,18 @@ public class NameTagsRender {
             drawList.add(state);
         }
 
-        // Farther first so closer name tags overlap properly
-        drawList.sort(Comparator.comparingDouble((TagState s) -> s.distanceSq).reversed());
-        for (TagState state : drawList) {
+        // Farther first so closer name tags overlap properly; reserve Liquid Glass for closest MAX_LIQUID_GLASS_TAGS
+        if (drawList.size() > 1) {
+            drawList.sort(distanceDescComparator);
+        }
+        int glassStartIdx = Math.max(0, drawList.size() - MAX_LIQUID_GLASS_TAGS);
+        for (int i = 0; i < drawList.size(); i++) {
+            TagState state = drawList.get(i);
+            boolean allowGlass = (i >= glassStartIdx) && state.alpha > 0.7f;
             if (state.entity instanceof ItemEntity item) {
-                renderItemTag(context, state, item);
+                renderItemTag(context, state, item, allowGlass);
             } else if (state.entity instanceof LivingEntity living) {
-                renderEntityTag(mc, context, state, living);
+                renderEntityTag(mc, context, state, living, now, allowGlass);
             }
         }
     }
@@ -207,7 +245,7 @@ public class NameTagsRender {
         return true;
     }
 
-    private void renderItemTag(GuiGraphicsExtractor context, TagState state, ItemEntity item) {
+    private void renderItemTag(GuiGraphicsExtractor context, TagState state, ItemEntity item, boolean allowGlass) {
         float alpha = state.alpha;
         ItemStack stack = item.getItem();
         float textScale = 0.72f * module.tagScale.getFloatValue();
@@ -224,11 +262,11 @@ public class NameTagsRender {
         float x = state.screenX - width * 0.5f;
         float y = state.screenY - height * 0.5f;
 
-        drawTagSurface(context, x, y, width, height, 3.5f, false, alpha);
+        drawTagSurface(context, x, y, width, height, 3.5f, false, alpha, allowGlass);
         drawComponent(context, label, x + 4.0f, y + (height - 7.5f * module.tagScale.getFloatValue()) * 0.5f, textScale, alpha);
     }
 
-    private void renderEntityTag(Minecraft mc, GuiGraphicsExtractor context, TagState state, LivingEntity entity) {
+    private void renderEntityTag(Minecraft mc, GuiGraphicsExtractor context, TagState state, LivingEntity entity, long now, boolean allowGlass) {
         float alpha = state.alpha;
         float sc = module.tagScale.getFloatValue();
 
@@ -244,21 +282,52 @@ public class NameTagsRender {
         float heartSize = 7.5f * sc;
         float pingIconSize = 6.5f * sc;
 
-        Component name = entity.getDisplayName();
-        float realHp = entity instanceof Player ? TargetHudModule.getRealHealth(entity) + entity.getAbsorptionAmount()
-                : entity.getHealth() + entity.getAbsorptionAmount();
-        String hpText = String.valueOf(Math.max(0, Math.round(realHp)));
-        String pingText = pingOf(mc, entity);
+        boolean masked = dev.opticumeclient.client.modules.other.NameProtectModule.shouldMaskHud();
+        boolean scaleChanged = Math.abs(state.cachedTextScale - textScale) > 0.001f;
+        if (state.cachedName == null || scaleChanged || state.cachedMasked != masked || now - state.lastMetaRefreshMs >= CACHE_REFRESH_MS) {
+            Component freshName = masked
+                    ? dev.opticumeclient.client.modules.other.NameProtectModule.protectComponent(entity.getDisplayName())
+                    : entity.getDisplayName();
+            state.cachedName = freshName;
+            state.cachedNameWidth = componentWidth(freshName, textScale);
+            state.cachedMasked = masked;
+            state.cachedTextScale = textScale;
 
-        float nameWidth = componentWidth(name, textScale);
-        float hpWidth = Render2DHelper.getTextWidth(hpText, textScale);
-        float pingWidth = pingText.isEmpty() ? 0.0f : Render2DHelper.getTextWidth(pingText + "ms", smallScale);
+            int pingVal = pingIntOf(mc, entity);
+            if (pingVal != state.cachedPingVal || scaleChanged) {
+                state.cachedPingVal = pingVal;
+                if (pingVal >= 0) {
+                    state.cachedPingLabel = pingVal + "ms";
+                    state.cachedPingWidth = Render2DHelper.getTextWidth(state.cachedPingLabel, smallScale);
+                } else {
+                    state.cachedPingLabel = "";
+                    state.cachedPingWidth = 0.0f;
+                }
+            }
+            state.lastMetaRefreshMs = now;
+        }
+
+        float realHp = isPlayer ? TargetHudModule.getRealHealth(entity) + entity.getAbsorptionAmount()
+                : entity.getHealth() + entity.getAbsorptionAmount();
+        int hpInt = Math.max(0, Math.round(realHp));
+        if (hpInt != state.cachedHpInt || scaleChanged || state.cachedHpText == null) {
+            state.cachedHpInt = hpInt;
+            state.cachedHpText = Integer.toString(hpInt);
+            state.cachedHpWidth = Render2DHelper.getTextWidth(state.cachedHpText, textScale);
+        }
+
+        Component name = state.cachedName;
+        String hpText = state.cachedHpText;
+        String pingLabel = state.cachedPingLabel;
+        float nameWidth = state.cachedNameWidth;
+        float hpWidth = state.cachedHpWidth;
+        float pingWidth = state.cachedPingWidth;
 
         boolean showHead = module.viewHead.isEnabled();
         float padX = 4.0f * sc;
         float width = padX + (showHead ? headSize + 4.0f * sc : 0.0f)
                 + nameWidth + 5.0f * sc + heartSize + 2.0f * sc + hpWidth + padX;
-        if (!pingText.isEmpty()) {
+        if (!pingLabel.isEmpty()) {
             width += 5.0f * sc + pingIconSize + 2.0f * sc + pingWidth;
         }
         float height = 14.5f * sc;
@@ -270,7 +339,7 @@ public class NameTagsRender {
         int textColor = ColorUtils.rgba(245, 247, 255, a255);
         float textY = y + (height - 8.0f * sc) * 0.5f + 0.5f;
 
-        drawTagSurface(context, x, y, width, height, 4.5f * sc, isFriend, alpha);
+        drawTagSurface(context, x, y, width, height, 4.5f * sc, isFriend, alpha, allowGlass);
 
         float cursor = x + padX;
         if (showHead) {
@@ -310,7 +379,7 @@ public class NameTagsRender {
         Render2DHelper.drawScaledText(context, hpText, cursor, textY, textColor, textScale, false);
         cursor += hpWidth;
 
-        if (!pingText.isEmpty()) {
+        if (!pingLabel.isEmpty()) {
             cursor += 5.0f * sc;
             Render2DHelper.drawTextureFloat(
                     context,
@@ -324,7 +393,7 @@ public class NameTagsRender {
             cursor += pingIconSize + 2.0f * sc;
             Render2DHelper.drawScaledText(
                     context,
-                    pingText + "ms",
+                    pingLabel,
                     cursor,
                     y + (height - 7.0f * sc) * 0.5f + 0.5f,
                     ColorUtils.rgba(195, 205, 226, a255),
@@ -346,10 +415,10 @@ public class NameTagsRender {
         }
     }
 
-    private void drawTagSurface(GuiGraphicsExtractor context, float x, float y, float w, float h, float r, boolean isFriend, float alpha) {
+    private void drawTagSurface(GuiGraphicsExtractor context, float x, float y, float w, float h, float r, boolean isFriend, float alpha, boolean allowGlass) {
         int aBg = Mth.clamp(Math.round(215.0f * alpha), 0, 255);
         int accent = isFriend ? FRIEND_GREEN : ThemeManager.getInstance().getAccentColor(0);
-        if (module.liquidGlass.isEnabled() && alpha > 0.15f) {
+        if (allowGlass && module.liquidGlass.isEnabled() && alpha > 0.15f) {
             HudPanelRenderer.drawSurface(context, "NameTags", x, y, w, h, r, aBg, isFriend ? 42 : 28);
         } else {
             Render2DHelper.drawRoundedRectFloat(context, x, y, w, h, r, ColorUtils.withAlpha(DARK_BG, aBg));
@@ -374,10 +443,10 @@ public class NameTagsRender {
         pose.popMatrix();
     }
 
-    private static String pingOf(Minecraft mc, LivingEntity entity) {
-        if (!(entity instanceof Player player) || mc.getConnection() == null) return "";
+    private static int pingIntOf(Minecraft mc, LivingEntity entity) {
+        if (!(entity instanceof Player player) || mc.getConnection() == null) return -1;
         PlayerInfo info = mc.getConnection().getPlayerInfo(player.getUUID());
-        return info == null ? "" : String.valueOf(Math.max(0, info.getLatency()));
+        return info == null ? -1 : Math.max(0, info.getLatency());
     }
 
     private float drawHeldItems(GuiGraphicsExtractor context, LivingEntity entity, float centerX, float startY, float sc, float alpha) {
@@ -386,7 +455,7 @@ public class NameTagsRender {
         int aBg = Mth.clamp(Math.round(190.0f * alpha), 0, 255);
         int aText = Mth.clamp(Math.round(255.0f * alpha), 0, 255);
 
-        for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.MAINHAND, EquipmentSlot.OFFHAND}) {
+        for (EquipmentSlot slot : HELD_SLOTS) {
             ItemStack stack = entity.getItemBySlot(slot);
             if (stack.isEmpty()) continue;
             String text = module.viewDisplayName.isEnabled()
@@ -402,26 +471,29 @@ public class NameTagsRender {
     }
 
     private void drawArmorRow(GuiGraphicsExtractor context, LivingEntity entity, float centerX, float pillTop, float sc, float alpha) {
-        List<ItemStack> stacks = new ArrayList<>();
+        armorScratch.clear();
         for (EquipmentSlot slot : DISPLAY_ORDER) {
             ItemStack stack = entity.getItemBySlot(slot);
-            if (!stack.isEmpty()) stacks.add(stack);
+            if (!stack.isEmpty()) armorScratch.add(stack);
         }
-        if (stacks.isEmpty()) return;
+        if (armorScratch.isEmpty()) return;
 
         float itemSize = 13.0f * sc;
         float step = 15.0f * sc;
         float y = pillTop - itemSize - 3.5f * sc;
-        float offsetX = centerX - ((stacks.size() - 1) * step + itemSize) * 0.5f;
+        float offsetX = centerX - ((armorScratch.size() - 1) * step + itemSize) * 0.5f;
         float enchScale = 0.58f * sc;
         int a = Mth.clamp(Math.round(255.0f * alpha), 0, 255);
 
-        for (ItemStack stack : stacks) {
+        for (int i = 0; i < armorScratch.size(); i++) {
+            ItemStack stack = armorScratch.get(i);
             NameTagItemRenderer.draw(context, stack, offsetX, y, itemSize, alpha);
 
             if (module.viewEnchants.isEnabled() && !stack.getEnchantments().isEmpty()) {
                 float enchantY = y - 6.5f * sc;
-                for (String enchantment : collectEnchants(stack)) {
+                collectEnchants(stack);
+                for (int e = 0; e < enchantLabelsScratch.size(); e++) {
+                    String enchantment = enchantLabelsScratch.get(e);
                     float eWidth = Render2DHelper.getTextWidth(enchantment, enchScale);
                     int col = isOverLevelled(enchantment)
                             ? ColorUtils.withAlpha(OVER_LEVEL_RED, a)
@@ -454,43 +526,53 @@ public class NameTagsRender {
         return (key.equalsIgnoreCase("Sh") && level > 5) || (key.equalsIgnoreCase("Pr") && level > 4);
     }
 
-    private static List<String> collectEnchants(ItemStack stack) {
-        List<Object2IntMap.Entry<Holder<Enchantment>>> sorted = new ArrayList<>(stack.getEnchantments().entrySet());
-        sorted.sort((a, b) -> Integer.compare(b.getIntValue(), a.getIntValue()));
-        List<String> result = new ArrayList<>();
-        for (Object2IntMap.Entry<Holder<Enchantment>> entry : sorted) {
-            String full = entry.getKey().value().description().getString();
-            String shortName = full.substring(0, Math.min(2, full.length()));
-            result.add(shortName + entry.getIntValue());
+    private void collectEnchants(ItemStack stack) {
+        enchantEntriesScratch.clear();
+        enchantLabelsScratch.clear();
+        enchantEntriesScratch.addAll(stack.getEnchantments().entrySet());
+        if (enchantEntriesScratch.size() > 1) {
+            enchantEntriesScratch.sort((a, b) -> Integer.compare(b.getIntValue(), a.getIntValue()));
         }
-        return result;
+        for (int i = 0; i < enchantEntriesScratch.size(); i++) {
+            Object2IntMap.Entry<Holder<Enchantment>> entry = enchantEntriesScratch.get(i);
+            String full = entry.getKey().value().description().getString();
+            textScratch.setLength(0);
+            int len = Math.min(2, full.length());
+            textScratch.append(full, 0, len).append(entry.getIntValue());
+            enchantLabelsScratch.add(textScratch.toString());
+        }
     }
 
     private void renderEffects(GuiGraphicsExtractor context, LivingEntity entity, float centerX, float startY, float sc, float alpha) {
-        List<MobEffectInstance> effects = List.copyOf(entity.getActiveEffects());
+        var effects = entity.getActiveEffects();
         if (effects.isEmpty()) return;
 
         float fontScale = 0.62f * sc;
-        List<EffectLine> lines = new ArrayList<>();
+        effectLinesScratch.clear();
         for (MobEffectInstance inst : effects) {
             int durationTicks = inst.getDuration();
             if (durationTicks <= 20) continue;
             String name = inst.getEffect().value().getDisplayName().getString();
             int amp = inst.getAmplifier() + 1;
-            StringBuilder sb = new StringBuilder(name);
-            if (amp > 1) sb.append(' ').append(toRomanNumeral(amp));
-            sb.append(' ').append(formatDuration(durationTicks));
-            String text = sb.toString();
-            lines.add(new EffectLine(text, Render2DHelper.getTextWidth(text, fontScale), effectColor(inst)));
+            textScratch.setLength(0);
+            textScratch.append(name);
+            if (amp > 1) {
+                textScratch.append(' ');
+                appendRomanNumeral(textScratch, amp);
+            }
+            textScratch.append(' ');
+            appendDuration(textScratch, durationTicks);
+            String text = textScratch.toString();
+            effectLinesScratch.add(new EffectLine(text, Render2DHelper.getTextWidth(text, fontScale), effectColor(inst)));
         }
-        if (lines.size() > 1) {
-            lines.sort(Comparator.comparingDouble(e -> e.width));
+        if (effectLinesScratch.size() > 1) {
+            effectLinesScratch.sort(effectWidthComparator);
         }
 
         float step = 7.5f * sc;
         int a = Mth.clamp(Math.round(255.0f * alpha), 0, 255);
-        for (int i = 0; i < lines.size(); i++) {
-            EffectLine line = lines.get(i);
+        for (int i = 0; i < effectLinesScratch.size(); i++) {
+            EffectLine line = effectLinesScratch.get(i);
             Render2DHelper.drawScaledText(
                     context,
                     line.text,
@@ -515,20 +597,24 @@ public class NameTagsRender {
         return 0xFFFFFFFF;
     }
 
-    private static String formatDuration(int ticks) {
+    private static void appendDuration(StringBuilder sb, int ticks) {
         int seconds = ticks / 20;
         int minutes = seconds / 60;
         seconds = seconds % 60;
-        return String.format("%d:%02d", minutes, seconds);
+        sb.append(minutes).append(':');
+        if (seconds < 10) sb.append('0');
+        sb.append(seconds);
     }
 
-    private static String toRomanNumeral(int number) {
-        if (number < 1 || number > 3999) return String.valueOf(number);
-        String[] thousands = {"", "M", "MM", "MMM"};
-        String[] hundreds = {"", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"};
-        String[] tens = {"", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"};
-        String[] ones = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"};
-        return thousands[number / 1000] + hundreds[(number % 1000) / 100] + tens[(number % 100) / 10] + ones[number % 10];
+    private static void appendRomanNumeral(StringBuilder sb, int number) {
+        if (number < 1 || number > 3999) {
+            sb.append(number);
+            return;
+        }
+        sb.append(ROMAN_THOUSANDS[number / 1000])
+                .append(ROMAN_HUNDREDS[(number % 1000) / 100])
+                .append(ROMAN_TENS[(number % 100) / 10])
+                .append(ROMAN_ONES[number % 10]);
     }
 
     private static void drawComponent(GuiGraphicsExtractor context, Component component, float x, float y, float scale, float alpha) {
@@ -566,6 +652,17 @@ public class NameTagsRender {
         float screenX, screenY;
         double distanceSq;
         float alpha;
+        Component cachedName;
+        float cachedNameWidth;
+        float cachedTextScale = -1.0f;
+        boolean cachedMasked;
+        int cachedHpInt = Integer.MIN_VALUE;
+        String cachedHpText;
+        float cachedHpWidth;
+        int cachedPingVal = Integer.MIN_VALUE;
+        String cachedPingLabel = "";
+        float cachedPingWidth;
+        long lastMetaRefreshMs;
         private float fadeFrom;
         private long fadeStart;
         private boolean fading;

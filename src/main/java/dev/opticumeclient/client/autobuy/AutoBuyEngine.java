@@ -63,6 +63,7 @@ public class AutoBuyEngine {
     private long lastSuspiciousEscapeTime = 0L;
 
     private int confirmActionCooldown = 0;
+    private int awaitingConfirmationTicks = 0;
     private boolean awaitingInventoryArrival = false;
     private String awaitingItemId = null;
     private int preBuyInventoryCount = 0;
@@ -81,6 +82,7 @@ public class AutoBuyEngine {
     private float speedJitterMultiplier = 1.0F;
     private int speedJitterTimer = 0;
     private int refreshThrottleCounter = 0;
+    private long lastAutoParseMs = 0L;
 
     private AutoBuyEngine() {
     }
@@ -113,9 +115,13 @@ public class AutoBuyEngine {
             return;
         }
 
+        boolean wasParserActive = this.parser.isActive();
         try {
             this.parser.tick();
         } catch (Throwable ignored) {
+        }
+        if (wasParserActive && !this.parser.isActive()) {
+            this.lastAutoParseMs = System.currentTimeMillis();
         }
         if (this.parser.isActive()) return;
 
@@ -133,7 +139,10 @@ public class AutoBuyEngine {
             this.afkInitDone = false;
         }
 
-        if (!cfg.enabled) return;
+        if (!cfg.enabled) {
+            this.awaitingConfirmationTicks = 0;
+            return;
+        }
 
         if (this.pauseBeforeActionTicks > 0) {
             this.pauseBeforeActionTicks--;
@@ -157,12 +166,62 @@ public class AutoBuyEngine {
         if (this.seller.isActive()) return;
 
         try {
+            if (this.awaitingConfirmationTicks > 0) {
+                boolean confirmOpen = mc.gui != null && mc.gui.screen() instanceof ContainerScreen gcs && isConfirmScreen(gcs);
+                if (!confirmOpen) {
+                    this.awaitingConfirmationTicks--;
+                    if (this.awaitingConfirmationTicks == 0 && !this.awaitingInventoryArrival) {
+                        this.targetedItemId = null;
+                        this.targetedMaxUnitPrice = 0L;
+                        this.targetedMarkers = null;
+                        this.targetedSeller = null;
+                        this.targetedSuspicious = false;
+                    }
+                }
+            }
+            if (this.checkAutoParseTimer(cfg)) return;
             this.checkAutoRelistTimer();
             this.processAuctionScreen();
             this.processConfirmationScreen();
             this.processAutoRefresh();
         } catch (Throwable ignored) {
         }
+    }
+
+    private boolean checkAutoParseTimer(AutoBuyConfig cfg) {
+        if (!cfg.autoParse || this.awaitingInventoryArrival || this.awaitingConfirmationTicks > 0
+                || this.parser.isActive() || this.relist.isActive() || this.seller.isActive()) {
+            return false;
+        }
+        if (mc.gui != null && mc.gui.screen() instanceof ContainerScreen gcs && isConfirmScreen(gcs)) {
+            return false;
+        }
+        boolean hasEnabled = false;
+        boolean hasUnpriced = false;
+        for (ItemEntry e : cfg.entries) {
+            if (e != null && e.enabled) {
+                hasEnabled = true;
+                if (e.maxUnitPrice <= 0L) {
+                    hasUnpriced = true;
+                }
+            }
+        }
+        if (!hasEnabled) return false;
+
+        long now = System.currentTimeMillis();
+        long intervalMs = Math.max(60L, cfg.parseIntervalSeconds) * 1000L;
+        if (this.lastAutoParseMs == 0L) {
+            this.lastAutoParseMs = now;
+            if (!hasUnpriced) {
+                return false;
+            }
+        } else if (now - this.lastAutoParseMs < intervalMs) {
+            return false;
+        }
+
+        this.lastAutoParseMs = now;
+        this.parser.start();
+        return this.parser.isActive();
     }
 
     /**
@@ -352,7 +411,11 @@ public class AutoBuyEngine {
     public void onPlayerTeleport() {
         AutoBuyConfig cfg = AutoBuyConfig.cfg();
         AutoBuyModule mod = AutoBuyModule.getInstance();
-        if (cfg.enabled || (mod != null && mod.isEnabled())) {
+        boolean parserWasActive = this.parser.isActive();
+        if (parserWasActive) {
+            this.parser.stop(false);
+        }
+        if (cfg.enabled || parserWasActive || (mod != null && mod.isEnabled())) {
             cfg.enabled = false;
             if (mod != null) {
                 mc.execute(() -> mod.setEnabled(false));
@@ -453,6 +516,9 @@ public class AutoBuyEngine {
                 return;
             }
             this.clickSlot(syncId, chosenLot.slot);
+            if (this.awaitingConfirmationTicks <= 0) {
+                this.awaitingConfirmationTicks = 60;
+            }
         }
     }
 
@@ -594,6 +660,7 @@ public class AutoBuyEngine {
         if (!(mc.gui.screen() instanceof ContainerScreen gcs) || !isConfirmScreen(gcs) || !cfg.enabled) {
             return;
         }
+        this.awaitingConfirmationTicks = 0;
 
         ChestMenu handler = gcs.getMenu();
         int syncId = handler.containerId;

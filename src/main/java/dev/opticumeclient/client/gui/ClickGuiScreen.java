@@ -254,6 +254,7 @@ public class ClickGuiScreen extends Screen {
 
         SystemTheme.update(dt);
         searchModal.update(dt);
+        syncTextInputFocus();
 
         float openTarget = closing ? 0.0f : 1.0f;
         openProgress += (openTarget - openProgress) * (1.0f - (float) Math.exp(-16.0f * dt));
@@ -356,107 +357,127 @@ public class ClickGuiScreen extends Screen {
         int accent = ThemeManager.getInstance().getAccentColor(0);
 
         context.enableScissor(Math.round(sx), Math.round(sy), Math.round(sx + sw), Math.round(sy + sh));
+        try {
+            // Top Brand Logo (smooth slide from centered Dock icon to left-aligned branding)
+            float centeredLogoX = sx + (sw - 18.0f) * 0.5f;
+            float expandedLogoX = sx + 10.0f;
+            float logoX = Mth.lerp(expandRatio, centeredLogoX, expandedLogoX);
+            Render2DHelper.drawTextureFloat(context, TextureAssets.MINI_LOGO, logoX, sy + 8.5f, 18.0f, 18.0f,
+                    ColorUtils.withAlphaFactor(0xFFFFFFFF, alpha));
+            if (expandRatio > 0.08f) {
+                float titleAlpha = alpha * Mth.clamp((expandRatio - 0.12f) / 0.88f, 0.0f, 1.0f);
+                Render2DHelper.drawScaledText(context, "Opticume", sx + 34.0f, sy + 10.0f,
+                        SystemTheme.fade(SystemTheme.foreground(), titleAlpha), 0.94f, false);
+                Render2DHelper.drawScaledText(context, "26.3", sx + 34.0f, sy + 21.0f,
+                        SystemTheme.fade(SystemTheme.mutedFg(), titleAlpha), 0.66f, false);
+            }
 
-        // Top Brand Logo
-        float logoX = expandRatio < 0.35f ? sx + (sw - 18.0f) * 0.5f : sx + 10.0f;
-        Render2DHelper.drawTextureFloat(context, TextureAssets.MINI_LOGO, logoX, sy + 8.5f, 18.0f, 18.0f,
-                ColorUtils.withAlphaFactor(0xFFFFFFFF, alpha));
-        if (expandRatio > 0.25f) {
-            Render2DHelper.drawScaledText(context, "Opticume", sx + 34.0f, sy + 10.0f,
-                    SystemTheme.fade(SystemTheme.foreground(), alpha * expandRatio), 0.94f, false);
-            Render2DHelper.drawScaledText(context, "26.3", sx + 34.0f, sy + 21.0f,
-                    SystemTheme.fade(SystemTheme.mutedFg(), alpha * expandRatio), 0.66f, false);
-        }
+            // Unified morphing Navigation Glass Capsule (present in BOTH collapsed MacOS Dock & expanded sidebar)
+            float footH = 25.0f;
+            float footReserve = (footH + 7.0f) * expandRatio;
+            float navX = sx + 5.0f;
+            float navW = Math.max(20.0f, sw - 10.0f);
+            float navY = sy + TOPBAR_H + 2.0f;
+            float navBot = sy + sh - 7.0f - footReserve;
+            float navH = Math.max(40.0f, navBot - navY);
+            float navRadius = Mth.lerp(expandRatio, 11.5f, 9.0f);
 
-        if (expandRatio < 0.35f) {
-            renderVerticalDockSidebar(context, dt, sx, sy, sw, sh, mouseX, mouseY, accent, alpha);
+            Render2DHelper.drawGlow(context, navX, navY + 2.0f, navW, navH, 6.0f,
+                    SystemTheme.fade(0xFF000000, alpha * 0.32f));
+            Render2DHelper.drawRoundedRectFloat(context, navX, navY, navW, navH, navRadius,
+                    SystemTheme.fade(SystemTheme.bg(), alpha * Mth.lerp(expandRatio, 0.92f, 0.86f)));
+            Render2DHelper.drawRoundedOutlineFloat(context, navX, navY, navW, navH, navRadius, 0.9f,
+                    SystemTheme.fade(SystemTheme.border(), alpha * 0.92f));
+
+            // Crossfading Dock icons <-> Expanded navigation list for smooth transition
+            float dockAlpha = alpha * Mth.clamp(1.0f - expandRatio * 1.8f, 0.0f, 1.0f);
+            float listAlpha = alpha * Mth.clamp((expandRatio - 0.22f) / 0.78f, 0.0f, 1.0f);
+
+            if (dockAlpha > 0.02f) {
+                renderVerticalDockIcons(context, dt, navX, navY, navW, navH, mouseX, mouseY, accent, dockAlpha);
+            }
+            if (listAlpha > 0.02f) {
+                renderExpandedNavItems(context, sx, sw, navX, navY, navW, navH, expandRatio, mouseX, mouseY, accent, listAlpha);
+            }
+
+            // Bottom User Profile Chip clipped cleanly inside outer sidebar scissor
+            if (listAlpha > 0.02f && footReserve > 10.0f) {
+                float footY = navBot + 5.0f;
+                String uname = (minecraft != null && minecraft.getUser() != null) ? minecraft.getUser().getName() : "Player";
+                int chipBg = SystemTheme.fade(SystemTheme.bg(), listAlpha * 0.92f);
+                int chipBorder = SystemTheme.fade(SystemTheme.border(), listAlpha);
+                Render2DHelper.drawRoundedRectFloat(context, navX, footY, navW, footH, 7.0f, chipBg);
+                Render2DHelper.drawRoundedOutlineFloat(context, navX, footY, navW, footH, 7.0f, 0.9f, chipBorder);
+                Render2DHelper.drawRoundedPlayerHeadByUuid(context, UUIDUtil.createOfflinePlayerUUID(uname),
+                        Math.round(navX + 4.5f), Math.round(footY + 4.5f), 16, 4.0f,
+                        chipBg, SystemTheme.fade(SystemTheme.border(), listAlpha * 0.85f), listAlpha);
+                Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(uname, 0.78f, Math.max(8.0f, navW - 30.0f)),
+                        navX + 24.5f, footY + 5.0f, SystemTheme.fade(SystemTheme.foreground(), listAlpha), 0.78f, false);
+                Render2DHelper.drawScaledText(context, ConfigManager.getInstance().getActiveConfigName(),
+                        navX + 24.5f, footY + 14.5f, SystemTheme.fade(SystemTheme.mutedFg(), listAlpha), 0.64f, false);
+            }
+        } finally {
             context.disableScissor();
-            return;
         }
+    }
 
-        // Expanded Navigation List + Bottom Search & Profile
-        float footH = 25.0f;
-        float footY = sy + sh - footH - 7.0f;
-        float listTop = sy + TOPBAR_H + 5.0f;
-        float listBot = footY - 6.0f;
-        float listH = Math.max(40.0f, listBot - listTop);
+    private void renderExpandedNavItems(GuiGraphicsExtractor context, float sx, float sw,
+                                        float navX, float navY, float navW, float navH, float expandRatio,
+                                        int mouseX, int mouseY, int accent, float alpha) {
+        float listTop = navY + 5.0f;
+        float listBot = navY + navH - 5.0f;
+        float listH = Math.max(30.0f, listBot - listTop);
 
         float contentH = computeExpandedSidebarHeight();
         sidebarMaxScroll = Math.max(0.0f, contentH - listH);
         sidebarTargetScroll = Mth.clamp(sidebarTargetScroll, 0.0f, sidebarMaxScroll);
         sidebarScroll = Mth.clamp(sidebarScroll, 0.0f, sidebarMaxScroll);
 
-        context.disableScissor();
-        context.enableScissor(Math.round(sx), Math.round(listTop), Math.round(sx + sw), Math.round(listBot));
+        context.enableScissor(Math.round(navX + 1.0f), Math.round(listTop), Math.round(navX + navW - 1.0f), Math.round(listBot));
+        try {
+            float curY = listTop - sidebarScroll;
+            float itemH = 18.0f;
+            float step = 19.5f;
+            float ix = navX + 4.0f;
+            float iw = Math.max(12.0f, navW - 8.0f);
+            float slideX = (1.0f - expandRatio) * -8.0f;
 
-        float curY = listTop - sidebarScroll;
-        float itemH = 18.0f;
-        float step = 19.5f;
-        for (int i = 0; i < sideEntries.size(); i++) {
-            SideEntry entry = sideEntries.get(i);
-            boolean active = isEntryActive(entry);
-            float ix = sx + 7.0f;
-            float iw = sw - 14.0f;
-            boolean hov = !searchModal.isOpen() && isInside(mouseX, mouseY, ix, curY, iw, itemH)
-                    && mouseY >= listTop && mouseY <= listBot;
+            for (int i = 0; i < sideEntries.size(); i++) {
+                SideEntry entry = sideEntries.get(i);
+                boolean active = isEntryActive(entry);
+                boolean hov = !searchModal.isOpen() && expandRatio > 0.75f
+                        && isInside(mouseX, mouseY, ix, curY, iw, itemH)
+                        && mouseY >= listTop && mouseY <= listBot;
 
-            if (active || hov) {
-                int fill = active ? ColorUtils.withAlpha(accent, 34) : ColorUtils.withAlphaFactor(SystemTheme.elevated(), 0.55f);
-                Render2DHelper.drawRoundedRectFloat(context, ix, curY, iw, itemH, 5.0f, ColorUtils.withAlphaFactor(fill, alpha));
-                if (active) {
-                    Render2DHelper.drawRoundedOutlineFloat(context, ix, curY, iw, itemH, 5.0f, 0.9f,
-                            ColorUtils.withAlphaFactor(accent, alpha * 0.72f));
+                if (active || hov) {
+                    int fill = active ? ColorUtils.withAlpha(accent, 34) : ColorUtils.withAlphaFactor(SystemTheme.elevated(), 0.55f);
+                    Render2DHelper.drawRoundedRectFloat(context, ix, curY, iw, itemH, 5.0f, ColorUtils.withAlphaFactor(fill, alpha));
+                    if (active) {
+                        Render2DHelper.drawRoundedOutlineFloat(context, ix, curY, iw, itemH, 5.0f, 0.9f,
+                                ColorUtils.withAlphaFactor(accent, alpha * 0.72f));
+                    }
+                }
+                int col = active ? accent : (hov ? SystemTheme.foreground() : SystemTheme.mutedFg());
+                Render2DHelper.drawTextureFloat(context, entry.icon(), ix + 5.5f + slideX, curY + 4.0f, 10.0f, 10.0f,
+                        ColorUtils.withAlphaFactor(col, alpha));
+                Render2DHelper.drawScaledText(context, entry.label(), ix + 20.0f + slideX, curY + 5.5f,
+                        ColorUtils.withAlphaFactor(col, alpha), 0.78f, false);
+
+                curY += step;
+                if (entry.dividerAfter()) {
+                    curY += 2.0f;
+                    Render2DHelper.drawRect(context, navX + 6.0f, curY, navW - 12.0f, 1.0f,
+                            SystemTheme.fade(SystemTheme.border(), alpha * 0.65f));
+                    curY += 4.5f;
                 }
             }
-            int col = active ? accent : (hov ? SystemTheme.foreground() : SystemTheme.mutedFg());
-            Render2DHelper.drawTextureFloat(context, entry.icon(), ix + 6.0f, curY + 4.0f, 10.0f, 10.0f,
-                    ColorUtils.withAlphaFactor(col, alpha));
-            Render2DHelper.drawScaledText(context, entry.label(), ix + 21.0f, curY + 5.5f,
-                    ColorUtils.withAlphaFactor(col, alpha * expandRatio), 0.78f, false);
-
-            curY += step;
-            if (entry.dividerAfter()) {
-                curY += 2.0f;
-                Render2DHelper.drawRect(context, sx + 9.0f, curY, sw - 18.0f, 1.0f,
-                        SystemTheme.fade(SystemTheme.border(), alpha * 0.75f));
-                curY += 4.5f;
-            }
+        } finally {
+            context.disableScissor();
         }
-        context.disableScissor();
-
-        // Bottom User Profile Chip
-        context.enableScissor(Math.round(sx), Math.round(sy), Math.round(sx + sw), Math.round(sy + sh));
-        String uname = (minecraft != null && minecraft.getUser() != null) ? minecraft.getUser().getName() : "Player";
-        int chipBg = SystemTheme.fade(SystemTheme.bg(), alpha);
-        int chipBorder = SystemTheme.fade(SystemTheme.border(), alpha);
-        Render2DHelper.drawRoundedRectFloat(context, sx + 7.0f, footY, sw - 14.0f, footH, 6.0f, chipBg);
-        Render2DHelper.drawRoundedOutlineFloat(context, sx + 7.0f, footY, sw - 14.0f, footH, 6.0f, 1.0f, chipBorder);
-        Render2DHelper.drawRoundedPlayerHeadByUuid(context, UUIDUtil.createOfflinePlayerUUID(uname),
-                Math.round(sx + 10.5f), Math.round(footY + 4.5f), 16, 4.0f,
-                chipBg, SystemTheme.fade(SystemTheme.border(), alpha * 0.85f), alpha);
-        Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(uname, 0.78f, sw - 46.0f),
-                sx + 31.0f, footY + 5.0f, SystemTheme.fade(SystemTheme.foreground(), alpha * expandRatio), 0.78f, false);
-        Render2DHelper.drawScaledText(context, ConfigManager.getInstance().getActiveConfigName(),
-                sx + 31.0f, footY + 14.5f, SystemTheme.fade(SystemTheme.mutedFg(), alpha * expandRatio), 0.64f, false);
-        context.disableScissor();
     }
 
-    private void renderVerticalDockSidebar(GuiGraphicsExtractor context, float dt, float sx, float sy, float sw, float sh,
-                                           int mouseX, int mouseY, int accent, float alpha) {
-        float dockX = sx + 5.0f;
-        float dockW = sw - 10.0f;
-        float dockY = sy + TOPBAR_H + 2.0f;
-        float dockH = Math.max(40.0f, sh - TOPBAR_H - 9.0f);
-        float dockRadius = 11.5f;
-
-        // Vertical macOS Dock translucent glass capsule
-        Render2DHelper.drawGlow(context, dockX, dockY + 2.0f, dockW, dockH, 6.0f,
-                SystemTheme.fade(0xFF000000, alpha * 0.35f));
-        Render2DHelper.drawRoundedRectFloat(context, dockX, dockY, dockW, dockH, dockRadius,
-                SystemTheme.fade(SystemTheme.bg(), alpha * 0.92f));
-        Render2DHelper.drawRoundedOutlineFloat(context, dockX, dockY, dockW, dockH, dockRadius, 0.9f,
-                SystemTheme.fade(SystemTheme.border(), alpha * 0.90f));
-
+    private void renderVerticalDockIcons(GuiGraphicsExtractor context, float dt, float dockX, float dockY, float dockW, float dockH,
+                                         int mouseX, int mouseY, int accent, float alpha) {
         float innerTop = dockY + 5.0f;
         float innerBot = dockY + dockH - 5.0f;
         float availH = Math.max(20.0f, innerBot - innerTop);
@@ -465,68 +486,68 @@ public class ClickGuiScreen extends Screen {
         sidebarTargetScroll = Mth.clamp(sidebarTargetScroll, 0.0f, sidebarMaxScroll);
         sidebarScroll = Mth.clamp(sidebarScroll, 0.0f, sidebarMaxScroll);
 
-        context.disableScissor();
-        context.enableScissor(Math.round(dockX), Math.round(innerTop), Math.round(dockX + dockW), Math.round(innerBot));
+        context.enableScissor(Math.round(dockX + 1.0f), Math.round(innerTop), Math.round(dockX + dockW - 1.0f), Math.round(innerBot));
+        try {
+            boolean inDock = !searchModal.isOpen() && sidebarWidth < 68.0f
+                    && isInside(mouseX, mouseY, dockX - 2.0f, innerTop, dockW + 4.0f, availH);
+            float curY = innerTop - sidebarScroll;
+            float slotStep = computeDockStep(availH);
+            float rate = 1.0f - (float) Math.exp(-18.0f * dt);
 
-        boolean inDock = !searchModal.isOpen() && isInside(mouseX, mouseY, dockX - 2.0f, innerTop, dockW + 4.0f, availH);
-        float curY = innerTop - sidebarScroll;
-        float slotStep = computeDockStep(availH);
-        float rate = 1.0f - (float) Math.exp(-18.0f * dt);
+            Matrix3x2fStack pose = context.pose();
+            for (int i = 0; i < sideEntries.size(); i++) {
+                SideEntry entry = sideEntries.get(i);
+                boolean active = isEntryActive(entry);
+                float cy = curY + slotStep * 0.5f;
 
-        Matrix3x2fStack pose = context.pose();
-        for (int i = 0; i < sideEntries.size(); i++) {
-            SideEntry entry = sideEntries.get(i);
-            boolean active = isEntryActive(entry);
-            float cy = curY + slotStep * 0.5f;
+                float targetZoom = 1.0f;
+                boolean directHover = inDock && Math.abs(mouseY - cy) <= slotStep * 0.52f;
+                if (inDock) {
+                    float normDist = Math.abs(mouseY - cy) / 24.0f;
+                    targetZoom = 1.0f + 0.34f * (float) Math.exp(-normDist * normDist * 2.2f);
+                }
+                dockScaleAnims[i] += (targetZoom - dockScaleAnims[i]) * rate;
 
-            float targetZoom = 1.0f;
-            boolean directHover = inDock && Math.abs(mouseY - cy) <= slotStep * 0.52f;
-            if (inDock) {
-                float normDist = Math.abs(mouseY - cy) / 24.0f;
-                targetZoom = 1.0f + 0.34f * (float) Math.exp(-normDist * normDist * 2.2f);
+                if (directHover) {
+                    dockTooltipLabel = entry.label();
+                    dockTooltipY = cy;
+                }
+
+                float zoom = dockScaleAnims[i];
+                float boost = Math.max(0.0f, (zoom - 1.0f) / 0.34f);
+
+                if (active || boost > 0.15f) {
+                    float pillS = Math.min(dockW - 5.0f, 16.5f * zoom);
+                    int fill = active ? ColorUtils.withAlpha(accent, 48)
+                            : ColorUtils.withAlphaFactor(SystemTheme.elevated(), 0.55f * boost);
+                    Render2DHelper.drawRoundedRectFloat(context, dockX + (dockW - pillS) * 0.5f, cy - pillS * 0.5f,
+                            pillS, pillS, 5.0f, ColorUtils.withAlphaFactor(fill, alpha));
+                }
+                if (active) {
+                    Render2DHelper.drawRoundedRectFloat(context, dockX + 1.5f, cy - 3.5f, 2.0f, 7.0f, 1.0f,
+                            ColorUtils.withAlphaFactor(accent, alpha));
+                }
+
+                float iconSize = 10.5f;
+                float cx = dockX + dockW * 0.5f + boost * 1.4f;
+                int iconCol = active ? accent : ColorUtils.interpolateColor(SystemTheme.mutedFg(), 0xFFFFFFFF, boost);
+                pose.pushMatrix();
+                pose.translate(cx, cy);
+                pose.scale(zoom, zoom);
+                Render2DHelper.drawTextureFloat(context, entry.icon(), -iconSize * 0.5f, -iconSize * 0.5f,
+                        iconSize, iconSize, ColorUtils.withAlphaFactor(iconCol, alpha));
+                pose.popMatrix();
+
+                curY += slotStep;
+                if (entry.dividerAfter()) {
+                    curY += 3.5f;
+                    Render2DHelper.drawRect(context, dockX + 6.0f, curY - 2.0f, dockW - 12.0f, 1.0f,
+                            SystemTheme.fade(SystemTheme.border(), alpha * 0.55f));
+                }
             }
-            dockScaleAnims[i] += (targetZoom - dockScaleAnims[i]) * rate;
-
-            if (directHover) {
-                dockTooltipLabel = entry.label();
-                dockTooltipY = cy;
-            }
-
-            float zoom = dockScaleAnims[i];
-            float boost = Math.max(0.0f, (zoom - 1.0f) / 0.34f);
-
-            if (active || boost > 0.15f) {
-                float pillS = Math.min(dockW - 5.0f, 16.5f * zoom);
-                int fill = active ? ColorUtils.withAlpha(accent, 48)
-                        : ColorUtils.withAlphaFactor(SystemTheme.elevated(), 0.55f * boost);
-                Render2DHelper.drawRoundedRectFloat(context, dockX + (dockW - pillS) * 0.5f, cy - pillS * 0.5f,
-                        pillS, pillS, 5.0f, ColorUtils.withAlphaFactor(fill, alpha));
-            }
-            if (active) {
-                // Classic macOS Dock active accent dot on the left edge
-                Render2DHelper.drawRoundedRectFloat(context, dockX + 1.5f, cy - 3.5f, 2.0f, 7.0f, 1.0f,
-                        ColorUtils.withAlphaFactor(accent, alpha));
-            }
-
-            float iconSize = 10.5f;
-            float cx = dockX + dockW * 0.5f + boost * 1.4f;
-            int iconCol = active ? accent : ColorUtils.interpolateColor(SystemTheme.mutedFg(), 0xFFFFFFFF, boost);
-            pose.pushMatrix();
-            pose.translate(cx, cy);
-            pose.scale(zoom, zoom);
-            Render2DHelper.drawTextureFloat(context, entry.icon(), -iconSize * 0.5f, -iconSize * 0.5f,
-                    iconSize, iconSize, ColorUtils.withAlphaFactor(iconCol, alpha));
-            pose.popMatrix();
-
-            curY += slotStep;
-            if (entry.dividerAfter()) {
-                curY += 3.5f;
-                Render2DHelper.drawRect(context, dockX + 6.0f, curY - 2.0f, dockW - 12.0f, 1.0f,
-                        SystemTheme.fade(SystemTheme.border(), alpha * 0.55f));
-            }
+        } finally {
+            context.disableScissor();
         }
-        context.disableScissor();
-        context.enableScissor(Math.round(sx), Math.round(sy), Math.round(sx + sw), Math.round(sy + sh));
     }
 
     private float computeExpandedSidebarHeight() {
@@ -576,13 +597,14 @@ public class ClickGuiScreen extends Screen {
         }
 
         String themeName = ThemeManager.getInstance().getCurrentTheme().getName();
-        float accentPillW = Math.min(86.0f, Render2DHelper.getTextWidth(themeName, 0.70f) + 20.0f);
+        float accentPillW = Math.min(92.0f, Render2DHelper.getTextWidth(themeName, 0.72f) + 20.0f);
         String sizeLabel = SIZE_NAMES[sizePresetIdx];
-        float sizePillW = Math.max(46.0f, Render2DHelper.getTextWidth(sizeLabel, 0.70f) + 12.0f);
+        float sizePillW = Math.max(46.0f, Render2DHelper.getTextWidth(sizeLabel, 0.72f) + 14.0f);
+        float boundPillW = 44.0f;
 
         float themeBtnX = tx + tw - 10.0f - btnSize;
         float collapseBtnX = themeBtnX - (btnSize + 5.0f);
-        float boundBtnX = collapseBtnX - (48.0f + 5.0f);
+        float boundBtnX = collapseBtnX - (boundPillW + 5.0f);
         float accentBtnX = boundBtnX - (accentPillW + 5.0f);
         float sizeBtnX = accentBtnX - (sizePillW + 5.0f);
 
@@ -616,6 +638,11 @@ public class ClickGuiScreen extends Screen {
             }
         }
 
+        int glassPillBg = SystemTheme.fade(SystemTheme.isDark() ? 0xE01D1F27 : SystemTheme.bg(), alpha * 0.86f);
+        int glassPillHover = SystemTheme.fade(SystemTheme.elevated(), alpha * 0.94f);
+        int glassBorder = SystemTheme.fade(SystemTheme.border(), alpha * 0.85f);
+        int accent = ThemeManager.getInstance().getAccentColor(0);
+
         float rx = themeBtnX;
         Identifier themeIcon = SystemTheme.isDark() ? TextureAssets.ICON_SUN : TextureAssets.ICON_MOON;
         drawIconToolButton(context, rx, btnY, btnSize, themeIcon, mouseX, mouseY, false, alpha);
@@ -624,32 +651,38 @@ public class ClickGuiScreen extends Screen {
             hoverTarget.description = "Switch between Dark and Light ClickGUI palettes";
         }
 
+        boolean anyExpanded = hasAnyExpandedDisplayed();
         rx = collapseBtnX;
-        drawIconToolButton(context, rx, btnY, btnSize, TextureAssets.ICON_COLLAPSE, mouseX, mouseY, false, alpha);
+        drawIconToolButton(context, rx, btnY, btnSize, TextureAssets.ICON_COLLAPSE, mouseX, mouseY, anyExpanded, alpha);
         if (isInside(mouseX, mouseY, rx, btnY, btnSize, btnSize)) {
-            hoverTarget.title = "Collapse / Expand";
-            hoverTarget.description = "Toggle settings expansion on all cards";
+            hoverTarget.title = anyExpanded ? "Collapse All" : "Expand All";
+            hoverTarget.description = "Toggle settings expansion on all visible module cards";
         }
 
         rx = boundBtnX;
-        boolean bHov = isInside(mouseX, mouseY, rx, btnY, 48.0f, btnSize);
-        Render2DHelper.drawRoundedRectFloat(context, rx, btnY, 48.0f, btnSize, 5.0f,
-                SystemTheme.fade(boundOnly ? SystemTheme.primary() : (bHov ? SystemTheme.elevated() : SystemTheme.bg()), alpha));
-        Render2DHelper.drawRoundedOutlineFloat(context, rx, btnY, 48.0f, btnSize, 5.0f, 1.0f,
-                SystemTheme.fade(boundOnly ? SystemTheme.primary() : SystemTheme.border(), alpha));
-        Render2DHelper.drawScaledText(context, "Bound", rx + 11.0f, btnY + 6.5f,
-                SystemTheme.fade(boundOnly ? SystemTheme.onPrimary() : SystemTheme.foreground(), alpha), 0.74f, false);
+        boolean bHov = isInside(mouseX, mouseY, rx, btnY, boundPillW, btnSize);
+        Render2DHelper.drawRoundedRectFloat(context, rx, btnY, boundPillW, btnSize, 5.5f,
+                boundOnly ? SystemTheme.fade(accent, alpha * 0.88f) : (bHov ? glassPillHover : glassPillBg));
+        Render2DHelper.drawRoundedOutlineFloat(context, rx, btnY, boundPillW, btnSize, 5.5f, 0.9f,
+                boundOnly ? ColorUtils.withAlphaFactor(accent, alpha) : glassBorder);
+        float boundTw = Render2DHelper.getTextWidth("Bound", 0.72f);
+        Render2DHelper.drawScaledText(context, "Bound", rx + (boundPillW - boundTw) * 0.5f, btnY + 7.0f,
+                SystemTheme.fade(boundOnly ? 0xFFFFFFFF : SystemTheme.foreground(), alpha), 0.72f, false);
+        if (bHov) {
+            hoverTarget.title = "Bound Filter: " + (boundOnly ? "ON" : "OFF");
+            hoverTarget.description = "Show only modules with an assigned hotkey";
+        }
 
         rx = accentBtnX;
         boolean aHov = isInside(mouseX, mouseY, rx, btnY, accentPillW, btnSize);
-        Render2DHelper.drawRoundedRectFloat(context, rx, btnY, accentPillW, btnSize, 5.0f,
-                SystemTheme.fade(aHov ? SystemTheme.elevated() : SystemTheme.bg(), alpha));
-        Render2DHelper.drawRoundedOutlineFloat(context, rx, btnY, accentPillW, btnSize, 5.0f, 1.0f,
-                SystemTheme.fade(activePage == NavPage.THEMES ? ThemeManager.getInstance().getAccentColor(0) : SystemTheme.border(), alpha));
-        Render2DHelper.drawCircle(context, rx + 8.0f, btnY + btnSize * 0.5f, 3.5f,
-                ColorUtils.withAlphaFactor(ThemeManager.getInstance().getAccentColor(0), alpha));
-        Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(themeName, 0.70f, accentPillW - 18.0f),
-                rx + 14.0f, btnY + 6.5f, SystemTheme.fade(SystemTheme.foreground(), alpha), 0.70f, false);
+        Render2DHelper.drawRoundedRectFloat(context, rx, btnY, accentPillW, btnSize, 5.5f,
+                aHov ? glassPillHover : glassPillBg);
+        Render2DHelper.drawRoundedOutlineFloat(context, rx, btnY, accentPillW, btnSize, 5.5f, 0.9f,
+                activePage == NavPage.THEMES ? ColorUtils.withAlphaFactor(accent, alpha * 0.9f) : glassBorder);
+        Render2DHelper.drawRoundedRectFloat(context, rx + 5.5f, btnY + (btnSize - 6.5f) * 0.5f, 6.5f, 6.5f, 3.25f,
+                ColorUtils.withAlphaFactor(accent, alpha));
+        Render2DHelper.drawScaledText(context, Render2DHelper.trimToWidth(themeName, 0.72f, accentPillW - 19.0f),
+                rx + 15.0f, btnY + 7.0f, SystemTheme.fade(SystemTheme.foreground(), alpha), 0.72f, false);
         if (aHov) {
             hoverTarget.title = "Theme: " + themeName;
             hoverTarget.description = "LMB cycle theme accent · RMB open Themes Editor";
@@ -658,12 +691,12 @@ public class ClickGuiScreen extends Screen {
         rx = sizeBtnX;
         if (rx >= sideBtnX + btnSize + 4.0f) {
             boolean szHov = isInside(mouseX, mouseY, rx, btnY, sizePillW, btnSize);
-            Render2DHelper.drawRoundedRectFloat(context, rx, btnY, sizePillW, btnSize, 5.0f,
-                    SystemTheme.fade(szHov ? SystemTheme.elevated() : SystemTheme.bg(), alpha));
-            Render2DHelper.drawRoundedOutlineFloat(context, rx, btnY, sizePillW, btnSize, 5.0f, 1.0f,
-                    SystemTheme.fade(SystemTheme.border(), alpha));
-            Render2DHelper.drawCenteredText(context, sizeLabel, rx + sizePillW * 0.5f, btnY + 6.5f,
-                    SystemTheme.fade(SystemTheme.foreground(), alpha), false);
+            Render2DHelper.drawRoundedRectFloat(context, rx, btnY, sizePillW, btnSize, 5.5f,
+                    szHov ? glassPillHover : glassPillBg);
+            Render2DHelper.drawRoundedOutlineFloat(context, rx, btnY, sizePillW, btnSize, 5.5f, 0.9f, glassBorder);
+            float szTw = Render2DHelper.getTextWidth(sizeLabel, 0.72f);
+            Render2DHelper.drawScaledText(context, sizeLabel, rx + (sizePillW - szTw) * 0.5f, btnY + 7.0f,
+                    SystemTheme.fade(SystemTheme.foreground(), alpha), 0.72f, false);
             if (szHov) {
                 hoverTarget.title = "GUI Size: " + sizeLabel;
                 hoverTarget.description = "Click to cycle preset or drag bottom-right corner";
@@ -691,7 +724,7 @@ public class ClickGuiScreen extends Screen {
             return;
         }
         if (activePage == NavPage.FRIENDS) {
-            pages.renderFriends(context, cx, cy, cw, ch, mouseX, mouseY, alpha);
+            pages.renderFriends(context, cx, cy, cw, ch, mouseX, mouseY, alpha, hoverTarget);
             return;
         }
 
@@ -839,12 +872,16 @@ public class ClickGuiScreen extends Screen {
     private static void drawIconToolButton(GuiGraphicsExtractor context, float x, float y, float size,
                                            Identifier icon, int mouseX, int mouseY, boolean active, float alpha) {
         boolean hov = isInside(mouseX, mouseY, x, y, size, size);
-        int bg = active ? SystemTheme.elevated() : (hov ? SystemTheme.elevated() : SystemTheme.bg());
-        Render2DHelper.drawRoundedRectFloat(context, x, y, size, size, 5.0f, SystemTheme.fade(bg, alpha));
-        Render2DHelper.drawRoundedOutlineFloat(context, x, y, size, size, 5.0f, 1.0f,
-                SystemTheme.fade(active ? SystemTheme.primary() : SystemTheme.border(), alpha));
-        Render2DHelper.drawTextureFloat(context, icon, x + 4.5f, y + 4.5f, size - 9.0f, size - 9.0f,
-                SystemTheme.fade(hov || active ? SystemTheme.foreground() : SystemTheme.mutedFg(), alpha));
+        int accent = ThemeManager.getInstance().getAccentColor(0);
+        int bg = active ? ColorUtils.withAlpha(accent, 42)
+                : (hov ? SystemTheme.fade(SystemTheme.elevated(), alpha * 0.94f)
+                : SystemTheme.fade(SystemTheme.isDark() ? 0xE01D1F27 : SystemTheme.bg(), alpha * 0.86f));
+        Render2DHelper.drawRoundedRectFloat(context, x, y, size, size, 5.5f, active ? ColorUtils.withAlphaFactor(bg, alpha) : bg);
+        Render2DHelper.drawRoundedOutlineFloat(context, x, y, size, size, 5.5f, 0.9f,
+                active ? ColorUtils.withAlphaFactor(accent, alpha * 0.85f) : SystemTheme.fade(SystemTheme.border(), alpha * 0.85f));
+        int iconTint = active ? ColorUtils.withAlphaFactor(accent, alpha)
+                : SystemTheme.fade(hov ? SystemTheme.foreground() : SystemTheme.mutedFg(), alpha);
+        Render2DHelper.drawTextureFloat(context, icon, x + 4.5f, y + 4.5f, size - 9.0f, size - 9.0f, iconTint);
     }
 
     @Override
@@ -937,15 +974,17 @@ public class ClickGuiScreen extends Screen {
                 toggleExpandAllDisplayed();
                 return true;
             }
-            rx -= (48.0f + 5.0f);
-            if (isInside(mx, my, rx, btnY, 48.0f, btnSize)) {
+            float boundPillW = 44.0f;
+            rx -= (boundPillW + 5.0f);
+            if (isInside(mx, my, rx, btnY, boundPillW, btnSize)) {
                 playClick();
                 boundOnly = !boundOnly;
                 targetScroll = 0.0f;
+                showToast(boundOnly ? "Filter: Bound only" : "Filter: All modules");
                 return true;
             }
             String themeName = ThemeManager.getInstance().getCurrentTheme().getName();
-            float accentPillW = Math.min(86.0f, Render2DHelper.getTextWidth(themeName, 0.70f) + 20.0f);
+            float accentPillW = Math.min(92.0f, Render2DHelper.getTextWidth(themeName, 0.72f) + 20.0f);
             rx -= (accentPillW + 5.0f);
             if (isInside(mx, my, rx, btnY, accentPillW, btnSize)) {
                 playClick();
@@ -959,7 +998,7 @@ public class ClickGuiScreen extends Screen {
                 return true;
             }
             String sizeLabel = SIZE_NAMES[sizePresetIdx];
-            float sizePillW = Math.max(46.0f, Render2DHelper.getTextWidth(sizeLabel, 0.70f) + 12.0f);
+            float sizePillW = Math.max(46.0f, Render2DHelper.getTextWidth(sizeLabel, 0.72f) + 14.0f);
             rx -= (sizePillW + 5.0f);
             if (rx >= sideBtnX + btnSize + 4.0f && isInside(mx, my, rx, btnY, sizePillW, btnSize)) {
                 playClick();
@@ -1040,9 +1079,10 @@ public class ClickGuiScreen extends Screen {
             step = computeDockStep(listBot - listTop);
             curY = listTop - sidebarScroll;
         } else {
-            float footY = sy + sh - 25.0f - 7.0f;
-            listTop = sy + TOPBAR_H + 5.0f;
-            listBot = footY - 6.0f;
+            float navY = sy + TOPBAR_H + 2.0f;
+            float navBot = sy + sh - 7.0f - (25.0f + 7.0f);
+            listTop = navY + 5.0f;
+            listBot = navBot - 5.0f;
             step = 19.5f;
             curY = listTop - sidebarScroll;
         }
@@ -1154,7 +1194,9 @@ public class ClickGuiScreen extends Screen {
             return autoBuyPage.mouseScrolled(verticalAmount);
         }
         if (activePage == NavPage.CONFIGS || activePage == NavPage.FRIENDS) {
-            return pages.scrollActive(activePage == NavPage.CONFIGS, verticalAmount);
+            float rightX = lastWinX + effSideW + 1.0f;
+            float rightW = Math.max(80.0f, lastWinW - effSideW - 1.0f);
+            return pages.scrollActive(activePage == NavPage.CONFIGS, mouseX, rightX, rightW, verticalAmount);
         }
         if (isModulePage()) {
             targetScroll = Mth.clamp(targetScroll - (float) (verticalAmount * 26.0f), 0.0f, maxScroll);
@@ -1227,7 +1269,7 @@ public class ClickGuiScreen extends Screen {
             return true;
         }
 
-        if (pages.keyPressed(key, activePage == NavPage.CONFIGS, this)) {
+        if (pages.keyPressed(input, activePage == NavPage.CONFIGS, this)) {
             return true;
         }
 
@@ -1286,7 +1328,28 @@ public class ClickGuiScreen extends Screen {
         this.bindingModule = null;
         this.activeBindingSetting = null;
         unfocusAllInputs();
+        if (minecraft != null) {
+            minecraft.textInputManager().stopTextInput(this);
+        }
         super.removed();
+    }
+
+    private boolean isTextInputActive() {
+        return searchModal.isOpen()
+                || themesPage.isTyping()
+                || eventsPage.isTyping()
+                || autoBuyPage.isTyping()
+                || isFocusedTextVisible()
+                || pages.hasFocusedInput();
+    }
+
+    private void syncTextInputFocus() {
+        if (minecraft == null) return;
+        if (isTextInputActive()) {
+            minecraft.textInputManager().startTextInput(this);
+        } else {
+            minecraft.textInputManager().stopTextInput(this);
+        }
     }
 
     private void unfocusAllInputs() {
@@ -1339,8 +1402,8 @@ public class ClickGuiScreen extends Screen {
                 || searchModal.isOpen()
                 || themesPage.isTyping()
                 || eventsPage.isTyping()
-                || activePage == NavPage.CONFIGS
-                || activePage == NavPage.FRIENDS;
+                || autoBuyPage.isTyping()
+                || pages.hasFocusedInput();
     }
 
     public void setBindingModule(Module m) {
@@ -1402,7 +1465,18 @@ public class ClickGuiScreen extends Screen {
         }
     }
 
+    private boolean hasAnyExpandedDisplayed() {
+        for (Module m : getDisplayedModules()) {
+            if (m.isExpanded()) return true;
+        }
+        return false;
+    }
+
     private void toggleExpandAllDisplayed() {
+        if (!isModulePage()) {
+            showToast("Switch to Modules tab to expand/collapse cards");
+            return;
+        }
         List<Module> list = getDisplayedModules();
         boolean anyExpanded = false;
         for (Module m : list) {
@@ -1418,6 +1492,7 @@ public class ClickGuiScreen extends Screen {
                 m.setExpanded(target);
             }
         }
+        showToast(target ? "Expanded all modules" : "Collapsed all modules");
     }
 
     private boolean isModulePage() {

@@ -22,7 +22,7 @@ public class NameTagsModule extends Module {
             "Отображать",
             "Кого отображать на плашках NameTags",
             new String[]{"Игроков", "Монстров", "Друзей", "Животных", "Себя", "Жителей", "Голых", "Предметы"},
-            "Игроков", "Друзей", "Голых", "Предметы"
+            "Игроков", "Друзей", "Голых"
     );
     public final BooleanSetting liquidGlass = new BooleanSetting("Жидкое стекло", "Эффект размытого стекла под плашками", true);
     public final BooleanSetting viewHead = new BooleanSetting("Отображать голову", "Иконка/голова перед ником", true);
@@ -34,6 +34,7 @@ public class NameTagsModule extends Module {
     public final BooleanSetting viewDisplayName = new BooleanSetting("Отображать название предмета", "Использовать кастомные названия предметов", false)
             .visibleWhen(viewItem::isEnabled);
     public final NumberSetting tagScale = new NumberSetting("Масштаб", "Общий размер плашек", 1.0, 0.7, 1.5, 0.05);
+    public final NumberSetting maxDistance = new NumberSetting("Дистанция", "Максимальная дальность отображения плашек", 48.0, 12.0, 128.0, 4.0);
 
     private final NameTagsRender renderer = new NameTagsRender(this);
 
@@ -49,6 +50,11 @@ public class NameTagsModule extends Module {
         addSetting(viewItem);
         addSetting(viewDisplayName);
         addSetting(tagScale);
+        addSetting(maxDistance);
+    }
+
+    public void trimStaleStates() {
+        renderer.trimStaleStates();
     }
 
     public static NameTagsModule getInstance() {

@@ -7,7 +7,7 @@ import dev.opticumeclient.client.setting.BooleanSetting;
 public class NoRenderModule extends Module {
     private static NoRenderModule INSTANCE;
 
-    private final BooleanSetting fire = new BooleanSetting("Fire", "Отключает огонь от первого лица", true);
+    private final BooleanSetting fire = new BooleanSetting("Fire", "Отключает огонь от первого лица (полностью перекрывает LowFire)", false);
     private final BooleanSetting weather = new BooleanSetting("Weather", "Отключает рендер дождя и снега", true);
     private final BooleanSetting totem = new BooleanSetting("Totem", "Отключает анимацию тотема на весь экран", true);
     private final BooleanSetting explosions = new BooleanSetting("Explosions", "Отключает тяжелые частицы взрывов", true);

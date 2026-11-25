@@ -68,7 +68,7 @@ public class StaffListHud extends Module {
             String lower = (name + " " + display).toLowerCase(Locale.ROOT);
 
             boolean isSpec = entry.getGameMode() == GameType.SPECTATOR;
-            boolean keywordMatch = false;
+            boolean keywordMatch = dev.opticumeclient.client.command.CommandDataStore.getInstance().isCustomStaff(name);
             for (String kw : STAFF_KEYWORDS) {
                 if (lower.contains(kw)) {
                     keywordMatch = true;
@@ -86,9 +86,11 @@ public class StaffListHud extends Module {
                         }
                     }
                 }
-                String tag = isSpec ? "[SPEC]" : (isNear ? "[NEAR]" : "[ONLINE]");
-                int col = isSpec ? 0xFFFF5252 : (isNear ? 0xFFFBBF24 : 0xFF4ADE80);
-                cachedStaffList.add(new StaffEntry(name, tag, col));
+                boolean isCustom = dev.opticumeclient.client.command.CommandDataStore.getInstance().isCustomStaff(name);
+                String tag = isSpec ? "[SPEC]" : (isNear ? "[NEAR]" : (isCustom ? "[STAFF]" : "[ONLINE]"));
+                int col = isSpec ? 0xFFFF5252 : (isNear ? 0xFFFBBF24 : (isCustom ? 0xFF38BDF8 : 0xFF4ADE80));
+                String safeName = dev.opticumeclient.client.modules.other.NameProtectModule.protectHudName(name);
+                cachedStaffList.add(new StaffEntry(safeName, tag, col));
             }
         }
     }

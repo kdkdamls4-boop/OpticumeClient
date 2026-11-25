@@ -27,6 +27,13 @@ public abstract class EntityRenderDispatcherMixin {
         FrameSyncModule frameSync = FrameSyncModule.getInstance();
         if (frameSync != null && frameSync.shouldCullDynamicEntity(entity, camX, camY, camZ)) {
             cir.setReturnValue(false);
+            return;
+        }
+
+        dev.opticumeclient.client.modules.visuals.KillEffectModule killEffect =
+                dev.opticumeclient.client.modules.visuals.KillEffectModule.getInstance();
+        if (killEffect != null && killEffect.shouldHideCorpse(entity)) {
+            cir.setReturnValue(false);
         }
     }
 }

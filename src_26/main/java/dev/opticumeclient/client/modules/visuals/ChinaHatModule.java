@@ -54,7 +54,7 @@ import java.util.Set;
  * rendered natively through RenderPearl SPIR-V pipelines.
  */
 public class ChinaHatModule extends Module {
-    private static final Identifier BLOOM_TEX = EspResources.image("fireflies/bloom.png");
+    private static final Identifier BLOOM_TEX = dev.opticumeclient.client.render.TextureAssets.DESIRE_PARTICLE_HEX_ORBIZ;
     private static final float TAU_F = (float) (Math.PI * 2.0);
     private static final double TAU_D = Math.PI * 2.0;
 
@@ -78,7 +78,7 @@ public class ChinaHatModule extends Module {
     private final NumberSetting offset = new NumberSetting("Отступ", "Смещение по высоте над головой", 0.08, -0.2, 0.4, 0.01);
     private final NumberSetting speed = new NumberSetting("Скорость", "Скорость вращения", 45.0, 0.0, 180.0, 1.0);
     private final NumberSetting opacity = new NumberSetting("Прозрачность", "Общая прозрачность эффекта", 0.75, 0.15, 1.0, 0.05);
-    private final NumberSetting ghost3Size = new NumberSetting("Размер", "Размер призраков 3", 0.30, 0.05, 1.0, 0.01)
+    private final NumberSetting ghost3Size = new NumberSetting("Размер", "Размер призраков 3", 0.25, 0.05, 1.0, 0.01)
             .visibleWhen(() -> mode.is("Призраки 3"));
     private final NumberSetting trailLength = new NumberSetting("Длина трейла", "Длина шлейфа в Призраки 3", 25.0, 5.0, 100.0, 1.0)
             .visibleWhen(() -> mode.is("Призраки 3"));
@@ -243,11 +243,13 @@ public class ChinaHatModule extends Module {
 
                     pose.pushPose();
                     pose.translate(ghostLocalVec.x, ghostLocalVec.y, ghostLocalVec.z);
-                    pose.rotateDegrees(Axis.YP, -camera.yRot());
-                    pose.rotateDegrees(Axis.XP, camera.xRot());
+                    pose.mulPose(new Matrix4f().rotation(camera.rotation()));
                     Matrix4f m = pose.last().pose();
-                    vertCount += emitBloomQuad(buf, m, segSize, mainCol);
-                    vertCount += emitBloomQuad(buf, m, segSize * 1.6f, outerCol);
+                    // Match Particles crisp luminous orb proportions (compact bright core + controlled soft halo)
+                    float coreSize = segSize * 0.56f;
+                    float haloSize = segSize * 0.88f;
+                    vertCount += emitBloomQuad(buf, m, coreSize, mainCol);
+                    vertCount += emitBloomQuad(buf, m, haloSize, outerCol);
                     pose.popPose();
                 }
             }

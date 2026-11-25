@@ -32,7 +32,8 @@ import java.util.Optional;
  */
 public final class KawaseBlurRenderer {
     private static final int UBO_SIZE = 16;
-    private static final long MIN_INTERVAL_NS = 1_000_000_000L / 90L;
+    private static final long MIN_INTERVAL_NS_NORMAL = 1_000_000_000L / 48L;
+    private static final long MIN_INTERVAL_NS_LOW_FPS = 1_000_000_000L / 30L;
 
     private static final RenderPipeline BLUR_PIPELINE = PipelineBuilder.create()
             .location("opticumeclient/ui_blur_gaussian")
@@ -66,13 +67,13 @@ public final class KawaseBlurRenderer {
     public static void requestWorldBlur(int passes, float offset) {
         worldBlurRequested = true;
         requestedPasses = Math.max(1, Math.min(8, passes));
-        requestedOffset = Math.max(0.5f, Math.min(8.0f, offset));
+        requestedOffset = Math.max(0.25f, Math.min(8.0f, offset));
     }
 
     public static void requestMenuBlur(int passes, float offset) {
         menuBlurRequested = true;
         requestedPasses = Math.max(1, Math.min(8, passes));
-        requestedOffset = Math.max(0.5f, Math.min(8.0f, offset));
+        requestedOffset = Math.max(0.25f, Math.min(8.0f, offset));
     }
 
     public static boolean consumeMenuBlurRequest() {
@@ -99,7 +100,8 @@ public final class KawaseBlurRenderer {
         if (main == null || main.width <= 2 || main.height <= 2 || main.getColorTextureView() == null) return;
 
         long now = System.nanoTime();
-        if (rateLimit && targetA != null && now - lastCaptureNs < MIN_INTERVAL_NS) {
+        long minInterval = (mc.getFps() > 0 && mc.getFps() < 55) ? MIN_INTERVAL_NS_LOW_FPS : MIN_INTERVAL_NS_NORMAL;
+        if (rateLimit && targetA != null && now - lastCaptureNs < minInterval) {
             return;
         }
         lastCaptureNs = now;
@@ -117,7 +119,7 @@ public final class KawaseBlurRenderer {
                 GpuTextureView srcH = (i == 0) ? main.getColorTextureView() : targetA.getColorTextureView();
                 float srcInvW = (i == 0) ? (1.0f / main.width) : (1.0f / halfW);
                 float srcInvH = (i == 0) ? (1.0f / main.height) : (1.0f / halfH);
-                float step = (i == 0) ? Math.max(1.0f, offset) : (offset * (1.0f + i * 0.35f));
+                float step = (i == 0) ? Math.max(0.35f, offset) : (offset * (1.0f + i * 0.35f));
 
                 uniformBufA = writeUniform(encoder, uniformBufA, "OpticumeBlurUboA", srcInvW, srcInvH, step, 0.0f);
                 runPass(encoder, targetB.getColorTextureView(), srcH, linear, uniformBufA, i == 0);

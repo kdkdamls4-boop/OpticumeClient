@@ -55,22 +55,30 @@ public abstract class LevelRendererMixin {
             CallbackInfo ci) {
         dev.opticumeclient.client.modules.visuals.AmbienceModule ambience =
                 dev.opticumeclient.client.modules.visuals.AmbienceModule.getInstance();
+        dev.opticumeclient.client.modules.visuals.JumpCirclesModule jumpCircles =
+                dev.opticumeclient.client.modules.visuals.JumpCirclesModule.getInstance();
+        boolean saturationHandled = false;
         if (ambience != null && ambience.isEnabled()) {
             dev.opticumeclient.client.modules.visuals.ambience.WetShaderRenderer.getInstance().render(ambience, cameraRenderState);
             dev.opticumeclient.client.modules.visuals.ambience.FogBlurRenderer.getInstance().render(ambience, cameraRenderState);
+            if (ambience.isAtmosphereActive()) {
+                boolean canFuseSat = ambience.isSaturationActive()
+                        && (jumpCircles == null || !jumpCircles.isPostFxActive());
+                boolean drewAtmo = dev.opticumeclient.client.modules.visuals.atmosphere.AtmosphereRenderer
+                        .getInstance().render(ambience, cameraRenderState, canFuseSat);
+                saturationHandled = canFuseSat && drewAtmo;
+            }
         }
-        dev.opticumeclient.client.modules.visuals.AtmosphereModule atmosphere =
-                dev.opticumeclient.client.modules.visuals.AtmosphereModule.getInstance();
-        if (atmosphere != null && atmosphere.isEnabled()) {
-            dev.opticumeclient.client.modules.visuals.atmosphere.AtmosphereRenderer.getInstance().render(atmosphere, cameraRenderState);
-        }
-        dev.opticumeclient.client.modules.visuals.JumpCirclesModule jumpCircles =
-                dev.opticumeclient.client.modules.visuals.JumpCirclesModule.getInstance();
         if (jumpCircles != null && jumpCircles.isEnabled()) {
             jumpCircles.renderPostFx(cameraRenderState);
         }
-        if (ambience != null && ambience.isEnabled()) {
+        if (ambience != null && ambience.isEnabled() && !saturationHandled) {
             dev.opticumeclient.client.modules.visuals.ambience.AmbienceSaturationProgram.getInstance().render(ambience);
+        }
+        dev.opticumeclient.client.modules.visuals.MotionBlurModule motionBlur =
+                dev.opticumeclient.client.modules.visuals.MotionBlurModule.getInstance();
+        if (motionBlur != null && motionBlur.isEnabled()) {
+            dev.opticumeclient.client.modules.visuals.ambience.MotionBlurRenderer.getInstance().render(motionBlur, cameraRenderState);
         }
     }
 

@@ -4,11 +4,12 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
-import dev.opticumeclient.client.modules.combat.KillAuraModule;
+import dev.opticumeclient.client.modules.combat.LegitAuraModule;
 import dev.opticumeclient.client.modules.combat.OpticumeAuraModule;
 import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
+import dev.opticumeclient.client.setting.RunSetting;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
@@ -131,6 +132,11 @@ public class SwingAnimationsModule extends Module {
         addSetting(leftX);
         addSetting(leftY);
         addSetting(leftZ);
+        addSetting(new RunSetting("Open Bezier Editor", "Открыть интерактивный редактор кривой Безье и ViewModel", () -> {
+            if (mc != null && mc.gui != null) {
+                mc.gui.setScreen(new dev.opticumeclient.client.gui.ViewModelEditorScreen(mc.gui.screen()));
+            }
+        }));
     }
 
     public static SwingAnimationsModule getInstance() {
@@ -165,9 +171,9 @@ public class SwingAnimationsModule extends Module {
             LivingEntity t = opticumeAura.getTarget();
             if (t != null && t.isAlive()) return true;
         }
-        KillAuraModule killAura = KillAuraModule.getInstance();
-        if (killAura != null && killAura.isEnabled()) {
-            LivingEntity t = killAura.getCurrentTarget();
+        LegitAuraModule legitAura = LegitAuraModule.getInstance();
+        if (legitAura != null && legitAura.isEnabled()) {
+            LivingEntity t = legitAura.getTarget();
             if (t != null && t.isAlive()) return true;
         }
         return false;
@@ -191,6 +197,8 @@ public class SwingAnimationsModule extends Module {
         if (!isEnabled() || mode.is("HMI") || !swingAllowed()) return false;
         if (auraOnly.isEnabled() && !auraHasTarget()) return false;
 
+        if (mc.player == null || arm != mc.player.getMainArm() || mode.is("Обычный")) return false;
+
         int side = arm == HumanoidArm.RIGHT ? 1 : -1;
         float progress = Mth.clamp(swingProgress, 0.0f, 1.0f);
         float eased = cubicEase.isEnabled() ? cubicOut(progress) : progress;
@@ -202,7 +210,6 @@ public class SwingAnimationsModule extends Module {
         if (scale != 1.0f) {
             pose.scale(scale, scale, scale);
         }
-        if (mc.player == null || arm != mc.player.getMainArm()) return false;
 
         switch (mode.getMode()) {
             case "Обычный" -> {
@@ -417,6 +424,11 @@ public class SwingAnimationsModule extends Module {
         float u = 1.0f - t;
         return u * u * u * p0 + 3.0f * u * u * t * p1 + 3.0f * u * t * t * p2 + t * t * t * p3;
     }
+
+    public NumberSetting getCurve1X() { return curve1X; }
+    public NumberSetting getCurve1Y() { return curve1Y; }
+    public NumberSetting getCurve2X() { return curve2X; }
+    public NumberSetting getCurve2Y() { return curve2Y; }
 
     private static float cubicOut(float t) {
         t = Mth.clamp(t, 0.0f, 1.0f);

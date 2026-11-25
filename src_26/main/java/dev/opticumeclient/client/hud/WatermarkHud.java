@@ -10,8 +10,10 @@ import dev.opticumeclient.client.render.TextureAssets;
 import dev.opticumeclient.client.render.Theme;
 import dev.opticumeclient.client.render.ThemeManager;
 import dev.opticumeclient.client.render.font.OpticumeFonts;
+import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
 import dev.opticumeclient.mixin.BossHealthOverlayAccessor;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
 
@@ -23,8 +25,10 @@ import java.util.Locale;
  * Draggable Watermark HUD widget (Relic two-row pills or Modern glass capsule).
  */
 public class WatermarkHud extends Module {
-    private final NumberSetting posX = new NumberSetting("PosX", "X позиция", 8.0, 0.0, 1920.0, 1.0);
-    private final NumberSetting posY = new NumberSetting("PosY", "Y позиция", 8.0, 0.0, 1080.0, 1.0);
+    private final BooleanSetting autoCenter = new BooleanSetting(
+            "Auto Center", "Всегда центрировать ватермарку по горизонтали экрана", true);
+    private final NumberSetting posX = new NumberSetting("PosX", "X позиция", 396.0, 0.0, 1920.0, 1.0);
+    private final NumberSetting posY = new NumberSetting("PosY", "Y позиция", 37.0, 0.0, 1080.0, 1.0);
     private final HudManager.DraggableWidget dragWidget;
 
     private String cachedFpsStr = "0 FPS";
@@ -43,22 +47,45 @@ public class WatermarkHud extends Module {
 
     public WatermarkHud() {
         super("Watermark", "Ватермарка клиента (ник, FPS, пинг, сервер, координаты)", Category.HUD);
+        addSetting(autoCenter);
         addSetting(posX);
         addSetting(posY);
         setEnabled(false);
 
+        InterfaceModule iface = InterfaceModule.getInstance();
+        boolean relic = iface == null || iface.isRelicWatermark();
         this.dragWidget = HudManager.getInstance().registerWidget(new HudManager.DraggableWidget(
                 "Watermark",
                 posX.getFloatValue(),
                 posY.getFloatValue(),
-                270.0f,
-                22.0f,
+                relic ? 168.0f : 270.0f,
+                relic ? 42.5f : 22.0f,
                 this::isEnabled,
-                (newX, newY) -> {
-                    posX.setValue((double) Math.round(newX));
-                    posY.setValue((double) Math.round(newY));
-                }
+                this::onWidgetMoved
         ));
+    }
+
+    private void onWidgetMoved(float newX, float newY) {
+        posY.setValue((double) Math.round(newY));
+        float newCenterX = newX + dragWidget.getScaledWidth() * 0.5f;
+        if (dragWidget.isDragging() && autoCenter.isEnabled()) {
+            Minecraft m = Minecraft.getInstance();
+            float screenW = (m != null && m.getWindow() != null) ? m.getWindow().getGuiScaledWidth() : 960.0f;
+            if (Math.abs(newCenterX - screenW * 0.5f) > 14.0f) {
+                autoCenter.setValue(false);
+                posX.setValue((double) Math.round(newX));
+            }
+        } else if (!autoCenter.isEnabled()) {
+            posX.setValue((double) Math.round(newX));
+        }
+    }
+
+    private void applyHorizontalAlignment() {
+        if (autoCenter.isEnabled() && !dragWidget.isDragging() && mc.getWindow() != null) {
+            float screenW = mc.getWindow().getGuiScaledWidth();
+            float centeredX = Math.max(2.0f, (screenW - dragWidget.getScaledWidth()) * 0.5f);
+            dragWidget.syncExternalPosition(centeredX, posY.getFloatValue());
+        }
     }
 
     @Override
@@ -114,6 +141,7 @@ public class WatermarkHud extends Module {
         float scale = 0.78f;
         float h = 22.0f;
         dragWidget.setBounds(cachedTotalW, h);
+        applyHorizontalAlignment();
         float x = dragWidget.getX();
         float y = dragWidget.getY();
 
@@ -207,6 +235,7 @@ public class WatermarkHud extends Module {
         float rowW = h + logoGap + w1;
         float totalH = h + rowGap + h;
         dragWidget.setBounds(rowW, totalH);
+        applyHorizontalAlignment();
 
         float x = dragWidget.getX();
         float rawY = dragWidget.getY();

@@ -57,8 +57,10 @@ public class BotsModule extends Module {
         setEnabled(false);
     }
 
-    @Override
-    public void onTick() {
-        apply();
+    public static void syncIfPresent() {
+        BotsModule mod = instance;
+        if (mod != null) {
+            mod.apply();
+        }
     }
 }

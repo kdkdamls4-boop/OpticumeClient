@@ -44,22 +44,46 @@ public class FrameSyncModule extends Module {
         return INSTANCE;
     }
 
+    private Boolean savedVsync = null;
+    private Integer savedFramerateLimit = null;
+
     @Override
     public void onTick() {
         if (!isEnabled() || mc.options == null) return;
 
         if (disableVsync.isEnabled()) {
+            if (savedVsync == null) {
+                savedVsync = mc.options.enableVsync().get();
+            }
+            if (savedFramerateLimit == null) {
+                savedFramerateLimit = mc.options.framerateLimit().get();
+            }
             if (mc.options.enableVsync().get()) {
                 mc.options.enableVsync().set(false);
             }
             if (mc.options.framerateLimit().get() != Options.UNLIMITED_FRAMERATE_CUTOFF) {
                 mc.options.framerateLimit().set(Options.UNLIMITED_FRAMERATE_CUTOFF);
             }
+        } else {
+            restoreDisplaySync();
         }
     }
 
     @Override
     public void onDisable() {
+        restoreDisplaySync();
+    }
+
+    private void restoreDisplaySync() {
+        if (mc.options == null) return;
+        if (savedVsync != null) {
+            mc.options.enableVsync().set(savedVsync);
+            savedVsync = null;
+        }
+        if (savedFramerateLimit != null) {
+            mc.options.framerateLimit().set(savedFramerateLimit);
+            savedFramerateLimit = null;
+        }
     }
 
     public boolean isParticleCapReached(int currentCount) {

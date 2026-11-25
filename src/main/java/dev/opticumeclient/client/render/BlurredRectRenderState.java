@@ -147,6 +147,13 @@ public final class BlurredRectRenderState implements GuiElementRenderState {
         return pipeline;
     }
 
+    public static void prewarm() {
+        try {
+            RenderSystem.getCompiledPipelineNullable(getPipeline());
+        } catch (Throwable ignored) {
+        }
+    }
+
     @Override
     public void buildVertices(VertexConsumer vc) {
         float x0 = x;

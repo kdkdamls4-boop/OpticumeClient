@@ -127,54 +127,33 @@ public class TrailsModule extends Module {
         if (doRibbon) {
             Vec3 lerpedPos = Render3DHelper.getLerpedPos(mc.player, tickDelta);
             double playerHeight = mc.player.getBbHeight() * (mc.player.isShiftKeyDown() ? 0.84 : 0.92);
-            if (nodes.isEmpty() || nodes.get(nodes.size() - 1).pos.distanceToSqr(lerpedPos) > 0.0025) {
+            if (!nodes.isEmpty() && nodes.get(nodes.size() - 1).pos.distanceToSqr(lerpedPos) > 64.0) {
+                nodes.clear();
+            }
+            if (nodes.isEmpty() || nodes.get(nodes.size() - 1).pos.distanceToSqr(lerpedPos) > 0.0004) {
                 nodes.add(new TrailNode(lerpedPos, playerHeight, now));
-                if (nodes.size() > 160) {
+                if (nodes.size() > 280) {
                     nodes.remove(0);
                 }
             }
 
-            if (nodes.size() >= 2) {
+            TrailNode liveTip = new TrailNode(lerpedPos, playerHeight, now);
+            boolean includeLiveTip = !nodes.isEmpty() && nodes.get(nodes.size() - 1).pos.distanceToSqr(lerpedPos) > 1.0E-5;
+            int totalNodes = nodes.size() + (includeLiveTip ? 1 : 0);
+
+            if (totalNodes >= 2) {
+                // Single-buffer BufferPool invariant: finish and draw quads BEFORE opening lines
                 BufferBuilder quadBuf = WorldPrimitiveRenderer.beginQuads();
-                BufferBuilder lineBuf = WorldPrimitiveRenderer.beginLines();
-                boolean any = false;
-
-                for (int i = 1; i < nodes.size(); i++) {
-                    TrailNode n0 = nodes.get(i - 1);
-                    TrailNode n1 = nodes.get(i);
-                    float life = 1.0f - (now - n1.time) / maxAgeMs;
-                    if (life <= 0.03f) continue;
-
-                    int themeCol = ThemeManager.getInstance().getAccentColor(i * 6);
-                    int fillTop = ColorUtils.withAlphaFactor(themeCol, life * 0.24f);
-                    int fillBot = ColorUtils.withAlphaFactor(themeCol, life * 0.42f);
-                    int edgeCol = ColorUtils.withAlphaFactor(themeCol, life * 0.92f);
-
-                    double h0 = n0.height * (0.35 + 0.65 * life);
-                    double h1 = n1.height * (0.35 + 0.65 * life);
-
-                    float bx0 = (float) (n0.pos.x - cam.x), by0 = (float) (n0.pos.y + 0.06 - cam.y), bz0 = (float) (n0.pos.z - cam.z);
-                    float bx1 = (float) (n1.pos.x - cam.x), by1 = (float) (n1.pos.y + 0.06 - cam.y), bz1 = (float) (n1.pos.z - cam.z);
-                    float tx0 = bx0, ty0 = (float) (n0.pos.y + h0 - cam.y), tz0 = bz0;
-                    float tx1 = bx1, ty1 = (float) (n1.pos.y + h1 - cam.y), tz1 = bz1;
-
-                    quadBuf.addVertex(pose, bx0, by0, bz0).setColor(fillBot);
-                    quadBuf.addVertex(pose, bx1, by1, bz1).setColor(fillBot);
-                    quadBuf.addVertex(pose, tx1, ty1, tz1).setColor(fillTop);
-                    quadBuf.addVertex(pose, tx0, ty0, tz0).setColor(fillTop);
-
-                    lineBuf.addVertex(pose, tx0, ty0, tz0).setColor(edgeCol);
-                    lineBuf.addVertex(pose, tx1, ty1, tz1).setColor(edgeCol);
-                    lineBuf.addVertex(pose, bx0, by0, bz0).setColor(edgeCol);
-                    lineBuf.addVertex(pose, bx1, by1, bz1).setColor(edgeCol);
-                    any = true;
-                }
-
-                if (any) {
+                if (emitRibbonSegments(quadBuf, pose, cam, now, maxAgeMs, liveTip, includeLiveTip, true)) {
                     WorldPrimitiveRenderer.drawQuads(quadBuf, true, true);
-                    WorldPrimitiveRenderer.drawLines(lineBuf, true);
                 } else {
                     WorldPrimitiveRenderer.discardQuietly(quadBuf);
+                }
+
+                BufferBuilder lineBuf = WorldPrimitiveRenderer.beginLines();
+                if (emitRibbonSegments(lineBuf, pose, cam, now, maxAgeMs, liveTip, includeLiveTip, false)) {
+                    WorldPrimitiveRenderer.drawLines(lineBuf, true);
+                } else {
                     WorldPrimitiveRenderer.discardQuietly(lineBuf);
                 }
             }
@@ -183,9 +162,10 @@ public class TrailsModule extends Module {
         if ((sparks.isEnabled() && doRibbon) || (doWalk && !walkParticles.isEmpty())) {
             if (mc.gameRenderer == null || mc.gameRenderer.mainCamera() == null) return;
             Quaternionf orient = new Quaternionf(mc.gameRenderer.mainCamera().rotation());
+
+            // Sequential textured passes so spriteBuf and glowBuf never share BufferPool simultaneously
             BufferBuilder spriteBuf = WorldPrimitiveRenderer.beginTexturedQuads();
-            BufferBuilder glowBuf = WorldPrimitiveRenderer.beginTexturedQuads();
-            boolean any = false;
+            boolean anySprite = false;
 
             if (doRibbon && sparks.isEnabled()) {
                 for (int i = 1; i < nodes.size(); i += 6) {
@@ -196,7 +176,7 @@ public class TrailsModule extends Module {
                     double waveY = (Math.sin(now * 0.006 + i) * 0.5 + 0.5) * h1;
                     int col = ColorUtils.withAlphaFactor(ThemeManager.getInstance().getAccentColor(i * 6), life * 0.9f);
                     WorldPrimitiveRenderer.glowSprite(spriteBuf, pose, n1.pos.x - cam.x, n1.pos.y + waveY - cam.y, n1.pos.z - cam.z, orient, 0.22f * life, col);
-                    any = true;
+                    anySprite = true;
                 }
             }
 
@@ -211,19 +191,77 @@ public class TrailsModule extends Module {
                     int col = ColorUtils.withAlphaFactor(ThemeManager.getInstance().getAccentColor(wp.colorSeed), life * 0.9f);
                     float sz = pScale * (0.35f + 0.65f * life);
                     WorldPrimitiveRenderer.glowSprite(spriteBuf, pose, wx, wy, wz, orient, sz, col);
-                    WorldPrimitiveRenderer.glowSprite(glowBuf, pose, wx, wy, wz, orient, sz * 1.9f, ColorUtils.withAlphaFactor(col, 0.42f));
-                    any = true;
+                    anySprite = true;
                 }
             }
 
-            if (any) {
+            if (anySprite) {
                 WorldPrimitiveRenderer.drawTexturedQuads(spriteBuf, TextureAssets.DESIRE_PARTICLE_HEX_ORBIZ, true, true);
-                WorldPrimitiveRenderer.drawTexturedQuads(glowBuf, TextureAssets.DESIRE_PARTICLE_GLOW, true, true);
             } else {
                 WorldPrimitiveRenderer.discardQuietly(spriteBuf);
-                WorldPrimitiveRenderer.discardQuietly(glowBuf);
+            }
+
+            if (doWalk && !walkParticles.isEmpty()) {
+                BufferBuilder glowBuf = WorldPrimitiveRenderer.beginTexturedQuads();
+                boolean anyGlow = false;
+                float pScale = walkScale.getFloatValue();
+                for (WalkParticle wp : walkParticles) {
+                    float life = 1.0f - (now - wp.spawnMs) / maxAgeMs;
+                    if (life <= 0.03f) continue;
+                    double wx = wp.prevPos.x + (wp.pos.x - wp.prevPos.x) * tickDelta - cam.x;
+                    double wy = wp.prevPos.y + (wp.pos.y - wp.prevPos.y) * tickDelta - cam.y;
+                    double wz = wp.prevPos.z + (wp.pos.z - wp.prevPos.z) * tickDelta - cam.z;
+                    int col = ColorUtils.withAlphaFactor(ThemeManager.getInstance().getAccentColor(wp.colorSeed), life * 0.9f);
+                    float sz = pScale * (0.35f + 0.65f * life);
+                    WorldPrimitiveRenderer.glowSprite(glowBuf, pose, wx, wy, wz, orient, sz * 1.9f, ColorUtils.withAlphaFactor(col, 0.42f));
+                    anyGlow = true;
+                }
+                if (anyGlow) {
+                    WorldPrimitiveRenderer.drawTexturedQuads(glowBuf, TextureAssets.DESIRE_PARTICLE_GLOW, true, true);
+                } else {
+                    WorldPrimitiveRenderer.discardQuietly(glowBuf);
+                }
             }
         }
+    }
+
+    private boolean emitRibbonSegments(BufferBuilder buf, Matrix4f pose, Vec3 cam, long now, float maxAgeMs,
+                                       TrailNode liveTip, boolean includeLiveTip, boolean quads) {
+        int totalNodes = nodes.size() + (includeLiveTip ? 1 : 0);
+        boolean any = false;
+        for (int i = 1; i < totalNodes; i++) {
+            TrailNode n0 = nodes.get(i - 1);
+            TrailNode n1 = (i < nodes.size()) ? nodes.get(i) : liveTip;
+            float life0 = Math.max(0.03f, 1.0f - (now - n0.time) / maxAgeMs);
+            float life1 = 1.0f - (now - n1.time) / maxAgeMs;
+            if (life1 <= 0.03f) continue;
+
+            int themeCol = ThemeManager.getInstance().getAccentColor(i * 6);
+            double h0 = n0.height * (0.35 + 0.65 * life0);
+            double h1 = n1.height * (0.35 + 0.65 * life1);
+
+            float bx0 = (float) (n0.pos.x - cam.x), by0 = (float) (n0.pos.y + 0.06 - cam.y), bz0 = (float) (n0.pos.z - cam.z);
+            float bx1 = (float) (n1.pos.x - cam.x), by1 = (float) (n1.pos.y + 0.06 - cam.y), bz1 = (float) (n1.pos.z - cam.z);
+            float tx0 = bx0, ty0 = (float) (n0.pos.y + h0 - cam.y), tz0 = bz0;
+            float tx1 = bx1, ty1 = (float) (n1.pos.y + h1 - cam.y), tz1 = bz1;
+
+            if (quads) {
+                int fillTop = ColorUtils.withAlphaFactor(themeCol, life1 * 0.24f);
+                int fillBot = ColorUtils.withAlphaFactor(themeCol, life1 * 0.42f);
+                buf.addVertex(pose, bx0, by0, bz0).setColor(fillBot);
+                buf.addVertex(pose, bx1, by1, bz1).setColor(fillBot);
+                buf.addVertex(pose, tx1, ty1, tz1).setColor(fillTop);
+                buf.addVertex(pose, tx0, ty0, tz0).setColor(fillTop);
+            } else {
+                int edgeCol = ColorUtils.withAlphaFactor(themeCol, life1 * 0.92f);
+                buf.addVertex(pose, tx0, ty0, tz0).setColor(edgeCol);
+                buf.addVertex(pose, tx1, ty1, tz1).setColor(edgeCol);
+                buf.addVertex(pose, bx0, by0, bz0).setColor(edgeCol);
+                buf.addVertex(pose, bx1, by1, bz1).setColor(edgeCol);
+            }
+            any = true;
+        }
+        return any;
     }
 
     private record TrailNode(Vec3 pos, double height, long time) {}

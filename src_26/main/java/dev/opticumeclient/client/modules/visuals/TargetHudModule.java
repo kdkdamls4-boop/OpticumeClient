@@ -6,7 +6,6 @@ import dev.opticumeclient.client.hud.HudManager;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.modules.ModuleManager;
-import dev.opticumeclient.client.modules.combat.KillAuraModule;
 import dev.opticumeclient.client.modules.combat.LegitAuraModule;
 import dev.opticumeclient.client.modules.combat.OpticumeAuraModule;
 import dev.opticumeclient.client.render.Animation;
@@ -108,7 +107,7 @@ public class TargetHudModule extends Module {
     }
 
     public TargetHudModule() {
-        super("TargetHUD", "Премиум панель цели (Nursultan / Catlavan / ThunderHack)", Category.VISUALS);
+        super("TargetHUD", "Премиум панель цели (Nursultan / Catlavan / ThunderHack)", Category.HUD);
         instance = this;
 
         addSetting(style);
@@ -322,8 +321,7 @@ public class TargetHudModule extends Module {
         float contentW = w - (contentX - x) - 8.0f;
 
         boolean isFriend = FriendManager.getInstance().isFriend(target);
-        String rawName = target.getName().getString();
-        if (rawName.length() > 14) rawName = rawName.substring(0, 13) + "..";
+        String rawName = safeTargetName(target, 14);
         String displayName = isFriend ? "§a[F] §f" + rawName : rawName;
         dev.opticumeclient.client.hud.HudPanelRenderer.drawHudText(
                 context, dev.opticumeclient.client.render.font.OpticumeFonts.KEY_HUD_MEDIUM,
@@ -367,8 +365,7 @@ public class TargetHudModule extends Module {
         float contentW = w - (contentX - x) - 7.0f;
 
         boolean isFriend = FriendManager.getInstance().isFriend(target);
-        String rawName = target.getName().getString();
-        if (rawName.length() > 13) rawName = rawName.substring(0, 12) + "..";
+        String rawName = safeTargetName(target, 13);
         String displayName = isFriend ? "§a[F] §f" + rawName : rawName;
         Render2DHelper.drawScaledText(context, displayName, contentX, y + 6.0f,
                 ColorUtils.withAlpha(0xFFFFFFFF, (int) (255 * alpha)), 0.85f, true);
@@ -416,8 +413,7 @@ public class TargetHudModule extends Module {
         float contentX = headX + headSize + 7.0f;
         float contentW = w - (contentX - x) - 7.0f;
 
-        String rawName = target.getName().getString();
-        if (rawName.length() > 13) rawName = rawName.substring(0, 12) + "..";
+        String rawName = safeTargetName(target, 13);
         Render2DHelper.drawScaledText(context, rawName, contentX, y + 6.0f,
                 ColorUtils.withAlpha(0xFFFFFFFF, (int) (255 * alpha)), 0.86f, true);
 
@@ -466,8 +462,7 @@ public class TargetHudModule extends Module {
         float contentX = x + 51.0f;
         float contentW = w - 58.0f;
 
-        String rawName = target.getName().getString();
-        if (rawName.length() > 13) rawName = rawName.substring(0, 12) + "..";
+        String rawName = safeTargetName(target, 13);
         Render2DHelper.drawScaledText(context, rawName, contentX, y + 5.5f,
                 ColorUtils.withAlpha(0xFFFFFFFF, (int) (255 * alpha)), 0.85f, true);
 
@@ -628,16 +623,17 @@ public class TargetHudModule extends Module {
         };
 
         float itemX = startX;
+        float slotSize = 16.0f * scale;
         Matrix3x2fStack matrices = context.pose();
         for (ItemStack stack : stacks) {
             if (stack != null && !stack.isEmpty()) {
                 matrices.pushMatrix();
                 matrices.translate(itemX, startY);
                 matrices.scale(scale, scale);
-                context.item(stack, 0, 0);
-                context.itemDecorations(mc.font, stack, 0, 0);
+                context.fakeItem(stack, 0, 0);
                 matrices.popMatrix();
-                itemX += 13.5f;
+                drawEquipmentDecorations(context, stack, itemX, startY, slotSize, 1.0f);
+                itemX += 14.0f;
             }
         }
     }
@@ -661,11 +657,43 @@ public class TargetHudModule extends Module {
                 matrices.pushMatrix();
                 matrices.translate(itemX - 0.5f, startY - 0.5f);
                 matrices.scale(0.75f, 0.75f);
-                context.item(stack, 0, 0);
-                context.itemDecorations(mc.font, stack, 0, 0);
+                context.fakeItem(stack, 0, 0);
                 matrices.popMatrix();
+                drawEquipmentDecorations(context, stack, itemX - 0.5f, startY - 0.5f, 12.0f, alpha);
             }
             itemX += 14.0f;
+        }
+    }
+
+    private static void drawEquipmentDecorations(GuiGraphicsExtractor context, ItemStack stack, float x, float y, float size, float alpha) {
+        int a = Math.max(0, Math.min(255, Math.round(255.0f * alpha)));
+        if (a <= 2) return;
+
+        int count = stack.getCount();
+        if (count > 1 && count <= 999) {
+            String cnt = Integer.toString(count);
+            float textScale = 0.52f;
+            float tw = Render2DHelper.getTextWidth(cnt, textScale);
+            Render2DHelper.drawScaledText(context, cnt, x + size - tw + 0.5f, y + size - 5.2f,
+                    ColorUtils.rgba(255, 255, 255, a), textScale, true);
+        }
+
+        if (stack.isDamageableItem() && stack.isDamaged() && stack.getMaxDamage() > 0) {
+            float frac = Math.max(0.0f, Math.min(1.0f, (float) (stack.getMaxDamage() - stack.getDamageValue()) / stack.getMaxDamage()));
+            float barW = Math.max(4.0f, size - 2.0f);
+            float barH = 1.4f;
+            float bx = x + 1.0f;
+            float by = y + size - 1.4f;
+            int barCol = ColorUtils.rgba(
+                    Math.max(0, Math.min(255, Math.round(255.0f * (1.0f - frac)))),
+                    Math.max(0, Math.min(255, Math.round(255.0f * frac))),
+                    0,
+                    a
+            );
+            Render2DHelper.drawRoundedRectFloat(context, bx, by, barW, barH, 0.4f, ColorUtils.rgba(0, 0, 0, a));
+            if (barW * frac > 0.25f) {
+                Render2DHelper.drawRoundedRectFloat(context, bx, by, barW * frac, barH, 0.4f, barCol);
+            }
         }
     }
 
@@ -716,17 +744,11 @@ public class TargetHudModule extends Module {
             return opticumeAura.getTarget();
         }
 
-        // 2. KillAuraModule
-        KillAuraModule killAura = ModuleManager.getInstance().getModule(KillAuraModule.class);
-        if (killAura != null && killAura.isEnabled() && killAura.getCurrentTarget() != null && killAura.getCurrentTarget().isAlive()) {
-            return killAura.getCurrentTarget();
-        }
-
-        // 3. LegitAuraModule
+        // 2. LegitAuraModule (direct live target)
         LegitAuraModule legitAura = ModuleManager.getInstance().getModule(LegitAuraModule.class);
         if (legitAura != null && legitAura.isEnabled()) {
-            LivingEntity legitTarget = findLegitAuraCandidate();
-            if (legitTarget != null) {
+            LivingEntity legitTarget = legitAura.getTarget();
+            if (legitTarget != null && legitTarget.isAlive()) {
                 return legitTarget;
             }
         }
@@ -757,28 +779,6 @@ public class TargetHudModule extends Module {
         return null;
     }
 
-    private LivingEntity findLegitAuraCandidate() {
-        LivingEntity best = null;
-        double bestDist = 4.0;
-        for (Entity e : mc.level.entitiesForRendering()) {
-            if (!(e instanceof LivingEntity living) || e == mc.player || !e.isAlive()) continue;
-            if (!(e instanceof Player)) continue;
-            if (FriendManager.getInstance().isFriend(e)) continue;
-
-            double dist = mc.player.distanceTo(e);
-            if (dist <= bestDist) {
-                Vec3 diff = e.position().subtract(mc.player.position());
-                double angle = Math.toDegrees(Math.atan2(diff.z, diff.x)) - 90.0;
-                double deltaYaw = Mth.wrapDegrees(angle - mc.player.getYRot());
-                if (Math.abs(deltaYaw) <= 45.0) {
-                    best = living;
-                    bestDist = dist;
-                }
-            }
-        }
-        return best;
-    }
-
     public LivingEntity getCurrentTarget() {
         return currentTarget != null ? currentTarget : lastTarget;
     }
@@ -793,5 +793,13 @@ public class TargetHudModule extends Module {
 
     public BooleanSetting getShowEquipment() {
         return showEquipment;
+    }
+
+    private static String safeTargetName(LivingEntity target, int maxLen) {
+        String raw = dev.opticumeclient.client.modules.other.NameProtectModule.protectHudName(target.getName().getString());
+        if (raw.length() > maxLen) {
+            return raw.substring(0, Math.max(1, maxLen - 1)) + "..";
+        }
+        return raw;
     }
 }

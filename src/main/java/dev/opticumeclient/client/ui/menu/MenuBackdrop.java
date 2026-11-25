@@ -73,6 +73,6 @@ public final class MenuBackdrop {
         v = Mth.clamp(cv - zh * 0.5f, 0.0f, Math.max(0.0f, 1.0f - zh));
 
         int tint = ColorUtils.rgba(255, 255, 255, Math.max(0, Math.min(255, Math.round(255.0f * alpha))));
-        Render2DHelper.drawCroppedTexture(context, wp.image(), 0, 0, width, height, u, v, zw, zh, tint);
+        Render2DHelper.drawCroppedTextureFloat(context, wp.image(), 0, 0, width, height, u, v, zw, zh, tint);
     }
 }

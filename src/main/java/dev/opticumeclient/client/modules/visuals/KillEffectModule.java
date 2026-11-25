@@ -1,15 +1,19 @@
 package dev.opticumeclient.client.modules.visuals;
 
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.modules.ModuleManager;
-import dev.opticumeclient.client.modules.combat.KillAuraModule;
+import dev.opticumeclient.client.modules.combat.LegitAuraModule;
 import dev.opticumeclient.client.modules.combat.OpticumeAuraModule;
+import dev.opticumeclient.client.modules.visuals.killeffect.DeathPiece;
+import dev.opticumeclient.client.modules.visuals.killeffect.DeathPoseFactory;
+import dev.opticumeclient.client.modules.visuals.targetesp.TargetEspFrame;
 import dev.opticumeclient.client.render.ColorUtils;
-import dev.opticumeclient.client.render.Render3DHelper;
 import dev.opticumeclient.client.render.TextureAssets;
 import dev.opticumeclient.client.render.ThemeManager;
+import dev.opticumeclient.client.render.WorldPrimitiveRenderer;
 import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ColorSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
@@ -19,6 +23,7 @@ import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.LightningBolt;
@@ -26,20 +31,36 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 public class KillEffectModule extends Module {
     private static KillEffectModule INSTANCE;
+    private static volatile boolean spawningClientExplosion = false;
 
-    private final ModeSetting effect = new ModeSetting("Effect", "Тип визуального эффекта", "All", "Lightning", "Explosion", "Blood", "Theme Bloom", "All");
+    public static boolean isSpawningClientExplosion() {
+        return spawningClientExplosion;
+    }
+
+    private final ModeSetting effect = new ModeSetting("Effect", "Тип визуального эффекта", "All", "Lightning", "Explosion", "Blood", "Theme Bloom", "All", "None");
+    private final ModeSetting deathAnim = new ModeSetting("Death Anim", "3D-анимация разрушения тела при смерти", "Shatter", "Off", "Shatter", "Dissolve", "Soul", "Ash");
+    private final NumberSetting animDuration = new NumberSetting("Anim Duration", "Длительность 3D-анимации смерти (сек)", 1.4, 0.5, 3.0, 0.1)
+            .visibleWhen(() -> !deathAnim.is("Off"));
+    private final BooleanSetting hideCorpse = new BooleanSetting("Hide Corpse", "Скрывать ванильный падающий труп во время 3D-анимации", true)
+            .visibleWhen(() -> !deathAnim.is("Off"));
+    private final NumberSetting deathForce = new NumberSetting("Death Force", "Импульс разлёта фрагментов 3D-анимации", 1.0, 0.4, 2.0, 0.1)
+            .visibleWhen(() -> !deathAnim.is("Off"));
     private final BooleanSetting sound = new BooleanSetting("Sound", "Звуковой эффект", true);
     private final NumberSetting volume = new NumberSetting("Volume", "Громкость", 1.0, 0.1, 1.0, 0.1);
     private final ModeSetting filter = new ModeSetting("Filter", "Фильтр целей", "Players Only", "Players Only", "All Living");
     private final NumberSetting particles = new NumberSetting("Particles", "Количество частиц", 35.0, 10.0, 80.0, 5.0);
-    private final ModeSetting colorMode = new ModeSetting("ColorMode", "Цвет партиклов Theme Bloom", "Theme", "Theme", "Red", "Rainbow", "Custom");
+    private final ModeSetting colorMode = new ModeSetting("ColorMode", "Цвет партиклов и 3D-эффекта", "Theme", "Theme", "Red", "Rainbow", "Custom");
     private final ColorSetting customColor = (ColorSetting) new ColorSetting("CustomColor", "Пользовательский цвет", 0xFFFF2244)
             .visibleWhen(() -> colorMode.is("Custom"));
 
@@ -51,6 +72,7 @@ public class KillEffectModule extends Module {
 
     private static class BloomParticle {
         Vec3 pos;
+        Vec3 prevPos;
         Vec3 vel;
         float rotation;
         int age = 0;
@@ -58,6 +80,7 @@ public class KillEffectModule extends Module {
 
         BloomParticle(Vec3 pos, Vec3 vel, float rotation, int maxAge) {
             this.pos = pos;
+            this.prevPos = pos;
             this.vel = vel;
             this.rotation = rotation;
             this.maxAge = maxAge;
@@ -65,10 +88,16 @@ public class KillEffectModule extends Module {
     }
 
     private final List<BloomParticle> activeBloomParticles = new ArrayList<>();
+    private final List<DeathPiece> activeDeathPieces = new ArrayList<>();
+    private final Map<Integer, Long> hiddenCorpseUntil = new HashMap<>();
 
     public KillEffectModule() {
-        super("KillEffect", "Эффектная анимация молнии, взрыва, крови и светлячков при устранении цели", Category.VISUALS);
+        super("KillEffect", "Эффекты молнии, взрыва, светлячков и 3D-анимации смерти (Shatter / Dissolve / Soul / Ash)", Category.VISUALS);
         addSetting(effect);
+        addSetting(deathAnim);
+        addSetting(animDuration);
+        addSetting(hideCorpse);
+        addSetting(deathForce);
         addSetting(sound);
         addSetting(volume);
         addSetting(filter);
@@ -117,19 +146,58 @@ public class KillEffectModule extends Module {
         if (aura != null && aura.isEnabled() && aura.getTarget() == target) {
             validKill = true;
         }
-        KillAuraModule killAura = ModuleManager.getInstance().getModule(KillAuraModule.class);
-        if (killAura != null && killAura.isEnabled() && killAura.getCurrentTarget() == target) {
+        LegitAuraModule legitAura = ModuleManager.getInstance().getModule(LegitAuraModule.class);
+        if (legitAura != null && legitAura.isEnabled() && legitAura.getTarget() == target) {
             validKill = true;
         }
 
-        if (validKill) {
+        if (validKill && target instanceof LivingEntity living) {
             lastTriggeredEntityId = target.getId();
             lastTriggeredTimeMs = now;
             if (lastAttackedEntity == target) {
                 lastAttackedEntity = null;
             }
+            if (!deathAnim.is("Off")) {
+                List<DeathPiece> pieces = DeathPoseFactory.build(
+                        living,
+                        deathAnim.getMode(),
+                        animDuration.getFloatValue(),
+                        deathForce.getFloatValue(),
+                        resolveEffectColor()
+                );
+                if (!pieces.isEmpty()) {
+                    while (activeDeathPieces.size() > 360) {
+                        activeDeathPieces.remove(0);
+                    }
+                    activeDeathPieces.addAll(pieces);
+                }
+                if (hideCorpse.isEnabled()) {
+                    hiddenCorpseUntil.put(target.getId(), now + Math.round(animDuration.getFloatValue() * 1000.0) + 1500L);
+                }
+            }
             triggerKillEffect(target.position());
         }
+    }
+
+    public boolean shouldHideCorpse(Entity entity) {
+        if (!isEnabled() || entity == null || deathAnim.is("Off") || !hideCorpse.isEnabled()) {
+            return false;
+        }
+        Long until = hiddenCorpseUntil.get(entity.getId());
+        if (until == null) return false;
+        if (System.currentTimeMillis() > until) {
+            hiddenCorpseUntil.remove(entity.getId());
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public void onDisable() {
+        super.onDisable();
+        activeBloomParticles.clear();
+        activeDeathPieces.clear();
+        hiddenCorpseUntil.clear();
     }
 
     public void triggerKillEffect(Vec3 pos) {
@@ -160,8 +228,13 @@ public class KillEffectModule extends Module {
 
         // 2. Explosion
         if (mode.equals("Explosion") || mode.equals("All")) {
-            level.addParticle(ParticleTypes.EXPLOSION_EMITTER, pos.x, pos.y + 1.0, pos.z, 0, 0, 0);
-            level.addParticle(ParticleTypes.EXPLOSION, pos.x, pos.y + 1.0, pos.z, 0, 0, 0);
+            spawningClientExplosion = true;
+            try {
+                level.addParticle(ParticleTypes.EXPLOSION_EMITTER, pos.x, pos.y + 1.0, pos.z, 0, 0, 0);
+                level.addParticle(ParticleTypes.EXPLOSION, pos.x, pos.y + 1.0, pos.z, 0, 0, 0);
+            } finally {
+                spawningClientExplosion = false;
+            }
 
             if (playSound && !mode.equals("All")) {
                 level.playLocalSound(pos.x, pos.y, pos.z, SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, vol, 1.0f, false);
@@ -198,40 +271,113 @@ public class KillEffectModule extends Module {
 
     @Override
     public void onTick() {
-        if (activeBloomParticles.isEmpty()) return;
+        long now = System.currentTimeMillis();
+        hiddenCorpseUntil.entrySet().removeIf(e -> now > e.getValue());
 
-        Iterator<BloomParticle> it = activeBloomParticles.iterator();
-        while (it.hasNext()) {
-            BloomParticle p = it.next();
-            p.age++;
-            p.pos = p.pos.add(p.vel);
-            p.vel = new Vec3(p.vel.x * 0.95, p.vel.y * 0.95, p.vel.z * 0.95);
-            p.rotation = (p.rotation + 3.0f) % 360.0f;
-            if (p.age >= p.maxAge) {
-                it.remove();
+        if (!activeBloomParticles.isEmpty()) {
+            Iterator<BloomParticle> it = activeBloomParticles.iterator();
+            while (it.hasNext()) {
+                BloomParticle p = it.next();
+                p.age++;
+                p.prevPos = p.pos;
+                p.pos = p.pos.add(p.vel);
+                p.vel = new Vec3(p.vel.x * 0.95, p.vel.y * 0.95, p.vel.z * 0.95);
+                p.rotation = (p.rotation + 3.0f) % 360.0f;
+                if (p.age >= p.maxAge) {
+                    it.remove();
+                }
+            }
+        }
+
+        if (!activeDeathPieces.isEmpty()) {
+            Iterator<DeathPiece> pieceIt = activeDeathPieces.iterator();
+            while (pieceIt.hasNext()) {
+                DeathPiece piece = pieceIt.next();
+                boolean expired = piece.tick();
+                if ((piece.mode == DeathPiece.MODE_SOUL || piece.mode == DeathPiece.MODE_DISSOLVE)
+                        && piece.age % 4 == 0 && activeBloomParticles.size() < 240 && Math.random() < 0.35) {
+                    activeBloomParticles.add(new BloomParticle(
+                            piece.pos,
+                            new Vec3((Math.random() - 0.5) * 0.02, 0.025 + Math.random() * 0.03, (Math.random() - 0.5) * 0.02),
+                            (float) (Math.random() * 360.0),
+                            18
+                    ));
+                }
+                if (expired) {
+                    pieceIt.remove();
+                }
             }
         }
     }
 
     @Override
     public void onRender3D(PoseStack matrices, float tickDelta) {
-        if (!isEnabled() || activeBloomParticles.isEmpty()) return;
+        // Rendered in native Vulkan 3D pass via renderWorld(TargetEspFrame)
+    }
 
-        int baseColor;
+    public void renderWorld(TargetEspFrame frame) {
+        if (!isEnabled() || frame == null || mc.level == null) return;
+
+        Vec3 cam = frame.cameraPos();
+        Matrix4f pose = frame.poseStack().last().pose();
+        float tickDelta = frame.partialTicks();
+
+        if (!activeDeathPieces.isEmpty()) {
+            BufferBuilder quadBuf = WorldPrimitiveRenderer.beginQuads();
+            boolean anyQuads = false;
+            for (DeathPiece piece : activeDeathPieces) {
+                anyQuads |= piece.emitQuads(quadBuf, pose, cam, tickDelta);
+            }
+            if (anyQuads) {
+                WorldPrimitiveRenderer.drawQuads(quadBuf, true, true);
+            } else {
+                WorldPrimitiveRenderer.discardQuietly(quadBuf);
+            }
+
+            BufferBuilder lineBuf = WorldPrimitiveRenderer.beginLines();
+            boolean anyLines = false;
+            for (DeathPiece piece : activeDeathPieces) {
+                anyLines |= piece.emitLines(lineBuf, pose, cam, tickDelta);
+            }
+            if (anyLines) {
+                WorldPrimitiveRenderer.drawLines(lineBuf, true);
+            } else {
+                WorldPrimitiveRenderer.discardQuietly(lineBuf);
+            }
+        }
+
+        if (!activeBloomParticles.isEmpty() && mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null) {
+            int baseColor = resolveEffectColor();
+            Quaternionf orient = new Quaternionf(mc.gameRenderer.mainCamera().rotation());
+            BufferBuilder glowBuf = WorldPrimitiveRenderer.beginTexturedQuads();
+            boolean any = false;
+            for (BloomParticle p : activeBloomParticles) {
+                float fade = 1.0f - ((float) p.age / p.maxAge);
+                if (fade <= 0.02f) continue;
+                double x = Mth.lerp(tickDelta, p.prevPos.x, p.pos.x) - cam.x;
+                double y = Mth.lerp(tickDelta, p.prevPos.y, p.pos.y) - cam.y;
+                double z = Mth.lerp(tickDelta, p.prevPos.z, p.pos.z) - cam.z;
+                float sz = 0.30f * fade;
+                int partCol = ColorUtils.withAlphaFactor(baseColor, Math.max(0.05f, fade));
+                WorldPrimitiveRenderer.glowSprite(glowBuf, pose, x, y, z, orient, sz, partCol);
+                any = true;
+            }
+            if (any) {
+                WorldPrimitiveRenderer.drawTexturedQuads(glowBuf, TextureAssets.GLOW_RADIAL, true, true);
+            } else {
+                WorldPrimitiveRenderer.discardQuietly(glowBuf);
+            }
+        }
+    }
+
+    private int resolveEffectColor() {
         if (colorMode.is("Theme")) {
-            baseColor = ThemeManager.getInstance().getAccentColor(0);
+            return ThemeManager.getInstance().getAccentColor(0);
         } else if (colorMode.is("Red")) {
-            baseColor = 0xFFFF2E54;
+            return 0xFFFF2E54;
         } else if (colorMode.is("Rainbow")) {
-            baseColor = ColorUtils.getRainbow(4.0f, 0.85f, 1.0f, 0L);
-        } else {
-            baseColor = customColor.getColor();
+            return ColorUtils.getRainbow(4.0f, 0.85f, 1.0f, 0L);
         }
-
-        for (BloomParticle p : activeBloomParticles) {
-            float fade = 1.0f - ((float) p.age / p.maxAge);
-            int partCol = ColorUtils.withAlphaFactor(baseColor, Math.max(0.05f, fade));
-            Render3DHelper.queueBillboardSprite(p.pos, 0.28f * fade, TextureAssets.GLOW_RADIAL, partCol, p.rotation, true);
-        }
+        return customColor.getColor();
     }
 }

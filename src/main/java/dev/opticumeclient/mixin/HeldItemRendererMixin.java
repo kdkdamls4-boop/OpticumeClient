@@ -145,12 +145,6 @@ public abstract class HeldItemRendererMixin {
         SwingAnimationsModule swing = SwingAnimationsModule.getInstance();
         if (swing != null && swing.overridesVanillaSwing()) {
             ci.cancel();
-            return;
-        }
-        ViewModelModule vm = ViewModelModule.getInstance();
-        if (vm != null && vm.isEnabled() && !"Vanilla".equals(vm.getSwingAnim())) {
-            vm.applyCustomSwing(matrices, arm, swingProgress);
-            ci.cancel();
         }
     }
 

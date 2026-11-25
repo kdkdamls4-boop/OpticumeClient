@@ -16,8 +16,8 @@ import org.joml.Matrix3x2fStack;
  * Draggable 9x3 inventory grid widget displaying all 27 main inventory slots with item counts.
  */
 public class InventoryHud extends Module {
-    private final NumberSetting posX = new NumberSetting("PosX", "X позиция", 160.0, 0.0, 1920.0, 1.0);
-    private final NumberSetting posY = new NumberSetting("PosY", "Y позиция", 8.0, 0.0, 1080.0, 1.0);
+    private final NumberSetting posX = new NumberSetting("PosX", "X позиция", 760.0, 0.0, 1920.0, 1.0);
+    private final NumberSetting posY = new NumberSetting("PosY", "Y позиция", 415.0, 0.0, 1080.0, 1.0);
 
     private final HudManager.DraggableWidget dragWidget;
 
@@ -52,7 +52,14 @@ public class InventoryHud extends Module {
         float w = pad * 2.0f + 9 * cell + 8 * gap;
         float h = headerH + pad + 3 * cell + 2 * gap;
 
-        dragWidget.syncExternalPosition(posX.getFloatValue(), posY.getFloatValue());
+        float screenW = mc.getWindow() != null ? mc.getWindow().getGuiScaledWidth() : 960.0f;
+        float screenH = mc.getWindow() != null ? mc.getWindow().getGuiScaledHeight() : 540.0f;
+        float clampedX = Math.max(4.0f, Math.min(Math.max(4.0f, screenW - w - 4.0f), posX.getFloatValue()));
+        float clampedY = Math.max(4.0f, Math.min(Math.max(4.0f, screenH - h - 4.0f), posY.getFloatValue()));
+
+        if (!dragWidget.isDragging()) {
+            dragWidget.syncExternalPosition(clampedX, clampedY);
+        }
         dragWidget.setBounds(w, h);
 
         float x = dragWidget.getX();

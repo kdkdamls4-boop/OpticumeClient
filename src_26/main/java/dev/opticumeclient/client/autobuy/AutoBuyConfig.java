@@ -56,10 +56,6 @@ public class AutoBuyConfig {
     public float delayPoint1 = 0.14F;
     public float delayPoint2 = 0.3F;
     public float delayPoint3 = 0.28F;
-    public float refreshRandomizationPoint0 = 0.0F;
-    public float refreshRandomizationPoint1 = 0.33F;
-    public float refreshRandomizationPoint2 = 0.66F;
-    public float refreshRandomizationPoint3 = 1.0F;
     public List<ItemEntry> entries = new ArrayList<>();
     public List<String> banList = new ArrayList<>();
     public List<PurchaseRecord> history = new ArrayList<>();
@@ -191,32 +187,11 @@ public class AutoBuyConfig {
         }
     }
 
-    public void resetDelayCurveDefaults() {
-        this.delayPoint0 = 0.1F;
-        this.delayPoint1 = 0.14F;
-        this.delayPoint2 = 0.3F;
-        this.delayPoint3 = 0.28F;
-    }
-
-    public void resetRefreshRandomizationDefaults() {
-        this.refreshRandomizationPoint0 = 0.0F;
-        this.refreshRandomizationPoint1 = 0.33F;
-        this.refreshRandomizationPoint2 = 0.66F;
-        this.refreshRandomizationPoint3 = 1.0F;
-    }
-
     public void clampDelayCurve() {
         this.delayPoint0 = clamp01(this.delayPoint0);
         this.delayPoint1 = clamp01(this.delayPoint1);
         this.delayPoint2 = clamp01(this.delayPoint2);
         this.delayPoint3 = clamp01(this.delayPoint3);
-    }
-
-    public void clampRefreshRandomization() {
-        this.refreshRandomizationPoint0 = clamp01(this.refreshRandomizationPoint0);
-        this.refreshRandomizationPoint1 = clamp01(this.refreshRandomizationPoint1);
-        this.refreshRandomizationPoint2 = clamp01(this.refreshRandomizationPoint2);
-        this.refreshRandomizationPoint3 = clamp01(this.refreshRandomizationPoint3);
     }
 
     public float getDelayPoint(int index) {
@@ -282,7 +257,6 @@ public class AutoBuyConfig {
                     if (INSTANCE.autoPayIntervalSeconds <= 0) INSTANCE.autoPayIntervalSeconds = 30;
                     INSTANCE.armorDurabilityPercent = Math.max(0, Math.min(100, INSTANCE.armorDurabilityPercent));
                     INSTANCE.clampDelayCurve();
-                    INSTANCE.clampRefreshRandomization();
                     INSTANCE.enabled = false;
                     INSTANCE.autoSell = false;
                     INSTANCE.autoRelist = false;

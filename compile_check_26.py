@@ -16,17 +16,22 @@ APPDATA = os.environ.get("APPDATA") or os.path.join(os.path.expanduser("~"), "Ap
 CACHE_DEFAULT = os.path.expanduser("~/.cache/opticumeclient-mc26.3")
 
 
+def _has_mc_26_3(base_dir):
+    return bool(base_dir) and os.path.isfile(
+        os.path.join(base_dir, "libraries", "com", "mojang", "minecraft", "26.3", "minecraft-26.3-client.jar")
+    )
+
+
 def _resolve_base_dir():
     env_cache = os.environ.get("OPTICUME_MC_CACHE")
-    if env_cache and os.path.isdir(os.path.join(env_cache, "libraries")):
+    if _has_mc_26_3(env_cache):
         return env_cache
     if sys.platform == "win32":
-        for cand in (
-            os.path.join(APPDATA, "ElyPrismLauncher"),
-            r"C:\Users\User\AppData\Roaming\ElyPrismLauncher",
-        ):
-            if os.path.isdir(os.path.join(cand, "libraries")):
-                return cand
+        cand = os.path.join(APPDATA, "ElyPrismLauncher")
+        if _has_mc_26_3(cand):
+            return cand
+    if _has_mc_26_3(CACHE_DEFAULT):
+        return CACHE_DEFAULT
     return env_cache or CACHE_DEFAULT
 
 
@@ -52,6 +57,7 @@ def _resolve_javac(base_dir):
     candidates = [
         os.environ.get("OPTICUME_JAVAC", ""),
         os.path.join(base_dir, "java", "java-runtime-epsilon", "bin", "javac.exe"),
+        os.path.join(APPDATA, "ElyPrismLauncher", "java", "java-runtime-epsilon", "bin", "javac.exe") if sys.platform == "win32" else "",
         os.path.join(os.environ.get("JAVA_HOME", ""), "bin", exe) if os.environ.get("JAVA_HOME") else "",
         os.path.expanduser("~/.local/jdks/jdk-25/bin/javac"),
         shutil.which("javac") or "",

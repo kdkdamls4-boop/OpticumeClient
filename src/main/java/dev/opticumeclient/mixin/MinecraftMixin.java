@@ -76,6 +76,7 @@ public abstract class MinecraftMixin {
             FogBlurRenderer.getInstance().releaseGpuResources();
             WetShaderRenderer.getInstance().releaseGpuResources();
             AtmosphereRenderer.getInstance().releaseGpuResources();
+            dev.opticumeclient.client.modules.visuals.ambience.MotionBlurRenderer.getInstance().releaseGpuResources();
             dev.opticumeclient.client.modules.visuals.JumpCirclesModule jumpCircles =
                     dev.opticumeclient.client.modules.visuals.JumpCirclesModule.getInstance();
             if (jumpCircles != null) {

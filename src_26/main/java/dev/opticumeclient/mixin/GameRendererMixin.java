@@ -5,17 +5,22 @@ import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import dev.opticumeclient.client.modules.ModuleManager;
-import dev.opticumeclient.client.modules.optimization.NoHurtCamModule;
 import dev.opticumeclient.client.modules.visuals.AspectRatioModule;
+import dev.opticumeclient.client.modules.visuals.BlockESPModule;
 import dev.opticumeclient.client.modules.visuals.BlockOverlayModule;
 import dev.opticumeclient.client.modules.visuals.ChinaHatModule;
+import dev.opticumeclient.client.modules.visuals.FireworkESPModule;
 import dev.opticumeclient.client.modules.visuals.HandsModule;
 import dev.opticumeclient.client.modules.visuals.JumpCirclesModule;
+import dev.opticumeclient.client.modules.visuals.KillEffectModule;
 import dev.opticumeclient.client.modules.visuals.NoRenderModule;
+import dev.opticumeclient.client.modules.visuals.ObjectInfoModule;
 import dev.opticumeclient.client.modules.visuals.ParticlesModule;
 import dev.opticumeclient.client.modules.visuals.PopChamsModule;
+import dev.opticumeclient.client.modules.visuals.PotsTimerModule;
 import dev.opticumeclient.client.modules.visuals.PredictionsModule;
 import dev.opticumeclient.client.modules.visuals.TargetEspModule;
+import dev.opticumeclient.client.modules.visuals.TntTimerModule;
 import dev.opticumeclient.client.modules.visuals.TrailsModule;
 import dev.opticumeclient.client.modules.visuals.hands.HandsEffectRenderer;
 import dev.opticumeclient.client.modules.visuals.targetesp.BufferPool;
@@ -105,7 +110,7 @@ public abstract class GameRendererMixin {
         WorldProjection.set(viewMatrix, projMatrix);
 
         DeltaTracker tracker = this.minecraft.getDeltaTracker();
-        float partialTicks = tracker.getGameTimeDeltaPartialTick(false);
+        float partialTicks = tracker.getGameTimeDeltaPartialTick(true);
         TargetEspFrame frame = new TargetEspFrame(
                 tracker,
                 poseStack,
@@ -156,6 +161,36 @@ public abstract class GameRendererMixin {
         TrailsModule trails = TrailsModule.getInstance();
         if (trails != null && trails.isEnabled()) {
             trails.renderWorld(frame);
+        }
+
+        KillEffectModule killEffect = KillEffectModule.getInstance();
+        if (killEffect != null && killEffect.isEnabled()) {
+            killEffect.renderWorld(frame);
+        }
+
+        ObjectInfoModule objInfo = ObjectInfoModule.getInstance();
+        if (objInfo != null && objInfo.isEnabled()) {
+            objInfo.renderWorld(frame);
+        }
+
+        BlockESPModule blockEsp = BlockESPModule.getInstance();
+        if (blockEsp != null && blockEsp.isEnabled()) {
+            blockEsp.renderWorld(frame);
+        }
+
+        TntTimerModule tntTimer = TntTimerModule.getInstance();
+        if (tntTimer != null && tntTimer.isEnabled()) {
+            tntTimer.renderWorld(frame);
+        }
+
+        PotsTimerModule potsTimer = PotsTimerModule.getInstance();
+        if (potsTimer != null && potsTimer.isEnabled()) {
+            potsTimer.renderWorld(frame);
+        }
+
+        FireworkESPModule fireworkEsp = FireworkESPModule.getInstance();
+        if (fireworkEsp != null && fireworkEsp.isEnabled()) {
+            fireworkEsp.renderWorld(frame);
         }
     }
 
@@ -209,6 +244,7 @@ public abstract class GameRendererMixin {
         dev.opticumeclient.client.modules.visuals.ambience.FogBlurRenderer.getInstance().releaseGpuResources();
         dev.opticumeclient.client.modules.visuals.ambience.WetShaderRenderer.getInstance().releaseGpuResources();
         dev.opticumeclient.client.modules.visuals.atmosphere.AtmosphereRenderer.getInstance().releaseGpuResources();
+        dev.opticumeclient.client.modules.visuals.ambience.MotionBlurRenderer.getInstance().releaseGpuResources();
         JumpCirclesModule jumpCircles = JumpCirclesModule.getInstance();
         if (jumpCircles != null) {
             jumpCircles.releaseGpuResources();
@@ -269,11 +305,6 @@ public abstract class GameRendererMixin {
 
     @Inject(method = "bobHurt", at = @At("HEAD"), cancellable = true)
     private void opticume$onTiltViewWhenHurt(CameraRenderState state, PoseStack matrices, CallbackInfo ci) {
-        NoHurtCamModule noHurtCam = NoHurtCamModule.getInstance();
-        if (noHurtCam != null && noHurtCam.isEnabled()) {
-            ci.cancel();
-            return;
-        }
         NoRenderModule noRender = NoRenderModule.getInstance();
         if (noRender != null && noRender.isHurtCam()) {
             ci.cancel();

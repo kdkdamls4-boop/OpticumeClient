@@ -2,6 +2,7 @@ package dev.opticumeclient.client.modules.optimization;
 
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
+import dev.opticumeclient.client.modules.visuals.NameTagsModule;
 import dev.opticumeclient.client.setting.BooleanSetting;
 import dev.opticumeclient.client.setting.ModeSetting;
 import dev.opticumeclient.client.setting.NumberSetting;
@@ -10,13 +11,15 @@ import java.util.concurrent.CompletableFuture;
 
 public class MemoryCleanerModule extends Module {
     private static MemoryCleanerModule INSTANCE;
+    private static final long AGGRESSIVE_GC_MIN_COOLDOWN_MS = 90_000L;
 
-    private final ModeSetting mode = new ModeSetting("Mode", "Режим очистки", "Smart Trim", "Smart Trim", "Aggressive GC");
+    private final ModeSetting mode = new ModeSetting("Mode", "Smart Trim чистит кэши без STW-фризов; Aggressive GC вызывает System.gc() в меню", "Smart Trim", "Smart Trim", "Aggressive GC");
     private final NumberSetting interval = new NumberSetting("Interval", "Интервал очистки (сек)", 30.0, 5.0, 120.0, 5.0);
     private final BooleanSetting cleanRenderCaches = new BooleanSetting("Clean Render Caches", "Очистка кэшей и пулов рендера", true);
     private final NumberSetting threshold = new NumberSetting("Threshold", "Порог памяти (%)", 85.0, 60.0, 95.0, 5.0);
 
-    private long lastCleanTime = 0;
+    private long lastCleanTime = 0L;
+    private long lastExplicitGcTime = 0L;
 
     public MemoryCleanerModule() {
         super("MemoryCleaner", "Автоматическая очистка оперативной памяти RAM", Category.OPTIMIZATION);
@@ -47,27 +50,28 @@ public class MemoryCleanerModule extends Module {
         long usedMemory = totalMemory - freeMemory;
         double usagePercent = ((double) usedMemory / runtime.maxMemory()) * 100.0;
 
-        boolean shouldClean = false;
-        if (mode.is("Smart Trim")) {
-            boolean hasScreen = mc.gui != null && mc.gui.screen() != null;
-            if (usagePercent >= threshold.getValue() && (hasScreen || usagePercent >= 92.0)) {
-                shouldClean = true;
+        boolean hasScreen = mc.gui != null && mc.gui.screen() != null;
+        boolean shouldTrimCaches = usagePercent >= threshold.getValue() || (cleanRenderCaches.isEnabled() && usagePercent >= 70.0);
+        if (shouldTrimCaches && cleanRenderCaches.isEnabled()) {
+            if (mc.particleEngine != null && usagePercent >= threshold.getValue()) {
+                try {
+                    mc.particleEngine.clearParticles();
+                } catch (Throwable ignored) {
+                }
             }
-        } else if (mode.is("Aggressive GC")) {
-            if (usagePercent >= threshold.getValue()) {
-                shouldClean = true;
+            NameTagsModule nameTags = NameTagsModule.getInstance();
+            if (nameTags != null) {
+                nameTags.trimStaleStates();
             }
         }
 
-        if (shouldClean) {
-            if (cleanRenderCaches.isEnabled()) {
-                if (mc.particleEngine != null) {
-                    try {
-                        mc.particleEngine.clearParticles();
-                    } catch (Throwable ignored) {
-                    }
-                }
-            }
+        // Never invoke blocking System.gc() in Smart Trim (prevents 1-2s Stop-The-World Full GC freezes).
+        // Explicit GC is strictly opt-in via Aggressive GC, only while a menu/screen is open, and rate-limited.
+        if (mode.is("Aggressive GC")
+                && hasScreen
+                && usagePercent >= threshold.getValue()
+                && now - lastExplicitGcTime >= AGGRESSIVE_GC_MIN_COOLDOWN_MS) {
+            lastExplicitGcTime = now;
             CompletableFuture.runAsync(System::gc);
         }
     }

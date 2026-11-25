@@ -80,6 +80,10 @@ public final class HudAlertBus {
         this.maxVisible = Math.max(1, Math.min(4, maxVisible));
     }
 
+    public void clear() {
+        activeAlerts.clear();
+    }
+
     public void syncCurrentStates() {
         for (Module m : ModuleManager.getInstance().getModules()) {
             moduleStates.put(m, m.isEnabled());

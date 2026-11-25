@@ -3,6 +3,7 @@ package dev.opticumeclient.client.modules.visuals;
 import dev.opticumeclient.client.modules.Category;
 import dev.opticumeclient.client.modules.Module;
 import dev.opticumeclient.client.modules.visuals.ambience.SkyPipelines;
+import dev.opticumeclient.client.modules.visuals.atmosphere.AtmosphereRenderer;
 import dev.opticumeclient.client.render.Theme;
 import dev.opticumeclient.client.render.ThemeManager;
 import dev.opticumeclient.client.setting.BooleanSetting;
@@ -41,6 +42,11 @@ public class AmbienceModule extends Module {
             "Caustic",
             "Thunder",
             "Fog Only"
+    );
+    private final ModeSetting shaderQuality = new ModeSetting(
+            "Shader Quality",
+            "Качество GPU-шейдеров неба и атмосферы (Balanced оптимально для Iris Xe)",
+            "Balanced", "Fast", "Balanced", "Ultra"
     );
     private final ModeSetting colorMode = new ModeSetting("Color Mode", "Источник цвета неба и тумана", "Sync", "Sync", "Custom");
     private final ColorSetting customColor = new ColorSetting("Primary Color", "Основной цвет неба", 0xFF7C4DFF, true);
@@ -82,12 +88,39 @@ public class AmbienceModule extends Module {
     private final BooleanSetting saturationEnabled = new BooleanSetting("Saturation", "Пост-насыщенность картинки мира", false);
     private final NumberSetting saturationLevel = new NumberSetting("Saturation Level", "Множитель насыщенности", 1.25, 0.0, 2.5, 0.05);
 
+    // Unified Atmosphere (volumetric fog, ground haze, GPU precipitation, surface ripples & lightning)
+    private final BooleanSetting atmosphereEnabled = new BooleanSetting("Atmosphere", "Шейдерный объёмный туман, дымка, осадки и молнии", false);
+    private final ModeSetting atmoPreset = new ModeSetting("Atmo Preset", "Готовый профиль атмосферы", "Storm", "Storm", "Drizzle", "Snowfall", "Sunset Mist", "Cyber Fog", "Inferno Embers", "Custom");
+    private final ModeSetting atmoColorMode = new ModeSetting("Atmo Color Mode", "Цвет объёмного тумана", "Preset", "Preset", "Sync", "Custom");
+    private final ColorSetting atmoFogColor = new ColorSetting("Atmo Fog Color", "Пользовательский цвет объёмного тумана", 0xFF2B3A55, true);
+    private final BooleanSetting atmoFogEnabled = new BooleanSetting("Volumetric Fog", "Экспоненциальный высотный туман", true);
+    private final NumberSetting atmoFogDensity = new NumberSetting("Fog Density", "Плотность объёмного тумана", 0.012, 0.001, 0.060, 0.001);
+    private final NumberSetting atmoFogHeight = new NumberSetting("Fog Height", "Масштаб высоты рассеяния", 32.0, 6.0, 96.0, 2.0);
+    private final NumberSetting atmoTurbulence = new NumberSetting("Turbulence", "Клубы и неоднородность тумана", 0.55, 0.0, 1.0, 0.05);
+    private final NumberSetting atmoSunScatter = new NumberSetting("Sun Scatter", "Рассеяние солнечного света в тумане", 0.65, 0.0, 2.0, 0.05);
+    private final NumberSetting atmoGodRays = new NumberSetting("God Rays", "20-шаговые экранные солнечные лучи", 0.55, 0.0, 1.5, 0.05);
+    private final NumberSetting atmoFogSoftness = new NumberSetting("Fog Softness", "Мягкость дальнего тумана (без ореолов на ближних блоках)", 0.35, 0.0, 1.0, 0.05);
+    private final BooleanSetting atmoLowHaze = new BooleanSetting("Ground Haze", "Низкая стелющаяся дымка", true);
+    private final NumberSetting atmoHazeDensity = new NumberSetting("Haze Density", "Плотность нижней дымки", 0.018, 0.0, 0.080, 0.002);
+    private final BooleanSetting atmoPrecipitation = new BooleanSetting("Precipitation", "Шейдерный дождь и снег по глубине", true);
+    private final ModeSetting atmoPrecipType = new ModeSetting("Precip Type", "Тип осадков", "Rain", "Rain", "Snow");
+    private final NumberSetting atmoPrecipDensity = new NumberSetting("Precip Density", "Плотность капель/снежинок", 0.48, 0.05, 1.0, 0.05);
+    private final ModeSetting atmoDdaParticles = new ModeSetting("3D Particles", "3D DDA-частицы в мировых ячейках с окклюзией", "Auto", "Off", "Auto", "Dust", "Snow", "Embers");
+    private final NumberSetting atmoDdaAmount = new NumberSetting("DDA Amount", "Плотность 3D DDA-частиц", 0.60, 0.05, 1.5, 0.05);
+    private final NumberSetting atmoDdaSpeed = new NumberSetting("DDA Speed", "Скорость движения 3D DDA-частиц", 1.0, 0.2, 2.5, 0.1);
+    private final BooleanSetting atmoRipples = new BooleanSetting("Surface Ripples", "Круги на мокрой поверхности (отключается при Wet World Ripples)", true);
+    private final NumberSetting atmoRippleStrength = new NumberSetting("Atmo Ripple Str", "Яркость кругов от капель атмосферы", 0.65, 0.05, 1.5, 0.05);
+    private final BooleanSetting atmoLightning = new BooleanSetting("Lightning", "Вспышки и 3D-разряды молний", true);
+    private final NumberSetting atmoWindStrength = new NumberSetting("Wind", "Сила ветра для осадков и тумана", 0.70, 0.0, 2.0, 0.05);
+    private final NumberSetting atmoPostGrade = new NumberSetting("Post Grade", "Атмосферный цветовой грейдинг и тонировка", 0.35, 0.0, 1.0, 0.05);
+    private final NumberSetting atmoVignette = new NumberSetting("Atmo Vignette", "Виньетка и лёгкий зимний иней по краям", 0.25, 0.0, 1.0, 0.05);
+
     private float lastFogStart = 12.0f;
     private float lastFogEnd = 96.0f;
     private final Vector4f lastFogColor = new Vector4f(0.15f, 0.20f, 0.30f, 1.0f);
 
     public AmbienceModule() {
-        super("Ambience", "Шейдерное небо, кастомное время, туман и мокрые отражения", Category.VISUALS);
+        super("Ambience", "Шейдерное небо, время, объёмный туман, осадки, молнии и мокрые отражения", Category.VISUALS);
 
         timeMode.visibleWhen(customTime::isEnabled);
         timeTicks.visibleWhen(() -> customTime.isEnabled() && timeMode.is("Custom"));
@@ -119,6 +152,31 @@ public class AmbienceModule extends Module {
 
         saturationLevel.visibleWhen(saturationEnabled::isEnabled);
 
+        atmoPreset.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoColorMode.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoFogColor.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoColorMode.is("Custom"));
+        atmoFogEnabled.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoFogDensity.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoFogEnabled.isEnabled());
+        atmoFogHeight.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoFogEnabled.isEnabled());
+        atmoTurbulence.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoFogEnabled.isEnabled());
+        atmoSunScatter.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoFogEnabled.isEnabled());
+        atmoGodRays.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoFogSoftness.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoFogEnabled.isEnabled());
+        atmoLowHaze.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoHazeDensity.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoLowHaze.isEnabled());
+        atmoPrecipitation.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoPrecipType.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoPrecipitation.isEnabled() && atmoPreset.is("Custom"));
+        atmoPrecipDensity.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoPrecipitation.isEnabled());
+        atmoDdaParticles.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoDdaAmount.visibleWhen(() -> atmosphereEnabled.isEnabled() && !atmoDdaParticles.is("Off"));
+        atmoDdaSpeed.visibleWhen(() -> atmosphereEnabled.isEnabled() && !atmoDdaParticles.is("Off"));
+        atmoRipples.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoRippleStrength.visibleWhen(() -> atmosphereEnabled.isEnabled() && atmoRipples.isEnabled());
+        atmoLightning.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoWindStrength.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoPostGrade.visibleWhen(atmosphereEnabled::isEnabled);
+        atmoVignette.visibleWhen(atmosphereEnabled::isEnabled);
+
         addSetting(customTime);
         addSetting(timeMode);
         addSetting(timeTicks);
@@ -126,6 +184,7 @@ public class AmbienceModule extends Module {
         addSetting(moonPhase);
 
         addSetting(skyMode);
+        addSetting(shaderQuality);
         addSetting(colorMode);
         addSetting(customColor);
         addSetting(customColor2);
@@ -166,6 +225,32 @@ public class AmbienceModule extends Module {
         addSetting(saturationEnabled);
         addSetting(saturationLevel);
 
+        addSetting(atmosphereEnabled);
+        addSetting(atmoPreset);
+        addSetting(atmoColorMode);
+        addSetting(atmoFogColor);
+        addSetting(atmoFogEnabled);
+        addSetting(atmoFogDensity);
+        addSetting(atmoFogHeight);
+        addSetting(atmoTurbulence);
+        addSetting(atmoSunScatter);
+        addSetting(atmoGodRays);
+        addSetting(atmoFogSoftness);
+        addSetting(atmoLowHaze);
+        addSetting(atmoHazeDensity);
+        addSetting(atmoPrecipitation);
+        addSetting(atmoPrecipType);
+        addSetting(atmoPrecipDensity);
+        addSetting(atmoDdaParticles);
+        addSetting(atmoDdaAmount);
+        addSetting(atmoDdaSpeed);
+        addSetting(atmoRipples);
+        addSetting(atmoRippleStrength);
+        addSetting(atmoLightning);
+        addSetting(atmoWindStrength);
+        addSetting(atmoPostGrade);
+        addSetting(atmoVignette);
+
         INSTANCE = this;
     }
 
@@ -197,6 +282,18 @@ public class AmbienceModule extends Module {
 
     public String getSkyModeName() {
         return skyMode.getValue();
+    }
+
+    public int getShaderQualityIndex() {
+        return switch (shaderQuality.getValue()) {
+            case "Fast" -> 0;
+            case "Ultra" -> 2;
+            default -> 1;
+        };
+    }
+
+    public float getSkyResolutionScale() {
+        return getShaderQualityIndex() == 2 ? 1.0f : 0.5f;
     }
 
     public boolean isShaderSkyActive() {
@@ -383,8 +480,193 @@ public class AmbienceModule extends Module {
         return saturationLevel.getFloatValue();
     }
 
+    public boolean isAtmosphereActive() {
+        return isEnabled() && atmosphereEnabled.isEnabled();
+    }
+
+    public boolean isAtmoFogEnabled() {
+        return isAtmosphereActive() && atmoFogEnabled.isEnabled();
+    }
+
+    public boolean isAtmoHazeEnabled() {
+        return isAtmosphereActive() && atmoLowHaze.isEnabled();
+    }
+
+    public boolean isAtmoPrecipitationEnabled() {
+        if (!isAtmosphereActive() || !atmoPrecipitation.isEnabled()) {
+            return false;
+        }
+        return !atmoPreset.is("Sunset Mist") && !atmoPreset.is("Cyber Fog") && !atmoPreset.is("Inferno Embers");
+    }
+
+    public boolean isAtmoSnowMode() {
+        if (atmoPreset.is("Snowfall")) {
+            return true;
+        }
+        if (atmoPreset.is("Storm") || atmoPreset.is("Drizzle") || atmoPreset.is("Inferno Embers")) {
+            return false;
+        }
+        return atmoPrecipType.is("Snow");
+    }
+
+    public boolean isAtmoRipplesEnabled() {
+        if (wetWorld.isEnabled() && wetRipples.isEnabled()) {
+            return false;
+        }
+        return isAtmosphereActive() && atmoRipples.isEnabled() && !isAtmoSnowMode() && isAtmoPrecipitationEnabled();
+    }
+
+    public boolean isAtmoLightningEnabled() {
+        if (!isAtmosphereActive() || !atmoLightning.isEnabled()) {
+            return false;
+        }
+        return atmoPreset.is("Storm") || atmoPreset.is("Custom");
+    }
+
+    public int getAtmoEffectiveFogColor() {
+        if (atmoColorMode.is("Custom")) {
+            return atmoFogColor.getColor();
+        }
+        if (atmoColorMode.is("Sync")) {
+            Theme theme = ThemeManager.getInstance().getCurrentTheme();
+            if (theme != null) {
+                return theme.getPrimaryColor();
+            }
+        }
+        return switch (atmoPreset.getValue()) {
+            case "Drizzle" -> 0xFF3E4C5E;
+            case "Snowfall" -> 0xFFC5D5E8;
+            case "Sunset Mist" -> 0xFFC9785A;
+            case "Inferno Embers" -> 0xFFD9582A;
+            case "Cyber Fog" -> {
+                Theme theme = ThemeManager.getInstance().getCurrentTheme();
+                yield theme != null ? theme.getPrimaryColor() : 0xFF7038D4;
+            }
+            default -> 0xFF243044;
+        };
+    }
+
+    public float getAtmoEffectiveFogDensity() {
+        return switch (atmoPreset.getValue()) {
+            case "Drizzle" -> atmoFogDensity.getFloatValue() * 0.72f;
+            case "Snowfall" -> atmoFogDensity.getFloatValue() * 0.85f;
+            case "Sunset Mist" -> atmoFogDensity.getFloatValue() * 0.65f;
+            case "Inferno Embers" -> atmoFogDensity.getFloatValue() * 0.88f;
+            case "Cyber Fog" -> atmoFogDensity.getFloatValue() * 0.90f;
+            default -> atmoFogDensity.getFloatValue();
+        };
+    }
+
+    public float getAtmoEffectiveFogHeight() {
+        return switch (atmoPreset.getValue()) {
+            case "Sunset Mist" -> atmoFogHeight.getFloatValue() * 1.3f;
+            case "Snowfall" -> atmoFogHeight.getFloatValue() * 1.15f;
+            case "Inferno Embers" -> atmoFogHeight.getFloatValue() * 1.1f;
+            default -> atmoFogHeight.getFloatValue();
+        };
+    }
+
+    public float getAtmoEffectiveHazeDensity() {
+        return switch (atmoPreset.getValue()) {
+            case "Drizzle" -> atmoHazeDensity.getFloatValue() * 0.65f;
+            case "Sunset Mist", "Inferno Embers" -> atmoHazeDensity.getFloatValue() * 1.2f;
+            default -> atmoHazeDensity.getFloatValue();
+        };
+    }
+
+    public float getAtmoEffectivePrecipDensity() {
+        return switch (atmoPreset.getValue()) {
+            case "Drizzle" -> atmoPrecipDensity.getFloatValue() * 0.55f;
+            case "Snowfall" -> atmoPrecipDensity.getFloatValue() * 0.80f;
+            default -> atmoPrecipDensity.getFloatValue();
+        };
+    }
+
+    public float getAtmoEffectiveGodRays() {
+        float base = atmoGodRays.getFloatValue();
+        if (base <= 0.001f) {
+            return 0.0f;
+        }
+        return switch (atmoPreset.getValue()) {
+            case "Sunset Mist" -> Math.max(0.75f, base * 1.25f);
+            case "Inferno Embers" -> base * 0.65f;
+            case "Storm", "Drizzle" -> base * 0.35f;
+            default -> base;
+        };
+    }
+
+    public float getAtmoFogSoftness() {
+        return isAtmoFogEnabled() ? atmoFogSoftness.getFloatValue() : 0.0f;
+    }
+
+    public int getAtmoDdaModeIndex() {
+        if ("Off".equals(atmoDdaParticles.getValue())) return 0;
+        if ("Dust".equals(atmoDdaParticles.getValue())) return 1;
+        if ("Snow".equals(atmoDdaParticles.getValue())) return 2;
+        if ("Embers".equals(atmoDdaParticles.getValue())) return 3;
+        return switch (atmoPreset.getValue()) {
+            case "Snowfall" -> 2;
+            case "Inferno Embers" -> 3;
+            case "Sunset Mist", "Cyber Fog", "Drizzle" -> 1;
+            default -> 0;
+        };
+    }
+
+    public float getAtmoDdaAmount() {
+        return atmoDdaAmount.getFloatValue();
+    }
+
+    public float getAtmoDdaSpeed() {
+        return atmoDdaSpeed.getFloatValue();
+    }
+
+    public float getAtmoPostGrade() {
+        return atmoPostGrade.getFloatValue();
+    }
+
+    public float getAtmoVignette() {
+        return atmoVignette.getFloatValue();
+    }
+
+    public float getAtmoFrostAmount() {
+        if (isAtmoSnowMode()) {
+            return Math.min(1.0f, atmoVignette.getFloatValue() * 0.85f);
+        }
+        return 0.0f;
+    }
+
+    public int getAtmoEffectivePostTint() {
+        return switch (atmoPreset.getValue()) {
+            case "Sunset Mist" -> 0xFFFFB27A;
+            case "Snowfall" -> 0xFFC6E2FF;
+            case "Inferno Embers" -> 0xFFFF7A38;
+            case "Cyber Fog" -> {
+                Theme theme = ThemeManager.getInstance().getCurrentTheme();
+                yield theme != null ? theme.getSecondaryColor() : 0xFFA78BFA;
+            }
+            default -> 0xFFD6E2F5;
+        };
+    }
+
+    public float getAtmoTurbulence() {
+        return atmoTurbulence.getFloatValue();
+    }
+
+    public float getAtmoSunScatter() {
+        return atmoSunScatter.getFloatValue();
+    }
+
+    public float getAtmoRippleStrength() {
+        return atmoRippleStrength.getFloatValue();
+    }
+
+    public float getAtmoWindStrength() {
+        return atmoWindStrength.getFloatValue();
+    }
+
     @Override
     public void onDisable() {
         SkyPipelines.getInstance().releaseGpuResources();
+        AtmosphereRenderer.getInstance().reset();
     }
 }

@@ -38,3 +38,8 @@ Thumbs.db
 
 # Temporary agent state
 .agents/teamwork/
+
+# Local diagnostic reporter mod
+build_reporter/
+reporter_mod/
+deploy_reporter_26.py

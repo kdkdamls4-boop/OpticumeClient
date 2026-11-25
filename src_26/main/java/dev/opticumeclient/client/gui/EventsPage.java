@@ -222,7 +222,7 @@ public final class EventsPage {
             float zoom = 1.0f - 0.05f * hover;
             float uw = (aspect < 3.0f ? aspect / 3.0f : 1.0f) * zoom;
             float vh = (aspect < 3.0f ? 1.0f : 3.0f / aspect) * zoom;
-            Render2DHelper.drawCroppedTextureFloat(context, card.banner(), cx + 0.5f, cy + 0.5f, cw - 1.0f, ch - 1.0f,
+            Render2DHelper.drawRoundedCroppedTextureFloat(context, card.banner(), cx + 0.5f, cy + 0.5f, cw - 1.0f, ch - 1.0f, rad,
                     (1.0f - uw) * 0.5f, (1.0f - vh) * 0.5f, uw, vh,
                     ColorUtils.rgba(255, 255, 255, Math.round(235.0f * alpha)));
         } else if (card.glyph() != null) {

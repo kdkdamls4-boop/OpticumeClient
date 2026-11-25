@@ -1,6 +1,9 @@
 package dev.opticumeclient.mixin;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.opticumeclient.client.modules.other.AuctionHelperModule;
+import dev.opticumeclient.client.modules.visuals.FreeCamModule;
+import dev.opticumeclient.client.modules.visuals.FreeLookModule;
 import dev.opticumeclient.client.modules.visuals.ZoomModule;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -52,6 +55,7 @@ public abstract class MouseHandlerMixin {
             boolean inGame = pressed && this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null;
             if (this.minecraft != null && this.minecraft.gui != null && this.minecraft.gui.screen() == null) {
                 dev.opticumeclient.client.modules.other.AssistModule.onInputKey(button, action, true);
+                AuctionHelperModule.onInputKey(button, action, true);
             }
             if (button == InputConstants.MOUSE_BUTTON_LEFT) {
                 this.isLeftPressed = pressed;
@@ -74,6 +78,10 @@ public abstract class MouseHandlerMixin {
         if (this.minecraft == null || this.minecraft.getWindow() == null || window != this.minecraft.getWindow().handle()) {
             return;
         }
+        if (yOffset != 0.0 && dev.opticumeclient.client.hud.HudManager.getInstance().onMouseScroll(yOffset)) {
+            ci.cancel();
+            return;
+        }
         ZoomModule zoom = ZoomModule.getInstance();
         if (zoom != null && zoom.isZoomActive() && zoom.isScrollZoom() && yOffset != 0.0) {
             zoom.adjustScrollZoom(yOffset);
@@ -81,7 +89,7 @@ public abstract class MouseHandlerMixin {
         }
     }
 
-    @Inject(method = "turnPlayer", at = @At("HEAD"))
+    @Inject(method = "turnPlayer", at = @At("HEAD"), cancellable = true)
     private void opticume$onZoomTurnPlayer(double movementTime, CallbackInfo ci) {
         ZoomModule zoom = ZoomModule.getInstance();
         if (zoom != null) {
@@ -90,6 +98,31 @@ public abstract class MouseHandlerMixin {
                 this.accumulatedDX *= factor;
                 this.accumulatedDY *= factor;
             }
+        }
+
+        FreeCamModule fc = FreeCamModule.getInstance();
+        FreeLookModule fl = FreeLookModule.getInstance();
+        boolean freeCamActive = fc != null && fc.isActive();
+        boolean freeLookActive = !freeCamActive && fl != null && fl.isActive();
+        if (freeCamActive || freeLookActive) {
+            double sens = this.minecraft != null && this.minecraft.options != null
+                    ? this.minecraft.options.sensitivity().get() * 0.6 + 0.2
+                    : 0.5;
+            double mult = sens * sens * sens * 8.0;
+            boolean invertX = this.minecraft != null && this.minecraft.options != null
+                    && Boolean.TRUE.equals(this.minecraft.options.invertMouseX().get());
+            boolean invertY = this.minecraft != null && this.minecraft.options != null
+                    && Boolean.TRUE.equals(this.minecraft.options.invertMouseY().get());
+            double dx = this.accumulatedDX * mult * (invertX ? -1.0 : 1.0);
+            double dy = this.accumulatedDY * mult * (invertY ? -1.0 : 1.0);
+            this.accumulatedDX = 0.0;
+            this.accumulatedDY = 0.0;
+            if (freeCamActive) {
+                fc.addCameraDelta(dx, dy);
+            } else {
+                fl.addCameraDelta(dx, dy);
+            }
+            ci.cancel();
         }
     }
 }

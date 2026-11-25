@@ -24,6 +24,10 @@ layout(std140) uniform AtmosphereUniforms {
     vec4 RippleParams;
     vec4 HazeColor;
     vec4 HazeParams;
+    vec4 SunScreenParams;
+    vec4 SoftPostParams;
+    vec4 PostTintParams;
+    vec4 DdaParticleParams;
 };
 
 float hash11(float p) {
@@ -167,6 +171,16 @@ float fogNoise(vec3 p) {
     return valueNoise(p) * 0.55 + valueNoise(p * 2.13) * 0.3 + valueNoise(p * 4.31) * 0.15;
 }
 
+float fogNoiseQ(vec3 p, float quality) {
+    if (quality < 0.5) {
+        return valueNoise(p);
+    }
+    if (quality < 1.5) {
+        return valueNoise(p) * 0.65 + valueNoise(p * 2.13) * 0.35;
+    }
+    return fogNoise(p);
+}
+
 float henyeyGreenstein(float cosTheta, float g) {
     float g2 = g * g;
     return (1.0 - g2) / pow(max(1.0 + g2 - 2.0 * g * cosTheta, 1.0e-4), 1.5);
@@ -288,27 +302,25 @@ void main() {
     vec3 rayDir = rawLength > 1.0e-4 ? relativeEnd / rawLength : vec3(0.0, 0.0, -1.0);
     float rayLength = sky ? SKY_DISTANCE : min(rawLength, SKY_DISTANCE);
 
-    vec3 hitPos = CameraOrigin.xyz + relativeEnd;
-    vec3 hitDdx = dFdx(hitPos);
-    vec3 hitDdy = dFdy(hitPos);
-    vec3 hitCross = cross(hitDdx, hitDdy);
-    float hitCrossLength = length(hitCross);
-    vec3 hitNormal = hitCrossLength > 1.0e-9 ? hitCross / hitCrossLength : vec3(0.0, 1.0, 0.0);
-    if (dot(hitNormal, rayDir) > 0.0) {
-        hitNormal = -hitNormal;
-    }
-    float surfacePixel = clamp(max(length(hitDdx), length(hitDdy)), 1.0e-4, 0.35);
+    float quality = FogExtra.w;
+    float fusedSat = WindParams.w;
 
     float invH = FogParams.x;
     float density = FogColorDensity.a * exp(-GROUND_OFFSET * invH);
 
     float turbulence = FogExtra.x;
-    if (turbulence > 0.0) {
+    if (turbulence > 0.0 && FogColorDensity.a > 0.0005) {
         vec3 drift = vec3(WindParams.x, 0.0, WindParams.y) * FogExtra.z * 0.35;
-        vec3 nearPoint = CameraOrigin.xyz + rayDir * min(rayLength, 40.0) - drift;
-        vec3 farPoint = CameraOrigin.xyz + rayDir * min(rayLength, 180.0) - drift;
-        float banding = fogNoise(nearPoint * 0.018) * 0.55 + fogNoise(farPoint * 0.007) * 0.45;
-        density *= mix(1.0, 0.2 + 1.6 * banding, turbulence);
+        if (quality < 1.5) {
+            vec3 samplePoint = CameraOrigin.xyz + rayDir * min(rayLength, 90.0) - drift;
+            float banding = fogNoiseQ(samplePoint * 0.014, quality);
+            density *= mix(1.0, 0.2 + 1.6 * banding, turbulence);
+        } else {
+            vec3 nearPoint = CameraOrigin.xyz + rayDir * min(rayLength, 40.0) - drift;
+            vec3 farPoint = CameraOrigin.xyz + rayDir * min(rayLength, 180.0) - drift;
+            float banding = fogNoise(nearPoint * 0.018) * 0.55 + fogNoise(farPoint * 0.007) * 0.45;
+            density *= mix(1.0, 0.2 + 1.6 * banding, turbulence);
+        }
     }
 
     float dy = rayDir.y;
@@ -323,6 +335,32 @@ void main() {
 
     float transmittance = exp(-opticalDepth);
     vec3 scene = texture(SceneSampler, texCoord).rgb;
+
+    // Depth-aware Fog Softness (Reverse-Z safe: compares relative depth delta & sky mask)
+    if (quality > 0.5 && SoftPostParams.x > 0.001 && FogColorDensity.a > 0.0 && !sky && (1.0 - transmittance) > 0.015) {
+        vec2 res = vec2(textureSize(SceneSampler, 0));
+        vec2 px = vec2(2.2) / max(res, vec2(1.0));
+        vec2 offsets[4] = vec2[4](
+            vec2(px.x, 0.0), vec2(-px.x, 0.0),
+            vec2(0.0, px.y), vec2(0.0, -px.y)
+        );
+        vec3 accum = vec3(0.0);
+        float wSum = 0.0;
+        for (int i = 0; i < 4; i++) {
+            vec2 sUv = clamp(texCoord + offsets[i], vec2(0.001), vec2(0.999));
+            float sd = texture(DepthSampler, sUv).r;
+            float sSky = (FogParams.z > 0.5) ? step(sd, 0.000001) : step(0.999999, sd);
+            float relDiff = abs(sd - depth) / max(depth, 1.0e-4);
+            float w = (1.0 - sSky) * (1.0 - smoothstep(0.02, 0.14, relDiff));
+            accum += texture(SceneSampler, sUv).rgb * w;
+            wSum += w;
+        }
+        if (wSum > 0.01) {
+            float softBlend = SoftPostParams.x * (1.0 - transmittance) * 0.65;
+            scene = mix(scene, accum / wSum, clamp(softBlend, 0.0, 0.7));
+        }
+    }
+
     float flash = FlashColor.a;
 
     vec3 scatter = FogColorDensity.rgb * FogParams.y * (1.0 - transmittance) * (1.0 + flash * 2.5);
@@ -348,7 +386,7 @@ void main() {
             float deckHit = clamp(abs(dy) > 1.0e-3 ? -deckOffset / dy : 0.0, 0.0, min(rayLength, 320.0));
             vec3 deckPoint = CameraOrigin.xyz + rayDir * deckHit
                     - vec3(WindParams.x, 0.0, WindParams.y) * FogExtra.z * 0.18;
-            float field = fogNoise(deckPoint * vec3(0.013, 0.055, 0.013));
+            float field = fogNoiseQ(deckPoint * vec3(0.013, 0.055, 0.013), quality);
             hazeDepth *= mix(1.0, 0.15 + 1.75 * field, banks);
         }
 
@@ -362,6 +400,17 @@ void main() {
     }
 
     if (RippleParams.x > 0.0 && !sky) {
+        vec3 hitPos = CameraOrigin.xyz + relativeEnd;
+        vec3 hitDdx = dFdx(hitPos);
+        vec3 hitDdy = dFdy(hitPos);
+        vec3 hitCross = cross(hitDdx, hitDdy);
+        float hitCrossLength = length(hitCross);
+        vec3 hitNormal = hitCrossLength > 1.0e-9 ? hitCross / hitCrossLength : vec3(0.0, 1.0, 0.0);
+        if (dot(hitNormal, rayDir) > 0.0) {
+            hitNormal = -hitNormal;
+        }
+        float surfacePixel = clamp(max(length(hitDdx), length(hitDdy)), 1.0e-4, 0.35);
+
         float upFacing = smoothstep(0.6, 0.86, hitNormal.y);
         float reach = 1.0 - smoothstep(18.0, 42.0, rawLength);
         float strength = RippleParams.x * upFacing * reach;
@@ -372,17 +421,142 @@ void main() {
         }
     }
 
-    if (RainParams.x > 0.0) {
+    float outside = clamp(SunScreenParams.w, 0.0, 1.0);
+
+    if (RainParams.x > 0.0 && outside > 0.02) {
         float hitHorizontal = sky ? 1.0e6 : rawLength * length(rayDir.xz);
-        float coverage = rain(rayDir, hitHorizontal);
+        float coverage = rain(rayDir, hitHorizontal) * outside;
         if (coverage > 0.0) {
             color = mix(color, RainColor.rgb * (1.0 + flash * 2.0), coverage * RainColor.a);
         }
     }
 
+    // 26-step 3D DDA world-cell particles (1 = Dust, 2 = Snow, 3 = Embers) occluded by sceneDistance
     float sceneDistance = sky ? 1.0e9 : rawLength;
+    int ddaMode = int(DdaParticleParams.x + 0.5);
+    float ddaVisibility = (ddaMode == 3) ? max(0.35, outside) : outside;
+    if (ddaMode > 0 && DdaParticleParams.y > 0.005 && ddaVisibility > 0.02) {
+        float cellSize = max(1.2, DdaParticleParams.w);
+        vec3 flowVel = vec3(WindParams.x * WindParams.z * 0.65, 0.0, WindParams.y * WindParams.z * 0.65);
+        if (ddaMode == 3) {
+            flowVel += vec3(0.0, 1.45 * DdaParticleParams.z, 0.0);
+        } else if (ddaMode == 2) {
+            flowVel += vec3(0.18, -1.05 * DdaParticleParams.z, 0.12);
+        } else {
+            flowVel += vec3(0.08, 0.16 * DdaParticleParams.z, 0.06);
+        }
+        vec3 originGrid = (CameraOrigin.xyz - flowVel * FogExtra.z) / cellSize;
+        vec3 rd = rayDir;
+        vec3 cell = floor(originGrid);
+        vec3 stepDir = sign(rd);
+        vec3 tMax = vec3(1.0e9);
+        vec3 tDelta = vec3(1.0e9);
+        if (abs(rd.x) > 1.0e-5) {
+            float invX = 1.0 / rd.x;
+            tMax.x = ((cell.x + step(0.0, rd.x)) - originGrid.x) * invX;
+            tDelta.x = abs(invX);
+        }
+        if (abs(rd.y) > 1.0e-5) {
+            float invY = 1.0 / rd.y;
+            tMax.y = ((cell.y + step(0.0, rd.y)) - originGrid.y) * invY;
+            tDelta.y = abs(invY);
+        }
+        if (abs(rd.z) > 1.0e-5) {
+            float invZ = 1.0 / rd.z;
+            tMax.z = ((cell.z + step(0.0, rd.z)) - originGrid.z) * invZ;
+            tDelta.z = abs(invZ);
+        }
+        float maxGridDist = sceneDistance / cellSize;
+        float glowAccum = 0.0;
+        vec3 pTint = (ddaMode == 3) ? vec3(1.0, 0.45, 0.16)
+                   : (ddaMode == 2) ? vec3(0.90, 0.95, 1.0)
+                   : mix(vec3(0.95, 0.88, 0.72), PostTintParams.rgb, 0.45);
+        float radiusBase = (ddaMode == 2) ? 0.045 : (ddaMode == 3 ? 0.036 : 0.024);
+        float tEnter = 0.0;
+        int ddaSteps = (quality < 0.5) ? 10 : ((quality < 1.5) ? 14 : 26);
+
+        for (int i = 0; i < 26; i++) {
+            if (i >= ddaSteps || tEnter > maxGridDist || tEnter > 18.0) break;
+
+            vec3 h = hash33(cell);
+            if (h.x < clamp(0.28 * DdaParticleParams.y, 0.04, 0.85)) {
+                vec3 pLocal = vec3(0.18) + 0.64 * fract(h * 13.7 + vec3(
+                    sin(FogExtra.z * 0.9 * DdaParticleParams.z + h.y * 6.283) * 0.14,
+                    cos(FogExtra.z * 0.7 * DdaParticleParams.z + h.z * 6.283) * 0.14,
+                    sin(FogExtra.z * 0.8 * DdaParticleParams.z + h.x * 6.283) * 0.14
+                ));
+                vec3 pCenter = cell + pLocal;
+                float proj = dot(pCenter - originGrid, rd);
+                if (proj > 0.15 && proj < maxGridDist) {
+                    float dPerp = length(pCenter - (originGrid + rd * proj));
+                    float distFade = exp(-proj * 0.14) * smoothstep(0.05, 0.6, proj);
+                    float rad = radiusBase * (0.65 + 0.65 * h.y);
+                    glowAccum += (1.0 - smoothstep(0.0, rad, dPerp)) * distFade * (0.55 + 0.45 * h.z);
+                }
+            }
+
+            if (tMax.x < tMax.y) {
+                if (tMax.x < tMax.z) { tEnter = tMax.x; tMax.x += tDelta.x; cell.x += stepDir.x; }
+                else { tEnter = tMax.z; tMax.z += tDelta.z; cell.z += stepDir.z; }
+            } else {
+                if (tMax.y < tMax.z) { tEnter = tMax.y; tMax.y += tDelta.y; cell.y += stepDir.y; }
+                else { tEnter = tMax.z; tMax.z += tDelta.z; cell.z += stepDir.z; }
+            }
+        }
+        color += pTint * min(glowAccum, 1.4) * ddaVisibility * 0.65;
+    }
+
+    // Screen-space God Rays (Reverse-Z safe)
+    if (SunScreenParams.z > 0.005 && outside > 0.05) {
+        int raySteps = (quality < 0.5) ? 8 : ((quality < 1.5) ? 12 : 20);
+        float fRaySteps = float(raySteps);
+        vec2 deltaUv = (texCoord - SunScreenParams.xy) / fRaySteps * 0.88;
+        vec2 sampleUv = texCoord;
+        float decay = 1.0;
+        float raySum = 0.0;
+        for (int i = 0; i < 20; i++) {
+            if (i >= raySteps) break;
+            sampleUv -= deltaUv;
+            vec2 cUv = clamp(sampleUv, vec2(0.001), vec2(0.999));
+            float sd = texture(DepthSampler, cUv).r;
+            float isSkyS = (FogParams.z > 0.5) ? step(sd, 0.000001) : step(0.999999, sd);
+            float inScreen = step(0.0, sampleUv.x) * step(sampleUv.x, 1.0) * step(0.0, sampleUv.y) * step(sampleUv.y, 1.0);
+            raySum += isSkyS * decay * inScreen;
+            decay *= 0.91;
+        }
+        float sunAligned = max(0.0, dot(rayDir, SunDirection.xyz));
+        float raysIntensity = (raySum / fRaySteps) * SunScreenParams.z * outside * (0.45 + 0.55 * sunAligned);
+        vec3 rayCol = mix(PostTintParams.rgb, vec3(1.0, 0.88, 0.64), 0.5);
+        color += rayCol * raysIntensity * 0.42;
+    }
+
     if (BoltParams.x > 0.0 && sceneDistance > CameraOrigin.w) {
         color += lightning(vec2(texCoord.x * FogParams.w, texCoord.y));
+    }
+
+    // Post-grade, subtle horizon warmth, vignette & winter edge frost
+    if (SoftPostParams.y > 0.001) {
+        float grade = SoftPostParams.y;
+        vec3 graded = mix(color, color * PostTintParams.rgb * 1.12, 0.24 * grade);
+        graded += PostTintParams.rgb * PostTintParams.w * 0.04 * grade;
+        color = mix(color, clamp(graded * (1.0 + 0.08 * grade) - 0.02 * grade, 0.0, 4.0), 0.85);
+    }
+
+    if (SoftPostParams.z > 0.001) {
+        float edge = smoothstep(0.36, 1.02, length(texCoord - vec2(0.5)));
+        color *= 1.0 - edge * SoftPostParams.z * 0.32;
+    }
+
+    if (SoftPostParams.w > 0.001) {
+        float edge = smoothstep(0.45, 0.98, length(texCoord - vec2(0.5)));
+        float frostNoise = fogNoiseQ(vec3(texCoord * 24.0, FogExtra.z * 0.03), quality);
+        float frostMask = edge * smoothstep(0.32, 0.78, frostNoise) * SoftPostParams.w;
+        color = mix(color, vec3(0.84, 0.93, 1.0), clamp(frostMask * 0.28, 0.0, 0.32));
+    }
+
+    if (abs(fusedSat - 1.0) > 0.005) {
+        float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        color = max(mix(vec3(luma), color, fusedSat), vec3(0.0));
     }
 
     fragColor = vec4(color, 1.0);

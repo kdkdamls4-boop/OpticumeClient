@@ -26,7 +26,8 @@ public class ArrayListHud extends Module {
 
     private final NumberSetting posX = new NumberSetting("PosX", "X позиция", 830.0, 0.0, 1920.0, 1.0);
     private final NumberSetting posY = new NumberSetting("PosY", "Y позиция", 8.0, 0.0, 1080.0, 1.0);
-    private final BooleanSetting hideHudModules = new BooleanSetting("Hide HUD", "Скрывать HUD-модули из списка", false);
+    private final BooleanSetting hideHudModules = new BooleanSetting("Hide HUD", "Скрывать HUD-модули из списка", true);
+    private final NumberSetting maxVisibleRows = new NumberSetting("Max Rows", "Максимум строк в списке", 16.0, 5.0, 40.0, 1.0);
 
     private final HudManager.DraggableWidget dragWidget;
     private final List<Module> visibleModules = new ArrayList<>();
@@ -38,6 +39,7 @@ public class ArrayListHud extends Module {
         addSetting(posX);
         addSetting(posY);
         addSetting(hideHudModules);
+        addSetting(maxVisibleRows);
         setEnabled(true);
 
         this.dragWidget = HudManager.getInstance().registerWidget(new HudManager.DraggableWidget(
@@ -105,12 +107,20 @@ public class ArrayListHud extends Module {
         float curY = y;
         float maxW = 86.0f;
         float rowH = 14.5f;
+        float screenH = mc.getWindow() != null ? mc.getWindow().getGuiScaledHeight() : 540.0f;
+        int maxRows = Math.max(1, maxVisibleRows.getIntValue());
+        int hiddenCount = 0;
         rowCount = 0;
 
         for (int i = 0; i < visibleModules.size(); i++) {
             Module m = visibleModules.get(i);
             float anim = Math.max(0.0f, Math.min(1.0f, m.getToggleAnimation().getValue()));
             if (anim <= 0.02f) continue;
+
+            if (rowCount >= maxRows || curY + rowH * anim > screenH - 20.0f) {
+                hiddenCount++;
+                continue;
+            }
 
             String name = m.getName();
             String suffix = m.getDisplaySuffix();
@@ -141,6 +151,27 @@ public class ArrayListHud extends Module {
             row.nameW = nameW;
 
             curY += rowH * anim;
+        }
+
+        if (hiddenCount > 0 && curY + rowH <= screenH - 4.0f) {
+            String summary = "+" + hiddenCount + " more";
+            float sumW = Render2DHelper.getTextWidth(summary, scale);
+            float pillW = sumW + 13.0f;
+            if (pillW > maxW) maxW = pillW;
+
+            RowHolder moreRow = getHolder(rowCount++);
+            moreRow.pillX = x + widgetW - pillW;
+            moreRow.pillY = curY;
+            moreRow.pillW = pillW;
+            moreRow.rowH = rowH;
+            moreRow.waveColor = ThemeManager.getInstance().getAccentColor(rowCount * 18);
+            moreRow.alpha255 = 215;
+            moreRow.anim = 1.0f;
+            moreRow.name = summary;
+            moreRow.suffix = null;
+            moreRow.nameW = sumW;
+
+            curY += rowH;
         }
 
         if (rowCount == 0) {

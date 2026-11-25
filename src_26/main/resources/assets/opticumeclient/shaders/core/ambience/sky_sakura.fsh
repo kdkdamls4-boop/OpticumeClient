@@ -58,7 +58,7 @@ float fbm(vec3 p) {
 }
 
 vec3 skyRay() {
-    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 1.0, 1.0);
+    vec4 world = uInvViewProj * vec4(texCoord * 2.0 - 1.0, 0.0, 1.0);
     return normalize(world.xyz / max(abs(world.w), 1.0e-5));
 }
 
@@ -107,14 +107,14 @@ void main() {
     vec3 sfr = fract(sp) - 0.5;
     float sh = hash31(sid);
     float tw = 0.65 + 0.35 * sin(t * 2.4 + sh * 60.0);
-    float stars = smoothstep(0.9925, 0.9997, sh) * smoothstep(0.34, 0.0, length(sfr));
+    float stars = smoothstep(0.9925, 0.9997, sh) * (1.0 - smoothstep(0.0, 0.34, length(sfr)));
     col += vec3(0.85, 0.92, 1.0) * stars * tw * (0.62 + 0.38 * bandWide);
 
     vec3 sp2 = rd * 540.0 + vec3(17.0, 29.0, 11.0);
     vec3 sid2 = floor(sp2);
     vec3 sfr2 = fract(sp2) - 0.5;
     float sh2 = hash31(sid2 + vec3(13.0, 7.0, 19.0));
-    float stars2 = smoothstep(0.997, 0.9998, sh2) * smoothstep(0.28, 0.0, length(sfr2));
+    float stars2 = smoothstep(0.997, 0.9998, sh2) * (1.0 - smoothstep(0.0, 0.28, length(sfr2)));
     col += vec3(0.72, 0.82, 1.0) * stars2 * (0.6 + 0.4 * bandWide);
 
     col *= mix(vec3(1.0), clamp(u_Color.rgb, 0.0, 1.0), 0.1);

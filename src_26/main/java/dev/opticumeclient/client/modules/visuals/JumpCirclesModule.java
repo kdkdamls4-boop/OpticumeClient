@@ -100,6 +100,10 @@ public class JumpCirclesModule extends Module {
         return style.getMode();
     }
 
+    public boolean isPostFxActive() {
+        return isEnabled() && style.is("Desire Effect") && !circles.isEmpty();
+    }
+
     @Override
     public void onDisable() {
         circles.clear();
@@ -244,16 +248,9 @@ public class JumpCirclesModule extends Module {
         }
 
         BufferBuilder lineBuf = WorldPrimitiveRenderer.beginLines();
-        BufferBuilder spriteBuf = WorldPrimitiveRenderer.beginTexturedQuads();
         boolean anyLine = false;
-        boolean anySprite = false;
-        Quaternionf camOrient = mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null
-                ? new Quaternionf(mc.gameRenderer.mainCamera().rotation())
-                : new Quaternionf();
 
-        Iterator<JumpCircle> it = circles.iterator();
-        while (it.hasNext()) {
-            JumpCircle c = it.next();
+        for (JumpCircle c : circles) {
             float t = (now - c.spawnTime) / maxLifeMs;
             if (t < 0.0f || t >= 1.0f) continue;
 
@@ -311,6 +308,35 @@ public class JumpCirclesModule extends Module {
                     lineBuf.addVertex(pose, wx2, fy, wz2).setColor(waveCol);
                 }
             }
+        }
+
+        if (anyLine) {
+            WorldPrimitiveRenderer.drawLines(lineBuf, true);
+        } else {
+            WorldPrimitiveRenderer.discardQuietly(lineBuf);
+        }
+
+        // Draw glow rune sprites sequentially so BufferPool never overlaps with lineBuf
+        Quaternionf camOrient = mc.gameRenderer != null && mc.gameRenderer.mainCamera() != null
+                ? new Quaternionf(mc.gameRenderer.mainCamera().rotation())
+                : new Quaternionf();
+        BufferBuilder spriteBuf = WorldPrimitiveRenderer.beginTexturedQuads();
+        boolean anySprite = false;
+
+        for (JumpCircle c : circles) {
+            float t = (now - c.spawnTime) / maxLifeMs;
+            if (t < 0.0f || t >= 1.0f) continue;
+
+            float inv = 1.0f - t;
+            float easeOut = 1.0f - inv * inv * inv * inv;
+            float rad = Math.max(0.08f, targetMaxRad * easeOut);
+            float alphaFactor = t < 0.12f ? (t / 0.12f) : (float) Math.pow(1.0f - (t - 0.12f) / 0.88f, 2.0);
+            if (alphaFactor <= 0.02f) continue;
+
+            double rot = t * Math.PI * 2.0 * spin;
+            double relX = c.pos.x - cam.x;
+            double relY = c.pos.y - cam.y + 0.02;
+            double relZ = c.pos.z - cam.z;
 
             int runePoints = 8;
             for (int r = 0; r < runePoints; r++) {
@@ -323,11 +349,6 @@ public class JumpCirclesModule extends Module {
             }
         }
 
-        if (anyLine) {
-            WorldPrimitiveRenderer.drawLines(lineBuf, true);
-        } else {
-            WorldPrimitiveRenderer.discardQuietly(lineBuf);
-        }
         if (anySprite) {
             WorldPrimitiveRenderer.drawTexturedQuads(spriteBuf, TextureAssets.DESIRE_PARTICLE_GLOW, true, true);
         } else {

@@ -13,8 +13,6 @@ public final class ClientParticleManager {
 
     private final ArrayDeque<Entry> entries = new ArrayDeque<>();
     private final ArrayDeque<Entry> pendingEntries = new ArrayDeque<>();
-    private final ArrayDeque<ParticleEmitter> emitters = new ArrayDeque<>();
-    private final ArrayDeque<ParticleEmitter> pendingEmitters = new ArrayDeque<>();
     private int limit = 16384;
     private boolean ticking;
 
@@ -34,7 +32,7 @@ public final class ClientParticleManager {
     }
 
     public boolean isEmpty() {
-        return entries.isEmpty() && pendingEntries.isEmpty() && emitters.isEmpty() && pendingEmitters.isEmpty();
+        return entries.isEmpty() && pendingEntries.isEmpty();
     }
 
     public Iterable<Entry> entries() {
@@ -63,29 +61,19 @@ public final class ClientParticleManager {
         return true;
     }
 
-    public boolean addEmitter(ParticleEmitter emitter) {
-        if (emitter == null || !emitter.isActive()) return false;
-        (ticking ? pendingEmitters : emitters).addLast(emitter);
-        return true;
-    }
-
     public void clear() {
         entries.clear();
         pendingEntries.clear();
-        emitters.clear();
-        pendingEmitters.clear();
     }
 
     public void tick() {
         ticking = true;
         try {
             tickParticles();
-            tickEmitters();
         } finally {
             ticking = false;
         }
         flushPendingEntries();
-        flushPendingEmitters();
     }
 
     public void updateVisibility() {
@@ -118,15 +106,6 @@ public final class ClientParticleManager {
         }
     }
 
-    private void tickEmitters() {
-        Iterator<ParticleEmitter> iterator = emitters.iterator();
-        while (iterator.hasNext()) {
-            ParticleEmitter emitter = iterator.next();
-            emitter.tick(this);
-            if (!emitter.isActive()) iterator.remove();
-        }
-    }
-
     private void flushPendingEntries() {
         Entry entry;
         while ((entry = pendingEntries.pollFirst()) != null) {
@@ -134,13 +113,6 @@ public final class ClientParticleManager {
             entry.prevAlpha = entry.alpha;
             entry.alpha = computeAlpha(entry.particle, entry.fadeTicks);
             entries.addLast(entry);
-        }
-    }
-
-    private void flushPendingEmitters() {
-        ParticleEmitter emitter;
-        while ((emitter = pendingEmitters.pollFirst()) != null) {
-            if (emitter.isActive()) emitters.addLast(emitter);
         }
     }
 
